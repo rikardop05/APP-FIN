@@ -1,0 +1,483 @@
+# CONTRACTS — assinaturas do motor puro
+
+> Declarações de interface, sem implementação. Um agente que recebe uma tarefa de `/lib` implementa **exatamente** esta assinatura: nome, parâmetros, formato de retorno.
+> Mudar uma assinatura aqui declarada quebra os consumidores escritos por outros agentes em paralelo — só o orquestrador altera este arquivo.
+> Tudo aqui é **função pura**: sem I/O, sem `Date.now()`, sem `process.env` (CONVENTIONS §5).
+
+---
+
+## 1. Primitivos — `/lib/money`
+
+```ts
+type Cents = number & { readonly __brand: 'Cents' }
+type BasisPoints = number & { readonly __brand: 'BasisPoints' }
+
+function cents(value: number): Cents                    // valida inteiro seguro
+function formatBRL(v: Cents, opts?: { sign?: 'auto' | 'never' | 'always' }): string
+function parseBRL(input: string): Cents | null          // aceita "1.234,56", "1234.56", "-R$ 10,00"
+function addCents(...values: Cents[]): Cents
+function applyRate(v: Cents, bp: BasisPoints): Cents    // arredonda para o centavo mais próximo
+function allocate(total: Cents, parts: number): Cents[] // soma dos retornos === total, sempre
+function bpToDecimal(bp: BasisPoints): number
+```
+
+## 2. Primitivos — `/lib/date`
+
+```ts
+type IsoDate = string      // 'YYYY-MM-DD'
+type Competence = string   // 'YYYY-MM'
+
+function toCompetence(d: IsoDate): Competence
+function competenceStart(c: Competence): IsoDate
+function competenceEnd(c: Competence): IsoDate
+function addCompetence(c: Competence, months: number): Competence
+function competenceRange(from: Competence, months: number): Competence[]
+function clampDayToMonth(year: number, month: number, day: number): IsoDate  // dia 31 em fevereiro -> 28/29
+function formatDateBR(d: IsoDate): string
+function diffMonths(a: Competence, b: Competence): number
+```
+
+## 3. Faturas — `/lib/finance/billing.ts`
+
+```ts
+interface CardCycleConfig { closingDay: number; dueDay: number }
+
+/** Em qual fatura cai uma compra. Se occurredOn > fechamento do mês, vai para o mês seguinte. */
+function billingPeriodFor(occurredOn: IsoDate, cfg: CardCycleConfig): {
+  competence: Competence
+  closingDate: IsoDate
+  dueDate: IsoDate      // se dueDay <= closingDay, vence no mês seguinte ao fechamento
+}
+
+function statementWindow(competence: Competence, cfg: CardCycleConfig): {
+  from: IsoDate; to: IsoDate; closingDate: IsoDate; dueDate: IsoDate
+}
+
+function reconcileStatement(input: {
+  reportedTotal: Cents | null
+  transactions: { amountCents: Cents }[]
+}): { computedTotal: Cents; differenceCents: Cents; matches: boolean }
+```
+
+## 4. Parcelas — `/lib/finance/installments.ts`
+
+```ts
+interface InstallmentPlanInput {
+  totalCents: Cents
+  installmentsCount: number
+  firstCompetence: Competence
+  description: string
+  categoryId?: string | null
+}
+
+interface PlannedInstallment {
+  installmentNumber: number
+  competence: Competence
+  amountCents: Cents
+  description: string      // "Descrição (3/10)"
+}
+
+/** Gera as N parcelas. Soma === totalCents (usa allocate). */
+function expandInstallmentPlan(input: InstallmentPlanInput): PlannedInstallment[]
+
+/** Ao editar um plano: preserva parcelas já realizadas, regenera as futuras. */
+function replanInstallments(input: InstallmentPlanInput, opts: {
+  keepThroughCompetence: Competence
+  settledCents: Cents
+}): PlannedInstallment[]
+```
+
+## 5. Comprometimento futuro — `/lib/finance/commitment.ts`
+
+```ts
+interface CommitmentInput {
+  transactions: { competence: Competence; amountCents: Cents; creditCardId: string; status: 'posted' | 'planned' }[]
+  fromCompetence: Competence
+  months: number
+  cards: { id: string; name: string; creditLimitCents: Cents | null }[]
+}
+
+function futureCommitment(input: CommitmentInput): {
+  byCompetence: { competence: Competence; totalCents: Cents; byCardId: Record<string, Cents> }[]
+  totalCents: Cents
+  lastCommittedCompetence: Competence | null   // mês em que o comprometimento zera
+  limitUsage: { cardId: string; usedCents: Cents; usageBp: BasisPoints | null }[]
+}
+```
+
+## 6. Categorização — `/lib/finance/categorization.ts`
+
+```ts
+interface Rule {
+  id: string; pattern: string; matchType: 'contains' | 'regex' | 'exact'
+  categoryId: string; memberId: string | null; priority: number; active: boolean
+}
+
+/** Primeira regra que casa, por priority asc, id asc como desempate. Regex inválida é ignorada, nunca lança. */
+function matchRule(rules: Rule[], description: string): Rule | null
+
+function categorizeBatch(rules: Rule[], rows: { id: string; description: string }[]):
+  Record<string, { categoryId: string; memberId: string | null; ruleId: string }>
+
+/** Sugere o padrão de uma nova regra a partir de uma descrição: remove parcelas, datas, códigos e dígitos variáveis. */
+function suggestRulePattern(rawDescription: string): { pattern: string; matchType: 'contains' }
+```
+
+## 7. Deduplicação — `/lib/finance/dedupe.ts`
+
+```ts
+function normalizeDescription(raw: string): string   // minúsculo, sem acento, espaços colapsados, sufixo de parcela removido
+
+function dedupeHash(input: {
+  sourceId: string          // credit_card_id ou account_id
+  occurredOn: IsoDate
+  amountCents: Cents
+  rawDescription: string
+}): string                  // sha256 hex
+```
+
+## 8. Recorrência — `/lib/finance/recurrence.ts`
+
+```ts
+interface RecurrenceInput {
+  expectedCents: Cents
+  dueDay: number
+  frequency: 'monthly' | 'bimonthly' | 'quarterly' | 'semiannual' | 'annual' | 'one_off'
+  startsOn: IsoDate
+  endsOn: IsoDate | null
+  annualAdjustmentBp: BasisPoints | null
+  oneOffCompetence?: Competence | null
+}
+
+interface PlannedOccurrence { competence: Competence; date: IsoDate; amountCents: Cents }
+
+/** Ocorrências previstas na janela. Aplica reajuste anual no aniversário de startsOn. */
+function expandRecurrence(input: RecurrenceInput, window: { from: Competence; months: number }): PlannedOccurrence[]
+```
+
+## 9. Conciliação previsto × realizado — `/lib/finance/reconcile.ts`
+
+```ts
+interface MatchCandidate { id: string; occurredOn: IsoDate; amountCents: Cents; categoryId: string | null }
+
+/** Casa previsto com realizado: mesma categoria, valor dentro de toleranceBp, data dentro de dayWindow. Melhor par primeiro, sem reuso. */
+function matchPlannedToPosted(
+  planned: MatchCandidate[],
+  posted: MatchCandidate[],
+  opts: { toleranceBp: BasisPoints; dayWindow: number }
+): {
+  matches: { plannedId: string; postedId: string; score: number }[]
+  unmatchedPlanned: string[]
+  unmatchedPosted: string[]
+}
+```
+
+## 10. Orçamento — `/lib/finance/budget.ts`
+
+```ts
+function budgetStatus(input: {
+  budgets: { categoryId: string; plannedCents: Cents }[]
+  spent: { categoryId: string; amountCents: Cents }[]
+  warnBp: BasisPoints
+}): {
+  categoryId: string; plannedCents: Cents; spentCents: Cents; remainingCents: Cents
+  usageBp: BasisPoints | null; light: 'green' | 'yellow' | 'red'
+}[]
+
+function suggestBudgetFromHistory(
+  history: { competence: Competence; categoryId: string; amountCents: Cents }[],
+  opts: { months: number }
+): { categoryId: string; suggestedCents: Cents }[]
+```
+
+## 11. Fluxo de caixa — `/lib/finance/cashflow.ts`
+
+```ts
+interface CashflowInput {
+  openingBalanceCents: Cents
+  fromCompetence: Competence
+  months: number
+  incomes: PlannedOccurrence[]
+  recurringExpenses: PlannedOccurrence[]
+  installments: { competence: Competence; amountCents: Cents }[]
+  statementsDue: { competence: Competence; amountCents: Cents }[]
+  plannedContributions: { competence: Competence; amountCents: Cents }[]
+  adjustments?: { competence: Competence; amountCents: Cents; label: string }[]  // modo "e se"
+}
+
+function projectCashflow(input: CashflowInput): {
+  months: {
+    competence: Competence
+    openingCents: Cents; incomeCents: Cents; expenseCents: Cents
+    installmentsCents: Cents; statementsCents: Cents; contributionsCents: Cents
+    netCents: Cents; closingCents: Cents; negative: boolean
+  }[]
+  firstNegativeCompetence: Competence | null
+  minClosingCents: Cents
+}
+```
+
+## 12. Investimento — `/lib/finance/investment.ts`
+
+> Todas as fórmulas trabalham em **valores reais**. Detalhamento matemático em SPEC §5.6.
+
+```ts
+interface ScenarioParams { label: 'conservative' | 'moderate' | 'optimistic'; realReturnBp: BasisPoints; withdrawalBp: BasisPoints }
+
+/** (R * 12) / w */
+function targetPortfolio(desiredMonthlyIncome: Cents, withdrawalBp: BasisPoints): Cents
+
+/** (1 + r)^(1/12) - 1 — jamais r/12 */
+function monthlyRate(annualBp: BasisPoints): number
+
+/** P0*(1+i)^n + A*((1+i)^n - 1)/i ; i === 0 => P0 + A*n */
+function futureValue(p0: Cents, monthlyContribution: Cents, annualBp: BasisPoints, months: number): Cents
+
+/** ln((T*i + A)/(P0*i + A)) / ln(1+i) ; null quando inalcançável */
+function monthsToTarget(target: Cents, p0: Cents, monthlyContribution: Cents, annualBp: BasisPoints): number | null
+
+/** (T - P0*(1+i)^n) * i / ((1+i)^n - 1) ; 0 quando o patrimônio atual já basta */
+function requiredContribution(target: Cents, p0: Cents, annualBp: BasisPoints, months: number): Cents
+
+/** FV * w / 12 */
+function projectedMonthlyIncome(portfolio: Cents, withdrawalBp: BasisPoints): Cents
+
+function accumulationCurve(input: {
+  p0: Cents; monthlyContribution: Cents; annualBp: BasisPoints; months: number; withdrawalBp: BasisPoints
+}): { month: number; competenceOffset: number; portfolioCents: Cents; passiveIncomeCents: Cents }[]
+
+/** A tabela que a tela exibe: uma linha por cenário. */
+function scenarioTable(input: {
+  desiredMonthlyIncome: Cents
+  currentPortfolio: Cents
+  currentMonthlyContribution: Cents
+  scenarios: ScenarioParams[]
+  horizonsYears: number[]        // default [5, 10, 15, 20]
+}): {
+  label: ScenarioParams['label']
+  targetPortfolioCents: Cents
+  monthsWithCurrentContribution: number | null
+  requiredByHorizon: { years: number; contributionCents: Cents }[]
+  projectedIncomeWithCurrentPlanCents: Cents
+  feasible: boolean
+}[]
+
+/** RF-INV-05: liga o planejamento ao orçamento real. */
+function contributionFeasibility(input: {
+  requiredContributionCents: Cents
+  averageMonthlySurplusCents: Cents
+}): { gapCents: Cents; feasible: boolean; surplusUsageBp: BasisPoints | null }
+```
+
+## 13. Metas — `/lib/finance/goals.ts`
+
+```ts
+function goalProgress(input: { targetCents: Cents; currentCents: Cents; targetDate: IsoDate | null; today: IsoDate }): {
+  progressBp: BasisPoints
+  remainingCents: Cents
+  monthsRemaining: number | null
+  requiredMonthlyCents: Cents | null
+  onTrack: boolean | null
+}
+
+function emergencyFundTarget(input: { monthlyEssentialAverageCents: Cents; months: number }): Cents
+```
+
+## 14. KPIs — `/lib/finance/kpis.ts`
+
+```ts
+function monthlyKpis(input: {
+  competence: Competence
+  transactions: {
+    amountCents: Cents; kind: TransactionKind; status: 'posted' | 'planned'
+    categoryNature: 'essential' | 'non_essential' | 'investment' | 'income'
+  }[]
+  futureInstallmentsCents: Cents
+  uncategorizedCount: number
+}): {
+  incomeCents: Cents; expenseCents: Cents; contributionsCents: Cents
+  surplusCents: Cents; savingsRateBp: BasisPoints | null; essentialShareBp: BasisPoints | null
+  futureInstallmentsCents: Cents; uncategorizedCount: number
+}
+```
+
+> Regra crítica (RC-03/RC-04): `transfer` e `credit_card_payment` **não entram** em `expenseCents`. `investment_contribution` sai em `contributionsCents`, separado da despesa.
+
+## 15. Importação — `/lib/import`
+
+> **v1:** `types.ts` + `detect.ts` (T-120), `installments.ts` (T-121), `pdf/` (T-117), `text.ts` (T-119), `pipeline.ts` (T-107).
+> **Fase 4:** `ofx.ts` (T-106 — nenhum dos três bancos oferece OFX), `csv.ts` (T-105), `xlsx.ts` (T-118) e os tipos de mapeamento de coluna. Declarados aqui para estabilidade de contrato, **não implementar na v1**.
+
+```ts
+// xlsx.ts — T-118, FASE 4 (adiado junto com o CSV)
+function parseXlsx(bytes: Uint8Array, mapping: ImportMapping): ParseResult
+
+// pdf/ — T-117. Implementacao sobre pdfjs-dist; extrator artesanal e proibido.
+interface PdfTextItem {
+  page: number
+  x: number; y: number        // origem do run, em pontos, no espaco da pagina
+  width: number
+  text: string
+}
+interface PdfTextRow {
+  page: number
+  y: number
+  cells: { x: number; text: string }[]   // ordenadas por x
+  text: string                            // celulas unidas por espaco, para heuristica simples
+}
+
+/**
+ * Extrai os runs de texto com coordenadas.
+ * - decifra quando necessario (opts.password); Santander usa RC4, Mercado Pago AES-256
+ * - decodifica sempre pelo ToUnicode CMap do proprio arquivo (subset Type0 do Nubank, CID do Mercado Pago)
+ * - PDF cifrado sem senha correta: lanca PdfPasswordError, NAO retorna vazio
+ * - a senha nunca aparece em log, mensagem de erro ou retorno
+ */
+function extractPdfTextItems(bytes: Uint8Array, opts?: { password?: string }): PdfTextItem[]
+
+/**
+ * RF-IMP-12: remonta linhas a partir das coordenadas. Infraestrutura COMUM aos tres bancos.
+ * O Santander emite cada celula como run separado: 884 runs, apenas 1 com data e valor juntos.
+ * Agrupa por y (com tolerancia, default 2pt) e ordena por x.
+ */
+function groupIntoRows(items: PdfTextItem[], opts?: { yTolerance?: number }): PdfTextRow[]
+
+/** Parsers por banco: mapeiam faixas de x para data | descricao | valor. */
+function parseNubankPdf(rows: PdfTextRow[]): ParseResult          // T-117
+function parseSantanderPdf(rows: PdfTextRow[]): ParseResult       // T-117b
+function parseMercadoPagoPdf(rows: PdfTextRow[]): ParseResult     // T-117c
+
+/** Identifica o banco pelo conteudo das primeiras linhas, para escolher o parser. */
+function detectPdfIssuer(rows: PdfTextRow[]): 'nubank' | 'santander' | 'mercadopago' | null
+
+// text.ts — T-119, fallback universal
+type ParseConfidence = 'high' | 'medium' | 'low'
+interface TextParseOptions {
+  defaultCompetence?: Competence   // usada quando a linha nao tem ano
+  dateOrder?: 'dmy' | 'mdy' | 'ymd'
+}
+interface TextParsedRow extends ParsedRow {
+  confidence: ParseConfidence
+  sourceLine: string               // linha original, sempre preservada
+  missing: ('date' | 'amount' | 'description')[]
+}
+/**
+ * Parser heuristico de texto colado. Por linha: acha o token de data, o token de valor
+ * (o ultimo da linha) e usa o resto como descricao.
+ * Linha que nao rende data+valor NAO e descartada: volta com confidence 'low',
+ * `missing` preenchido e `sourceLine`, para o usuario completar na confirmacao.
+ */
+function parsePastedText(raw: string, opts?: TextParseOptions): ParseResult & { rows: TextParsedRow[] }
+
+// types.ts — T-120, pre-requisito de todo parser
+// ColumnMap e ImportMapping: FASE 4 (T-105). Nao declarar na v1 - nenhum parser da v1 os consome.
+interface ColumnMap { date: string; description: string; amount?: string; debit?: string; credit?: string }
+interface ImportMapping {
+  bankKey: string; format: 'csv' | 'xlsx'; columnMap: ColumnMap
+  dateFormat: string; decimalSeparator: ',' | '.'; amountSignInverted: boolean
+}
+interface ParsedRow {
+  occurredOn: IsoDate; rawDescription: string; amountCents: Cents
+  fitId?: string | null           // OFX
+  installment?: { current: number; total: number } | null
+}
+interface ParseDiagnostic { line: number; message: string; raw: string }
+interface ParseResult { rows: ParsedRow[]; diagnostics: ParseDiagnostic[]; reportedTotalCents: Cents | null }
+
+// csv.ts — T-105, FASE 4 (adiado). Contrato declarado para que XLSX e detect ja componham com ele.
+function parseCsv(content: string, mapping: ImportMapping): ParseResult
+
+// ofx.ts — T-106, FASE 4 (nenhum banco da familia oferece OFX)
+function parseOfx(content: string): ParseResult & { accountHint: string | null }
+
+// detect.ts — T-120
+// Na v1 os formatos aceitos sao 'ofx' e 'pdf'; 'unsupported' cobre .csv/.xls/.xlsx com mensagem
+// orientando o caminho de texto colado. 'csv'/'xlsx' passam a ser aceitos na Fase 4.
+// v1: aceita 'pdf'. 'unsupported' cobre .ofx/.csv/.xls/.xlsx, com hint orientando o texto colado.
+function detectSource(input: { fileName: string; content: string | Uint8Array }):
+  { format: 'pdf' | 'unsupported' | null; bankKey: string | null; encrypted: boolean; hint: string | null }
+
+// installments.ts — T-121 (v1)
+/** Reconhece "PARC 03/10", "3/10", "PARCELA 3 DE 10", "(3 de 10)". Devolve descrição limpa. */
+function detectInstallment(rawDescription: string):
+  { current: number; total: number; cleanDescription: string } | null
+
+// pipeline.ts — T-107, junta tudo: e o que a rota de API chama
+function buildImportPreview(input: {
+  parse: ParseResult
+  sourceId: string
+  sourceKind: 'credit_card' | 'account'
+  cardCycle: CardCycleConfig | null
+  rules: Rule[]
+  existingHashes: Set<string>
+  today: IsoDate
+}): {
+  rows: {
+    index: number
+    occurredOn: IsoDate; competence: Competence; description: string; rawDescription: string
+    amountCents: Cents; dedupeHash: string
+    suggestedCategoryId: string | null; suggestedMemberId: string | null
+    state: 'new' | 'duplicate' | 'installment_first' | 'installment_part'
+    installment: { current: number; total: number } | null
+  }[]
+  summary: {
+    rowsRead: number; rowsNew: number; rowsDuplicated: number
+    installmentPlansDetected: number; totalCents: Cents
+    uncategorizedCount: number
+  }
+  diagnostics: ParseDiagnostic[]
+}
+```
+
+## 16. Confirmação e commit — `/lib/import/finalize.ts`
+
+> A tela de confirmação (RF-IMP-02) devolve **linhas editadas pelo usuário**. É isso que vira lançamento, não o que o parser leu. Competência e hash são recalculados aqui (RF-IMP-09), em função pura e testada.
+
+```ts
+interface ConfirmedRow {
+  index: number
+  include: boolean                 // false = usuario excluiu a linha do lote
+  occurredOn: IsoDate              // editavel
+  description: string              // editavel
+  rawDescription: string           // imutavel; vazio quando a origem e texto colado sem original
+  amountCents: Cents               // editavel, com sinal
+  categoryId: string | null        // editavel
+  memberId: string | null          // editavel
+  installment: { current: number; total: number } | null   // editavel
+  forceDuplicate?: boolean         // usuario decidiu incluir mesmo sendo duplicata
+}
+
+interface FinalizeInput {
+  rows: ConfirmedRow[]
+  sourceId: string
+  sourceKind: 'credit_card' | 'account'
+  cardCycle: CardCycleConfig | null
+  existingHashes: Set<string>
+  reportedTotalCents: Cents | null
+}
+
+/**
+ * Converte linhas confirmadas no que sera persistido.
+ * - recalcula competence via billingPeriodFor a partir da data EDITADA
+ * - recalcula dedupeHash a partir dos valores CONFIRMADOS
+ * - agrupa linhas parceladas em installment_plans e projeta as parcelas futuras
+ * - devolve o que foi ignorado e por que, para a UI mostrar
+ */
+function finalizeImport(input: FinalizeInput): {
+  transactions: {
+    occurredOn: IsoDate; competence: Competence; cashDate: IsoDate | null
+    description: string; rawDescription: string; amountCents: Cents
+    categoryId: string | null; memberId: string | null
+    dedupeHash: string
+    installmentPlanRef: number | null; installmentNumber: number | null
+  }[]
+  installmentPlans: {
+    ref: number; description: string; totalCents: Cents
+    installmentsCount: number; firstCompetence: Competence; categoryId: string | null
+  }[]
+  skipped: { index: number; reason: 'excluded_by_user' | 'duplicate' }[]
+  totals: { includedCents: Cents; reportedCents: Cents | null; differenceCents: Cents | null; matches: boolean | null }
+}
+```
+
+**Invariante de teste obrigatória:** editar a data de uma linha muda sua `competence` e seu `dedupeHash`; editar o valor muda o hash e o total do lote; excluir uma linha a remove de `transactions` e a lista em `skipped`.
