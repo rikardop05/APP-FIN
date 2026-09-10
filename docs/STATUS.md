@@ -5,9 +5,9 @@ Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATI
 
 | ID | Tarefa | Classe | Modelo | Estado | Agente | Data | Nota |
 |----|--------|--------|--------|--------|--------|------|------|
-| T-001 | Bootstrap do projeto | I | Opus 5 | **done (aguarda commit)** | Bigorna | 2026-09-10 | 4 gates verdes + audit 0, validados pelo Orquestrador. Posse ratificada. `overrides` de postcss e esbuild zeraram 6 advisories sem sair do Next 15. Landing provisória em `app/page.tsx` |
+| T-001 | Bootstrap do projeto | I | Opus 5 | **done** | Bigorna | 2026-09-10 | commit 588289c. | 4 gates verdes + audit 0, validados pelo Orquestrador. Posse ratificada. `overrides` de postcss e esbuild zeraram 6 advisories sem sair do Next 15. Landing provisória em `app/page.tsx` |
 | T-002 | Schema, migrations e seed | D | Opus 5 | **review (2a)** | Bigorna | 2026-09-10 | ⛔ **gate humano aberto** sobre `drizzle/0000_silent_zombie.sql`: 18 tabelas, 14 enums, 43 FKs, 4 checks, 2 uniques parciais, seed com 22 regras. **2b** aguarda `DATABASE_URL` |
-| T-003 | Primitivos de dinheiro e data | P | Opus 5 | todo | Prumo | — | libera após T-001 |
+| T-003 | Primitivos de dinheiro e data | P | Opus 5 | **done (aguarda commit)** | Prumo | 2026-09-10 | 102 testes, 4 gates verdes. Zero dependência: UTC + `Intl`, date-fns e date-fns-tz **não** entraram. 14 valores conferidos à mão pelo Orquestrador, fora da suíte |
 | T-004 | Autenticação | I | Opus 5 | todo | Bigorna | — | |
 | T-005 | Layout, navegação e formatação | U | Sonnet 5 | todo | Vitral (a recrutar) | — | |
 | T-100 | Inventário de formatos por banco | I | DeepSeek V4 Flash | **done** | Enxada | 2026-09-10 | Tabela fechada e checklist §5 criado. Revisão do Orquestrador corrigiu 1 defeito: arquivo bruto ia para caminho versionado |
@@ -60,6 +60,6 @@ Distribuição completa, roles e comandos em `TEAM.md`.
 
 **T-001 em execução pelo Bigorna** e **T-100 em execução pelo Enxada**, ambos desde 2026-09-10. É gate: ao terminar, o Orquestrador valida (build, lint, test, diff contra a posse) e reporta ao humano antes de liberar T-002.
 
-Pendente do humano: (1) **commit inicial** — segue tudo no working tree, sem commit; (2) **`DATABASE_URL`** de um Postgres free tier (Neon ou Supabase), para fechar a parte **2b** do T-002. A landing foi liberada em 2026-09-10.
+Pendente do humano: **`DATABASE_URL`** de um Postgres free tier (Neon ou Supabase), para fechar a parte **2b** do T-002. Commit inicial feito em 2026-09-10 (`588289c`), então a auditoria de posse por `git diff` já funciona.
 
 Requisito para entregar no gate do T-001: o `.gitignore` precisa conter **`.private/`** — é onde ficam os arquivos reais de banco, que nunca podem ser versionados (CONVENTIONS §9). Achado na revisão da entrega do T-100.

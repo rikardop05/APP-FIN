@@ -13,6 +13,7 @@ type Cents = number & { readonly __brand: 'Cents' }
 type BasisPoints = number & { readonly __brand: 'BasisPoints' }
 
 function cents(value: number): Cents                    // valida inteiro seguro
+function basisPoints(value: number): BasisPoints        // idem, para o tipo BasisPoints
 function formatBRL(v: Cents, opts?: { sign?: 'auto' | 'never' | 'always' }): string
 function parseBRL(input: string): Cents | null          // aceita "1.234,56", "1234.56", "-R$ 10,00"
 function addCents(...values: Cents[]): Cents
