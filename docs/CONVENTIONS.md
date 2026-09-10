@@ -37,7 +37,7 @@ Nunca misturar. Nunca traduzir um identificador já existente no schema.
 - Timestamp de sistema (`created_at`): `timestamptz`, gravado em UTC.
 - Exibição sempre convertida para `America/Sao_Paulo`.
 - **Competência** (mês de referência): `string` `'YYYY-MM'`, tipo `Competence`. É o eixo de todo relatório de gasto.
-- **O proibido em `/lib` é ler o relógio**, não construir data: `new Date()` sem argumentos, `Date.now()` e `new Date(Date.now())` são proibidos. Função pura recebe a data como parâmetro (`today: string`) — é o que torna o teste determinístico.
+- **O proibido em `/lib` é ler o relógio**, não construir data: `new Date()` sem argumentos, `Date.now()`, `new Date(Date.now())`, `performance.now()` e `process.hrtime()` são proibidos — qualquer leitura de relógio quebra o determinismo do teste do mesmo jeito, e nada em `/lib` precisa delas. Função pura recebe a data como parâmetro (`today: string`) — é o que torna o teste determinístico.
 - **Construir data a partir de valores explícitos é permitido e necessário** (`new Date(Date.UTC(y, m, d))`), mas **só dentro de `lib/date`**, que é o único lugar do sistema com aritmética de calendário. `lib/finance` e `lib/import` chamam `lib/date`; não constroem data nem fazem conta de mês por si.
 
 ## 5. Camadas
