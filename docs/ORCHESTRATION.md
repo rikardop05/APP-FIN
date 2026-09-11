@@ -89,6 +89,39 @@ NÃO FAÇA
 
 Registrado em 2026-09-10, no gate do T-001: o Vigia apontou, com razão, que §4 tratava concorrência mas não posse, e sem isso o T-002 não poderia instalar o Drizzle sem violar a posse na letra.
 
+### 4.2 `next dev` é exclusivo e nunca fica rodando
+
+Descoberto em produção em 2026-09-10, reportado independentemente por dois agentes: `next dev` **reescreve `.next/`** enquanto `next build` lê o mesmo diretório. Com um dev server no ar, o gate de build alterna verde e vermelho **com código idêntico** (`PageNotFoundError` no collect page data) — para todos os agentes, não só para quem subiu o servidor.
+
+Regras:
+
+1. **Um `next dev` por vez no repositório**, e só enquanto estiver sendo olhado. Terminou de conferir? Mate o processo.
+2. **Porta explícita** (`next dev -p 32xx`). Sem isso o Next escolhe outra porta em silêncio quando a 3000 está ocupada, e você acaba testando contra o servidor de outro agente, com estado de compilação obsoleto. Foi o que aconteceu: quatro rotas apareceram como 500 e estavam íntegras.
+3. **Gate de build vermelho com dev no ar não é reprovação.** Antes de reprovar entrega por build, confira que não há servidor de ninguém no ar: `netstat -ano | grep LISTENING` nas portas 30xx/32xx.
+4. Quem sobe, derruba. Não deixe para depois.
+
+### 4.3 Verifique se o agente está vivo antes de mandar prompt
+
+Aprendido em 2026-09-10, duas vezes: o TUI de um recruta pode sair e deixar o terminal num shell puro. Nesse estado, o texto de `maestri ask` **é digitado no shell**, e cada linha do prompt vira tentativa de comando. Na primeira vez, um pedido de revisão de 30 linhas virou 30 erros de `CommandNotFoundException` no PowerShell do Vigia — inofensivo por sorte, mas é execução de texto arbitrário num shell.
+
+Regras:
+
+1. **Antes de um prompt longo, teste com um curto**: `maestri ask "Nome" "Responda apenas: vivo."`. Se voltar saída de shell em vez de resposta do agente, religue o processo antes de qualquer coisa.
+2. **Prompt longo em TUI é frágil.** Prefira apontar para arquivos do repositório — o agente lê — em vez de despejar conteúdo no terminal. Menos texto digitado, menos chance de o TUI interpretar algo como atalho.
+3. **Se um agente sair duas vezes**, não insista: troque o programa com `maestri recruit --replace`, que preserva o nó, as conexões e a posição no canvas.
+4. Agente que reporta "não consegui alcançar o colega" está certo em parar e avisar, e errado em relançar o processo alheio por conta própria.
+
+### 4.4 Laudo de revisão vai para nota ou para o implementador, nunca só para o terminal
+
+O terminal de um agente mostra só a última tela: `maestri check` trunca, e um laudo de revisão longo **se perde** minutos depois de ser produzido. Em 2026-09-10 isso custou quatro rodadas para recuperar cinco achados que já existiam.
+
+Como pedir revisão, daqui em diante:
+
+1. **O laudo vai direto ao implementador**, pelo canal: `maestri ask "<Implementador>" "<texto integral>"`. Quem corrige precisa do texto inteiro, não do resumo.
+2. **E fica gravado numa nota do canvas**: `maestri note create` com nome estável, uma seção por achado (id, severidade, arquivo, linha, cenário de falha, correção proposta). O orquestrador lê com `maestri note read` quando quiser, sem depender de scrollback.
+3. Nota não é arquivo do repositório, então isso não fere a regra de o revisor nunca editar arquivo.
+4. **O orquestrador não fica esperando o laudo para verificar.** Enquanto o revisor trabalha, sonde os invariantes por conta própria: conservação de valor, janelas que pavimentam o calendário, overflow, ida e volta de normalização. Achado que você confirma sozinho não depende de canal nenhum.
+
 ## 5. Defaults para ambiguidade — um agente nunca trava
 
 Se a decisão está nesta tabela, aplique o default e siga. Se não está, pare e reporte ao orquestrador; o orquestrador decide ou eleva ao humano.
@@ -123,6 +156,8 @@ Se a decisão está nesta tabela, aplique o default e siga. Se não está, pare 
 | `ColumnMap` / `ImportMapping` / tabela `import_mappings` | maquinaria de mapeamento de coluna: **Fase 4**. A tabela existe no schema, mas nenhum código da v1 a lê ou escreve |
 | Tipos de importação (`ParsedRow`, `ParseResult`, `ParseDiagnostic`) | pertencem a T-120. Nenhum parser declara os seus próprios |
 | PDF sem camada de texto | cai no **texto colado** (T-119): o usuário converte por fora e cola. OCR dentro do app continua fora de escopo |
+| Teto de parcelas na detecção | 99 com evidência escrita (`PARC`, `PARCELA`, `N de M`), **24 sem evidência**. Decisão do humano em 2026-09-10; não rediscutir sem ele |
+| Constante de domínio lida por dois módulos | nomear e alinhar explicitamente entre eles (ex: `MAX_TOTAL` ↔ `MAX_INSTALLMENT_COUNT`). Dois módulos divergindo ao ler a mesma string é bug caro de achar |
 | Linha colada que o parser não entendeu | **nunca descartar**: devolver com `confidence: 'low'`, `missing` e `sourceLine`, editável na confirmação |
 | O que é gravado numa importação | a **linha confirmada pelo usuário**, não a linha lida. Competência e `dedupe_hash` recalculados após a edição (RF-IMP-09) |
 | Gravar direto, sem confirmação | **proibido** em qualquer caminho de importação (RF-IMP-02) |
@@ -173,7 +208,8 @@ Definido. O critério: onde o erro é **silencioso** (fórmula financeira, schem
 | **A** — API e persistência | T-108, T-302, T-402 | **Sonnet 5** |
 | **U** — telas | T-005, T-109, T-111…T-115, T-204…T-208, T-303…T-306 | **Sonnet 5** |
 | **I** — bootstrap, infra, PWA, cron | T-001, T-116, T-403, T-406 | **Sonnet 5** |
-| Revisão de entrega de tarefa **P** ou **D** | T-002, T-003, T-101…T-104, T-107, T-110, T-117, T-119…T-121, T-201…T-203, T-206, T-301 | **Opus 5** (agente distinto do que implementou) |
+| Revisão de entrega de tarefa **P** ou **D** | T-002, T-003, T-101…T-104, T-107, T-110, T-117, T-119…T-121, T-201…T-203, T-206 | **Sonnet 5** desde 2026-09-10, por decisão do humano (agente distinto do que implementou) |
+| Revisão do **T-301** (planejador de renda passiva) | T-301 | **Opus 5** — exceção recomendada: é a tarefa onde erro de fórmula distorce decisão de 20 anos, e o revisor precisa ser pelo menos tão forte quanto quem implementou |
 | Revisão de entrega **A**, **U**, **I** | demais | **Sonnet 5** |
 
 Regras que acompanham a atribuição:

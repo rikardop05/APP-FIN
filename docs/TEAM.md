@@ -11,8 +11,12 @@ Estado em 2026-09-10. Atualizar quando a equipe mudar.
 | **Claude Code** (eu) | Claude Code · Opus 5 | `Orquestrador` | — | planejar, delegar, validar, manter `STATUS.md` | `docs/` |
 | **Bigorna** | Claude Code · `claude --model claude-opus-5` | `Infra e Schema APPFIN` | I + D | T-001, T-002, T-004, T-116 | `package.json`, `tsconfig.json`, `lib/db/schema.ts`, `drizzle/`, `lib/auth/`, `middleware.ts`, `scripts/seed.ts` |
 | **Prumo** | Claude Code · `claude --model claude-opus-5` | `Motor Financeiro APPFIN` | P | T-003, T-101–T-104, T-121, T-110, T-201–T-203, T-206, **T-301** | `lib/money/`, `lib/date/`, `lib/finance/` |
-| **Vigia** | Codex · gpt-5.6-sol | `Revisor APPFIN` | revisão | revisa toda entrega P e D | **nenhuma** — read-only, nunca edita |
+| **Vigia** | Claude Code · `claude --model claude-sonnet-5` | `Revisor APPFIN` | revisão | revisa toda entrega P e D | **nenhuma** — read-only, nunca edita |
+
+> **Histórico do Vigia:** começou em Codex (escolha do humano, por independência de família de modelo), mas o TUI do Codex saiu três vezes e o `maestri ask` acabou digitando o prompt no PowerShell — um pedido de revisão virou 30 `CommandNotFoundException`. Trocado para Opus 5 em 2026-09-10, e para Sonnet 5 no mesmo dia, a pedido do humano. As trocas usaram `maestri recruit --replace`, preservando nó, conexões e posição.
 | **Enxada** | OpenCode · `opencode -m opencode-go/deepseek-v4-flash` | `Trabalho Mecanico APPFIN` | mecânico | seed, stubs, catalogação, fixtures sintéticas, varreduras | **nenhuma fixa** — escreve só nos arquivos que a tarefa nomear |
+| **Garimpo** | Claude Code · `claude --model claude-opus-5` | `Importacao APPFIN` | P | T-120, T-117, T-117b, T-117c, T-119, T-107 | `lib/import/` |
+| **Vitral** | Claude Code · `claude --model claude-sonnet-5` | `Telas APPFIN` | A + U | T-005, T-108, T-109, T-111–T-115, T-204–T-208, T-302–T-306 | `app/`, `components/`, `lib/db/queries/` |
 
 Topologia: Bigorna e Prumo conectados a mim e ao Vigia. Vigia conectado aos dois.
 
@@ -27,23 +31,9 @@ Topologia: Bigorna e Prumo conectados a mim e ao Vigia. Vigia conectado aos dois
 - Bigorna e Prumo pedem revisao direto ao Vigia, sem me atravessar.
 - Enxada e ligado somente a mim: entrega rascunho, eu integro ou passo ao dono do arquivo.
 
-## 2. Equipe da próxima fase (não recrutada ainda)
+## 2. Equipe completa desde 2026-09-10
 
-Entram quando T-002 e T-003 passarem pelos gates. Comandos prontos:
-
-```bash
-maestri recruit "Garimpo" --command "claude --model claude-opus-5"   --role "Importacao APPFIN"
-maestri recruit "Vitral"  --command "claude --model claude-sonnet-5" --role "Telas APPFIN"
-maestri connect "Garimpo" "Vigia"
-maestri connect "Vitral"  "Vigia"
-```
-
-| Codinome | Modelo | Classe | Tarefas | Posse exclusiva |
-|---|---|---|---|---|
-| **Garimpo** | Opus 5 | P | T-120, T-117, T-117b, T-117c, T-119, T-107 | `lib/import/` |
-| **Vitral** | Sonnet 5 | A + U | T-005, T-108, T-109, T-111–T-115, T-204–T-208, T-302–T-306 | `app/`, `components/`, `lib/db/queries/` |
-
-Pico: 6 recrutas. As roles de Garimpo e Vitral ainda precisam ser criadas com `maestri role create` no momento do recrutamento; a do Enxada já existe.
+Os seis recrutas estão no canvas. Não há mais ninguém a recrutar no plano: as classes P (motor e importação), D, A, U, revisão e trabalho mecânico estão todas cobertas, com posses disjuntas.
 
 ## 3. Por que essa divisão
 

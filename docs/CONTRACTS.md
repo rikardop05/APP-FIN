@@ -54,6 +54,7 @@ function statementWindow(competence: Competence, cfg: CardCycleConfig): {
   from: IsoDate; to: IsoDate; closingDate: IsoDate; dueDate: IsoDate
 }
 
+/** differenceCents = computedTotal - reportedTotal. Positivo = somamos mais do que a fatura informou. */
 function reconcileStatement(input: {
   reportedTotal: Cents | null
   transactions: { amountCents: Cents }[]
@@ -120,7 +121,11 @@ function matchRule(rules: Rule[], description: string): Rule | null
 function categorizeBatch(rules: Rule[], rows: { id: string; description: string }[]):
   Record<string, { categoryId: string; memberId: string | null; ruleId: string }>
 
-/** Sugere o padrão de uma nova regra a partir de uma descrição: remove parcelas, datas, códigos e dígitos variáveis. */
+/**
+ * Sugere o padrão de uma nova regra a partir de uma descrição: remove parcelas, datas, códigos e dígitos variáveis.
+ * Devolve o padrão NORMALIZADO (minúsculo), e `matchRule` compara sem diferenciar caixa.
+ * Invariante (RF-CAT-03): a regra sugerida tem de casar com a descrição que a gerou e com outras parcelas da mesma compra.
+ */
 function suggestRulePattern(rawDescription: string): { pattern: string; matchType: 'contains' }
 ```
 
@@ -399,7 +404,22 @@ function detectSource(input: { fileName: string; content: string | Uint8Array })
   { format: 'pdf' | 'unsupported' | null; bankKey: string | null; encrypted: boolean; hint: string | null }
 
 // installments.ts — T-121 (v1)
-/** Reconhece "PARC 03/10", "3/10", "PARCELA 3 DE 10", "(3 de 10)". Devolve descrição limpa. */
+/**
+ * Reconhece "PARC 03/10", "3/10", "PARCELA 3 DE 10", "(3 de 10)". Devolve descricao limpa.
+ * LIMITE CONHECIDO: "03/10" solto e ambiguo - pode ser 3 de outubro. Esta funcao so recebe a descricao
+ * e nao tem como desempatar. O filtro N <= M elimina a maioria das datas, mas sobra residuo.
+ * O desempate final e do buildImportPreview (secao 15, T-107), que tem o occurredOn da linha.
+ *
+ * TETOS DE total, decididos pelo humano em 2026-09-10:
+ *   MAX_TOTAL          = 99  quando ha evidencia direta (PARC, PARCELA, ou a forma por extenso
+ *                            'N de M'). Quem escreveu 'PARCELA 2 DE 60' disse que e parcela, e
+ *                            nao cabe a heuristica desmentir. Alinhado com MAX_INSTALLMENT_COUNT
+ *                            de lib/finance/dedupe.ts: os dois modulos leem o mesmo sufixo e nao
+ *                            podem divergir.
+ *   MAX_TOTAL_UNMARKED = 24  sem evidencia direta. Assimetria de custo: falso negativo o usuario
+ *                            corrige em dois cliques na confirmacao; falso positivo cria despesa
+ *                            fantasma discreta, projetada por ate M meses, numa fatura de 40 linhas.
+ */
 function detectInstallment(rawDescription: string):
   { current: number; total: number; cleanDescription: string } | null
 

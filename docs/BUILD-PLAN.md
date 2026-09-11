@@ -2,6 +2,7 @@
 
 > Uma linha = uma unidade de delegação para um agente. **Posse de arquivo é exclusiva:** um agente só escreve nos caminhos listados em "Posse". Dois agentes nunca possuem o mesmo arquivo — é o que permite rodar em paralelo sem conflito.
 > "⛔ Gate" = ponto de revisão humana; o orquestrador para e reporta antes de seguir.
+> **Substituir um stub não é violação de posse.** O T-005 cria o `page.tsx` de cada rota como stub; a tarefa dona daquela rota (T-109 `/cartoes`, T-111 `/importar`, T-112 `/lancamentos`, T-114 `/config`, T-205 `/orcamento`, T-207 `/fluxo`, T-303 `/investimentos`, T-305 `/metas`) **substitui o stub** ao entrar. O stub carrega, em comentário, o ID da tarefa que o sucede.
 > **`package.json` e `package-lock.json` são posse serial compartilhada** (ORCHESTRATION §4.1): qualquer tarefa pode acrescentar as dependências que a **sua própria linha** declara, uma tarefa por vez, nunca em janela paralela. Não é preciso listar o manifesto na posse de cada tarefa.
 > Legenda de tipo: **P** = puro (`/lib`, alta densidade de teste) · **D** = dados/schema · **A** = API/persistência · **U** = UI/tela · **I** = infra.
 
@@ -49,7 +50,8 @@
 
 ### T-005 · Layout, navegação e formatação · U
 **Depende de:** T-001, T-003
-**Posse:** `app/(app)/layout.tsx`, `components/nav/**`, `components/ui-kit/**` (Money, DateText, PageHeader, EmptyState, DataTable base), `lib/i18n/format.ts`
+**Posse:** `app/(app)/layout.tsx`, `components/nav/**`, `components/ui-kit/**` (Money, DateText, PageHeader, EmptyState, DataTable base), `lib/i18n/format.ts`, **e o `page.tsx` de cada uma das 8 rotas de `app/(app)/`** (`lancamentos`, `importar`, `cartoes`, `orcamento`, `fluxo`, `investimentos`, `metas`, `config`), como stub.
+> Posse dos stubs concedida em 2026-09-10, no gate. A versão anterior pedia os stubs na Entrega e não os concedia na Posse — contradição do plano, apontada pelo revisor. `app/page.tsx` **não** é do T-005: é a landing provisória do T-001, e quem a substitui é o T-115.
 **Entrega:** shell responsivo (nav lateral no desktop, inferior no celular) com as 9 rotas de SPEC §7 como stubs; componentes de exibição de valor e data usando `formatBRL`/`formatDateBR`; tabela base com ordenação e paginação.
 **Aceite:** legível e navegável em 390 px; nenhum valor monetário formatado fora de `<Money>`; rotas stub respondem 200.
 **Depende de T-004 para navegar autenticado, mas pode ser escrita em paralelo.**
@@ -143,7 +145,8 @@ Bloco serial C (integração):
 ### T-107 · Pipeline de preview de importação · P
 **Depende de:** T-101, T-103, T-104, T-120, T-121, T-117, T-117b, T-117c, T-119 · **Posse:** `lib/import/pipeline.ts` + teste
 **Entrega:** CONTRACTS §15 (`buildImportPreview`) e §16 (`finalizeImport`) — orquestra parse + competência + dedupe + categorização + detecção de parcela, e converte as linhas **confirmadas** no que será gravado, recalculando competência e hash após edição (RF-IMP-09).
-**Aceite:** um arquivo com 1 duplicata, 1 parcelada em 10x e 3 linhas novas produz o `summary` exato esperado; as invariantes de CONTRACTS §16 valem (editar data muda competência e hash; editar valor muda hash e total; excluir linha a move para `skipped`); roda sem tocar banco.
+**Requisito acrescentado em 2026-09-10, por recomendação do revisor:** desempatar parcela × data usando o `occurredOn` da própria linha. Um par `N/M` que coincide com o dia e o mês da transação — descrição `03/10` numa linha de `2026-10-03` — é data, não parcela. O `detectInstallment` (T-121) só recebe a descrição e não tem como saber; o pipeline tem a informação e custa uma comparação. Sem isso, cerca de 1 em 5 datas `dd/mm` viram parcela fantasma projetada por M meses.
+**Aceite:** um arquivo com 1 duplicata, 1 parcelada em 10x e 3 linhas novas produz o `summary` exato esperado; uma linha com descrição `03/10` e `occurredOn` `2026-10-03` **não** é tratada como parcela; as invariantes de CONTRACTS §16 valem (editar data muda competência e hash; editar valor muda hash e total; excluir linha a move para `skipped`); roda sem tocar banco.
 
 ### T-108 · Persistência da importação · A
 **Depende de:** T-002, T-004, T-107 · **Posse:** `app/api/import/**`, `lib/db/queries/import.ts`, `lib/db/queries/transactions.ts`
