@@ -9,12 +9,25 @@ import type { ParseDiagnostic, ParseResult, ParsedRow } from '@/lib/import/types
  * `types.ts` nao exporta funcao, entao nao ha comportamento a testar. O que
  * este arquivo protege e o aceite do T-120 — "os tipos compoem com `Cents` e
  * `IsoDate`" — e ele falha em tempo de compilacao (`npm run typecheck`), nao em
- * tempo de execucao: se `ParsedRow.amountCents` deixar de ser `Cents`, ou
- * `occurredOn` deixar de ser `IsoDate`, o arquivo para de compilar.
+ * tempo de execucao: se `ParsedRow.amountCents` deixar de compor com `Cents`, ou
+ * `occurredOn` com `IsoDate`, o arquivo para de compilar.
  *
- * As asercoes de runtime existem para o `vitest` ter o que rodar e para fixar
- * a convencao de sinal (CONVENTIONS §2: saida negativa, entrada positiva).
+ * `occurredOn` e `amountCents` sao anulaveis (CONTRACTS §15): `null` e ausente,
+ * `cents(0)` e R$ 0,00 real. As asercoes de runtime existem para o `vitest` ter
+ * o que rodar e para fixar a convencao de sinal (CONVENTIONS §2: saida
+ * negativa, entrada positiva).
  */
+
+/**
+ * Extrai do fixture um campo que **tem de** estar preenchido. Lanca se vier
+ * `null` — nada de `!` nem `as`: uma assercao non-null apagaria a garantia que a
+ * anulabilidade comprou, e o proximo bug passaria em silencio. Se o fixture
+ * deixar de produzir o valor, o teste falha ruidosamente aqui.
+ */
+function required<T>(value: T | null, field: string): T {
+  if (value === null) throw new Error(`fixture sem ${field}`);
+  return value;
+}
 
 /** Uma linha como um parser da v1 a produz. */
 function buildRow(): ParsedRow {
@@ -35,11 +48,11 @@ describe('ParsedRow', () => {
     const row = buildRow();
 
     // `IsoDate` entra em lib/date sem conversao: e o mesmo tipo dos dois lados.
-    const occurredOn: IsoDate = row.occurredOn;
+    const occurredOn: IsoDate = required(row.occurredOn, 'occurredOn');
     expect(toCompetence(occurredOn)).toBe('2026-09');
 
     // `Cents` entra na aritmetica de dinheiro sem conversao, pelo mesmo motivo.
-    const amount: Cents = row.amountCents;
+    const amount: Cents = required(row.amountCents, 'amountCents');
     expect(addCents(amount, cents(56))).toBe(-123400);
   });
 

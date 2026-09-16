@@ -40,12 +40,19 @@ import type { Cents } from '@/lib/money';
  * chuta.
  */
 export interface ParsedRow {
-  /** Data do fato financeiro, `'YYYY-MM-DD'`. Nunca com hora. */
-  occurredOn: IsoDate;
+  /**
+   * Data do fato financeiro, `'YYYY-MM-DD'`. `null` = **nao lida na origem**: o
+   * usuario completa na tela de confirmacao antes de qualquer gravacao.
+   */
+  occurredOn: IsoDate | null;
   /** Descricao como veio da origem, sem limpeza. E o que a UI mostra ao lado da editada. */
   rawDescription: string;
-  /** Valor em centavos, com sinal. */
-  amountCents: Cents;
+  /**
+   * Valor em centavos, com sinal, ou `null` quando nao lido. **NAO confundir
+   * `null` com `cents(0)`**: zero e um valor legitimo (uma compra de R$ 0,00
+   * existe), entao o ausente precisa de um estado proprio.
+   */
+  amountCents: Cents | null;
   /**
    * Identificador unico da transacao na origem. Existe so no OFX (`FITID`), que
    * e Fase 4 (T-106): na v1 vem sempre ausente ou `null`. Fica declarado porque
@@ -55,6 +62,25 @@ export interface ParsedRow {
   /** Parcela reconhecida por `detectInstallment` (T-121), quando ha padrao. */
   installment?: { current: number; total: number } | null;
 }
+
+/**
+ * Nulabilidade de `occurredOn` e `amountCents` — CONTRACTS §15, fixada em
+ * 2026-09-16 a partir do achado do T-119.
+ *
+ * A regra "nenhuma linha e descartada em silencio" obriga a devolver a linha
+ * que o parser nao leu por inteiro. Com os campos obrigatorios, a unica saida
+ * era um sentinela (`''` e `cents(0)`) — e sentinela aqui mente de duas formas:
+ *
+ * 1. `cents(0)` e um valor legitimo, entao zero ficaria ambiguo entre "nao li"
+ *    e "li e e zero";
+ * 2. `''` nao e `IsoDate` valido, e `billingPeriodFor('')` lanca longe da
+ *    causa, em runtime, no meio da importacao.
+ *
+ * Com `null` o compilador **obriga** todo consumidor (T-107, T-108, T-111) a
+ * tratar o caso ausente: erro de compilacao em vez de bug silencioso.
+ * Consequencia: linha com `occurredOn` ou `amountCents` `null` nao pode ser
+ * gravada — ou o usuario completa na confirmacao, ou ele a exclui do lote.
+ */
 
 /**
  * Um problema encontrado em UMA linha, que **nao** aborta o arquivo.
