@@ -102,10 +102,33 @@ interface CommitmentInput {
 function futureCommitment(input: CommitmentInput): {
   byCompetence: { competence: Competence; totalCents: Cents; byCardId: Record<string, Cents> }[]
   totalCents: Cents
-  lastCommittedCompetence: Competence | null   // mês em que o comprometimento zera
+  lastCommittedCompetence: Competence | null   // ULTIMO mes da janela com saldo DEVEDOR
   limitUsage: { cardId: string; usedCents: Cents; usageBp: BasisPoints | null }[]
 }
 ```
+
+> **Semantica de `lastCommittedCompetence`** — fixada em 2026-09-16, apos conflito entre tres fontes
+> apontado pelo Esquadro no T-110 e confirmado pelo Corvo.
+>
+> E o **ultimo mes da janela cujo `totalCents` e negativo**, ou seja, o ultimo mes em que ainda se
+> deve dinheiro. `null` quando nao ha nenhum mes devedor na janela.
+>
+> Tres razoes para esta leitura, e nao "primeiro mes que zera":
+> 1. e o que o **nome do campo** diz. `lastCommitted` = ultima competencia comprometida. A outra
+>    leitura tornaria o nome mentiroso, e nome mentiroso e o defeito que mais custa caro depois.
+> 2. **sempre tem resposta.** "Primeiro mes que zera" nao existe quando as parcelas passam do fim
+>    da janela - e o caso comum de um parcelado em 24x visto numa janela de 24 meses.
+> 3. o mes seguinte e derivavel em uma linha por quem quiser exibi-lo; o caminho inverso perde
+>    informacao.
+>
+> **Mes com saldo POSITIVO nao conta.** Um mes que so tem estorno (entrada liquida) nao e
+> comprometimento: nao se deve nada nele. O criterio e `totalCents < 0`, nunca `!= 0`. Contar
+> estorno faria a tela dizer "voce termina de pagar em marco" apontando um mes em que a familia
+> na verdade RECEBE dinheiro.
+>
+> **Para a tela (T-113 e RF-CC-03):** o texto "o mes em que o comprometimento zera" do SPEC e
+> redacao de UI, nao semantica de dado. A tela exibe a partir deste campo o mes em que a familia
+> termina de pagar.
 
 ## 6. Categorização — `/lib/finance/categorization.ts`
 
@@ -338,8 +361,12 @@ interface PdfTextRow {
  * - decodifica sempre pelo ToUnicode CMap do proprio arquivo (subset Type0 do Nubank, CID do Mercado Pago)
  * - PDF cifrado sem senha correta: lanca PdfPasswordError, NAO retorna vazio
  * - a senha nunca aparece em log, mensagem de erro ou retorno
+ * - ASSINCRONA por necessidade: pdfjs-dist so expoe getDocument().promise e getTextContent()
+ *   assincronos, e extrator artesanal e proibido. Corrigido em 2026-09-16, achado do Peneira
+ *   no T-117. groupIntoRows, parseNubankPdf e detectPdfIssuer seguem SINCRONAS: recebem dados
+ *   ja extraidos. So quem le bytes precisa de await, e esse caminho (T-107, T-108) ja e async.
  */
-function extractPdfTextItems(bytes: Uint8Array, opts?: { password?: string }): PdfTextItem[]
+function extractPdfTextItems(bytes: Uint8Array, opts?: { password?: string }): Promise<PdfTextItem[]>
 
 /**
  * RF-IMP-12: remonta linhas a partir das coordenadas. Infraestrutura COMUM aos tres bancos.
@@ -383,12 +410,32 @@ interface ImportMapping {
   dateFormat: string; decimalSeparator: ',' | '.'; amountSignInverted: boolean
 }
 interface ParsedRow {
-  occurredOn: IsoDate; rawDescription: string; amountCents: Cents
+  occurredOn: IsoDate | null      // null = nao lido na origem; o usuario preenche na confirmacao
+  rawDescription: string
+  amountCents: Cents | null       // null = nao lido; NAO confundir com cents(0), que e R$ 0,00 real
   fitId?: string | null           // OFX
   installment?: { current: number; total: number } | null
 }
 interface ParseDiagnostic { line: number; message: string; raw: string }
 interface ParseResult { rows: ParsedRow[]; diagnostics: ParseDiagnostic[]; reportedTotalCents: Cents | null }
+
+// NULABILIDADE DE occurredOn E amountCents - fixada em 2026-09-16, achado do Funil no T-119,
+// severidade alta, confirmado pelo Corvo.
+//
+// A regra RF-IMP "nenhuma linha e descartada em silencio" obriga a devolver a linha que o parser
+// nao conseguiu ler por inteiro. Com os campos obrigatorios, a unica saida era um sentinela
+// (occurredOn '' e cents(0)) - e sentinela aqui MENTE de duas formas:
+//   1. cents(0) e um valor legitimo. Uma compra de R$ 0,00 existe, entao "zero" fica ambiguo
+//      entre "nao li" e "li e e zero";
+//   2. '' nao e um IsoDate valido, e billingPeriodFor('') LANCA. O erro aparece longe da causa,
+//      em runtime, no meio da importacao.
+//
+// Com null, o compilador OBRIGA todo consumidor (T-107, T-108, T-111) a tratar o caso ausente.
+// Vira erro de compilacao, nao bug silencioso - e e exatamente o que a RF-IMP-02 exige, porque a
+// tela de confirmacao existe para o usuario completar essas linhas antes de qualquer gravacao.
+//
+// Consequencia para quem consome: linha com occurredOn ou amountCents null NAO pode ser gravada.
+// Ou o usuario completa na confirmacao, ou ela e excluida do lote por decisao dele.
 
 // csv.ts — T-105, FASE 4 (adiado). Contrato declarado para que XLSX e detect ja componham com ele.
 function parseCsv(content: string, mapping: ImportMapping): ParseResult
@@ -502,3 +549,55 @@ function finalizeImport(input: FinalizeInput): {
 ```
 
 **Invariante de teste obrigatória:** editar a data de uma linha muda sua `competence` e seu `dedupeHash`; editar o valor muda o hash e o total do lote; excluir uma linha a remove de `transactions` e a lista em `skipped`.
+
+## 17. Sessão e contexto de household — `/lib/auth/session.ts`
+
+> **Declarado em 2026-09-16.** O `BUILD-PLAN` do T-004 exigia "resolução de `household_id` e
+> `member_id` da sessão em um helper único", mas a assinatura nunca foi escrita aqui — e T-108,
+> T-109, T-112 e T-114 dependem dela. Sem esta seção, quatro agentes inventariam quatro versões.
+
+```ts
+// Implementado como `AppSession`, em lib/auth/app-session.ts.
+type AppSession = {
+  householdId: string
+  memberId: string
+}
+
+/**
+ * Única porta de entrada para `householdId` e `memberId`. Nenhuma rota, query ou
+ * componente os obtém de outro lugar — nem de env, nem de cookie lido à mão,
+ * nem de parâmetro de URL.
+ *
+ * **Lança** quando não há sessão válida. Não devolve `null`: ver a nota abaixo.
+ */
+function requireSession(): Promise<AppSession>
+
+/** Versão não-lançante, só para onde a ausência de sessão é estado legítimo (ex.: a própria /login). */
+function getSession(): Promise<AppSession | null>
+```
+
+**Por que `requireSession` lança em vez de devolver `null`** — e por que isso *não* contradiz a
+decisão oposta tomada em `ParsedRow` (§15):
+
+Em `ParsedRow`, o campo ausente é um estado **legítimo e esperado** — a linha incompleta existe e o
+usuário vai completá-la. Ali `null` é certo, porque obriga cada consumidor a tratar um caso que vai
+mesmo acontecer.
+
+Aqui é o contrário. Numa rota protegida, "sem sessão" **não é** um estado que o chamador deva tratar
+inline: o middleware já redirecionou antes. Se acontecer, é erro. E o modo de falha que precisamos
+tornar impossível é específico: um `null` esquecido faria a query rodar **sem** `household_id` — ou
+seja, devolvendo dados do outro household. Uma checagem esquecida vira vazamento silencioso entre as
+duas pessoas da família. Lançar torna o esquecimento impossível.
+
+A regra que sustenta isso: **toda query filtra `household_id`**, e o único lugar de onde esse valor
+sai é `requireSession()`.
+
+> **Correção de 2026-09-16, poucas horas depois:** esta seção nasceu declarando `SessionContext` com
+> um terceiro campo, `email`. A implementação entregou `AppSession` com apenas os dois ids, e o
+> contrato foi ajustado para a implementação — não o contrário — por um motivo de mérito: **manter o
+> e-mail fora do token de sessão reduz o dado pessoal em circulação**, e `memberId` já resolve
+> "quem está logado" para a UI. A versão implementada é melhor que a declarada.
+>
+> Isto **não** é precedente para divergir do contrato sem avisar. A mudança deveria ter sido
+> proposta antes, não descoberta na validação — o custo aqui foi baixo só porque um único consumidor
+> tinha compilado contra ela.

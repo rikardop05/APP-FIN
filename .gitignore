@@ -61,3 +61,6 @@ desktop.ini
 # Nome completo, digitos de cartao e endereco nunca entram no historico.
 /.private/
 .neon
+
+# Copias de .next feitas por inspecao de agente (quebram o lint do repo inteiro)
+.next-*/

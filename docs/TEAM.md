@@ -1,22 +1,25 @@
 # TEAM — distribuição de agentes no Maestri
 
-Estado em 2026-09-10. Atualizar quando a equipe mudar.
+Estado em **2026-09-16**. Atualizar quando a equipe mudar.
+
+> ⚠️ **A equipe de 2026-09-10 (Bigorna, Prumo, Vigia, Enxada, Garimpo, Vitral) não existe mais.**
+> O canvas foi esvaziado e reconstruído. Se um agente mandar mensagem para um desses nomes, ela não
+> chega a ninguém. A fonte de verdade sobre quem está vivo é `maestri list`, nunca este arquivo.
 
 ---
 
 ## 1. Equipe ativa
 
-| Codinome | Agente / modelo | Role | Classe | Tarefas | Posse exclusiva |
-|---|---|---|---|---|---|
-| **Claude Code** (eu) | Claude Code · Opus 5 | `Orquestrador` | — | planejar, delegar, validar, manter `STATUS.md` | `docs/` |
-| **Bigorna** | Claude Code · `claude --model claude-opus-5` | `Infra e Schema APPFIN` | I + D | T-001, T-002, T-004, T-116 | `package.json`, `tsconfig.json`, `lib/db/schema.ts`, `drizzle/`, `lib/auth/`, `middleware.ts`, `scripts/seed.ts` |
-| **Prumo** | Claude Code · `claude --model claude-opus-5` | `Motor Financeiro APPFIN` | P | T-003, T-101–T-104, T-121, T-110, T-201–T-203, T-206, **T-301** | `lib/money/`, `lib/date/`, `lib/finance/` |
-| **Vigia** | Claude Code · `claude --model claude-sonnet-5` | `Revisor APPFIN` | revisão | revisa toda entrega P e D | **nenhuma** — read-only, nunca edita |
-
-> **Histórico do Vigia:** começou em Codex (escolha do humano, por independência de família de modelo), mas o TUI do Codex saiu três vezes e o `maestri ask` acabou digitando o prompt no PowerShell — um pedido de revisão virou 30 `CommandNotFoundException`. Trocado para Opus 5 em 2026-09-10, e para Sonnet 5 no mesmo dia, a pedido do humano. As trocas usaram `maestri recruit --replace`, preservando nó, conexões e posição.
-| **Enxada** | OpenCode · `opencode -m opencode-go/deepseek-v4-flash` | `Trabalho Mecanico APPFIN` | mecânico | seed, stubs, catalogação, fixtures sintéticas, varreduras | **nenhuma fixa** — escreve só nos arquivos que a tarefa nomear |
-| **Garimpo** | Claude Code · `claude --model claude-opus-5` | `Importacao APPFIN` | P | T-120, T-117, T-117b, T-117c, T-119, T-107 | `lib/import/` |
-| **Vitral** | Claude Code · `claude --model claude-sonnet-5` | `Telas APPFIN` | A + U | T-005, T-108, T-109, T-111–T-115, T-204–T-208, T-302–T-306 | `app/`, `components/`, `lib/db/queries/` |
+| Codinome | Programa · modelo | Role | Posse exclusiva |
+|---|---|---|---|
+| **Claude Code** (eu) | Claude Code · Opus 5 | `Orquestrador` | `docs/`, e a ratificação de `lib/import/types.ts` |
+| **Estaca** | OpenCode · `deepseek-v4.1-flash` | `Infra e Schema APPFIN` | `lib/db/`, `drizzle/`, `scripts/seed.ts`, `lib/auth/`, `app/(auth)/`, `app/api/auth/`, `middleware.ts` |
+| **Esquadro** | OpenCode · `deepseek-v4.1-flash` | `Motor Financeiro APPFIN` | `lib/money/`, `lib/date/`, `lib/finance/` |
+| **Peneira** | OpenCode · `deepseek-v4.1-flash` | `Importacao APPFIN` | `lib/import/pdf/**` |
+| **Funil** | OpenCode · `deepseek-v4.1-flash` | `Importacao Texto APPFIN` | `lib/import/text.ts` **e mais nada** |
+| **Lanterna** | Codex · `gpt-5.6-luna` | `Telas APPFIN` | `app/`, `components/`, `lib/db/queries/` |
+| **Corvo** | OpenCode · `deepseek-v4.1-flash` | `Revisor APPFIN` | **nenhuma** — read-only |
+| **Cinzel** | OpenCode · `deepseek-v4.1-flash` | `Git Manager APPFIN` | só commits |
 
 Topologia: Bigorna e Prumo conectados a mim e ao Vigia. Vigia conectado aos dois.
 

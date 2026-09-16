@@ -91,3 +91,107 @@ Para cada um dos três, o mesmo roteiro:
 Particularidades já conhecidas: a fatura do Nubank vem sem senha; a do Santander é cifrada com RC4; a do Mercado Pago com AES-256 (§2).
 
 > **Não bloqueia a v1:** este levantamento de CSV/planilha é insumo da Fase 4 (T-105, T-118). A v1 entrega PDF + texto colado e não depende dele.
+
+## 6. Layout medido da fatura Nubank (2026-09-16)
+
+> Medido pelo Orquestrador sobre uma fatura **real** (`Nubank_2026-09-09.pdf`, 5 páginas, 595×842pt,
+> não cifrada). O arquivo vive em `.private/` e **não** é acessível aos agentes implementadores, que
+> rodam em provedor de terceiro (RNF-01). Esta seção é a forma anonimizada: coordenadas e máscaras
+> de formato, onde **letra virou `A` e dígito virou `9`**. Nenhum estabelecimento, valor ou nome real
+> aparece aqui — por isso ela pode ser lida por qualquer agente.
+
+### 6.1 Colunas da linha de transação (página 5)
+
+| Coluna | x | Máscara | Observação |
+|---|---|---|---|
+| Data | `123` | `99 AAA` | `dd MMM` em pt-BR (`15 SET`). **Sem ano** |
+| Cartão | `172` | `•••• 9999` | **Opcional** — só em parte das linhas |
+| Descrição | `185` **ou** `214` | livre | `185` sem coluna de cartão, `214` com ela |
+| Valor | `~491–508` | `A$ 9.999,99` | **Alinhado à direita**: o x varia com o tamanho |
+
+**Quatro armadilhas que essa medição revelou**, e que valem mais que a tabela:
+
+1. **A descrição não tem x fixo.** Salta de `185` para `214` quando a linha traz `•••• 9999`.
+   Chumbar um único x perde metade dos lançamentos. Detecte a presença da coluna de cartão e
+   desloque, ou case por faixa.
+2. **O valor é alinhado à direita**, então o x inicial muda conforme o número (`x=508` para `R$ 9,99`,
+   `x=496` para `R$ 999,99`). Só faixa (`x > 450`) funciona; igualdade não.
+3. **Existem linhas de continuação sem data**, ancoradas em `x=214`, com conversão de câmbio
+   (`AAA 99.99 = AAA 9.99` e `AAAAAAAAA: AAA 9.99 = AAA 9 = A$ 9,99`). Pertencem à transação
+   anterior. Se o parser as tratar como lançamento, inventa despesa; se as descartar em silêncio,
+   viola a regra de não engolir linha. **Anexe à transação de cima.**
+4. **Parcela vem embutida na descrição**, no fim, como `- AAAAAAA 99/99` ou `- AAAAAAA 9/9`.
+   É o formato que o detector do T-121 já cobre — chame-o, não reescreva.
+
+### 6.2 De onde sai o ano
+
+A linha de transação **não tem ano**. Ele está no cabeçalho, repetido em **todas** as páginas:
+
+- `y=782, x=327` → `AAAAAA 99 AAA 9999` (a data da fatura)
+- `y=782, x=442` → `AAAAAAA A AAAAA 99 AAA 9999` (emissão e envio)
+- página 1, `y=438` → `Data de vencimento: dd MMM yyyy`
+- página 1, `y=415` → `Período vigente: dd MMM a dd MMM`
+
+Ordem obrigatória para resolver o ano: **cabeçalho → parâmetro do chamador → linha com confiança
+baixa para o usuário completar**. Nunca do relógio. Assumir "ano atual" quebra em silêncio toda
+janeiro, quando se importa a fatura de dezembro.
+
+### 6.3 Cabeçalho e rodapé a ignorar
+
+Repetem em toda página e **não** são transação: `y=795` (nome do titular), `y=782` (fatura/emissão),
+`y≈21` (`9 AA 9`, o "n de 5"). O rodapé institucional da página 3 ocupa `y=120` a `y=35`.
+O cabeçalho da seção de transações é `y=732`: `AAAAAAAAAA` + `AA 99 AAA A 99 AAA`.
+
+## 7. Layout medido da fatura Mercado Pago (2026-09-16)
+
+> Medido pelo Orquestrador sobre fatura **real** (`MercadoPago_2026-07-20.pdf`, 6 páginas). Abriu
+> **sem senha** — o humano forneceu cópia decifrada. Forma anonimizada: letra `A`, dígito `9`.
+
+| Coluna | x | Máscara | Observação |
+|---|---|---|---|
+| Data | `40` | `99/99` | **`dd/MM` com barra** — diferente do Nubank |
+| Descrição | `94` | livre | |
+| Parcela | `~393–397` | `AAAAAAA 9 AA 99` | **coluna própria** (`Parcela 1 de 12`) |
+| Valor | `~507–518` | `A$ 999,99` | alinhado à direita |
+
+**Três diferenças que quebram um parser copiado do Nubank:**
+
+1. **A parcela tem coluna própria** (`x≈395`), não vem colada no fim da descrição. O detector do
+   T-121 continua servindo para interpretar o texto, mas a **extração** é de outra coluna.
+2. **A fatura agrupa por cartão.** Linhas `AAAAAA AAAA [************9999]` em `x=40` abrem uma seção,
+   e os lançamentos abaixo pertencem àquele cartão. Uma fatura traz **vários cartões**. Ignorar isso
+   mistura gastos de cartões diferentes num só.
+3. **Linhas de subtotal se parecem com lançamento.** `y=368` e `y=437` têm `x=40 "AAAAA"` (a palavra
+   *Total*) e um valor em `x≈513`, mas **nenhuma data**. Se entrarem como transação, dobram o gasto
+   do mês. Exija data válida em `x=40`; palavra naquela posição é cabeçalho ou subtotal.
+
+O ano não está na linha (`dd/MM`); está no cabeçalho, `y=776`: `AAAAAAAAAA: 99/99/9999`.
+
+## 8. Layout medido da fatura Santander (2026-09-16)
+
+> Medido pelo Orquestrador sobre fatura **real** (`Santander_2026-09.pdf`, 4 páginas). Abriu **sem
+> senha** (cópia decifrada). pdfjs emite `Incorrect 'loca' table length` e se recupera sozinho —
+> é ruído de fonte, não erro. Forma anonimizada: letra `A`, dígito `9`.
+
+**É o layout mais hostil dos três.** Duas características sem paralelo nos outros:
+
+**1. Data e descrição vêm FUNDIDAS num único run.** Em `x=33`: `"99/99 AAAAAAAAA AA AAAAAA-AAAAAAAA"`.
+Não são colunas separadas — é `dd/MM` + espaço + descrição, no mesmo item de texto. A separação é
+por **parsing da string**, não por coordenada.
+
+**2. ⚠️ Duas tabelas independentes dividem as mesmas linhas `y`.** A tabela de lançamentos ocupa
+`x < 250`; um quadro-resumo ocupa `x > 320` (`(-) AAAAA AA AAAAAAAA`, `(=) AAAAA AAAAA AAAAAA`).
+Na mesma `y=425` convivem um lançamento e uma linha de resumo que **não têm relação nenhuma**.
+
+> Consequência direta para o `groupIntoRows`: **agrupar só por `y` corrompe o Santander.** A linha
+> montada juntaria a descrição de uma compra com o rótulo de um totalizador. É preciso **segmentar
+> também por faixa de `x`** antes de unir as células. Este é o caso que o RF-IMP-12 tem de cobrir, e
+> é a razão de a infra de remontagem ser comum aos três bancos em vez de código por banco.
+
+| Elemento | x | Máscara | Observação |
+|---|---|---|---|
+| Data + descrição | `33` | `99/99 AAAA…` | **fundidas**, separar por string |
+| Data auxiliar | `168` | `99/99` | opcional |
+| Valor | `~201–214` | `999,99` / `-9.999,99` | **sem `R$`**, sinal por `-`, à direita |
+| Marcador | `16–17` | `9` | dígito solto, fora da tabela |
+| Quadro-resumo | `> 320` | — | **não é lançamento** |
