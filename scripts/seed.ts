@@ -11,6 +11,7 @@ import {
 } from '../lib/db/index.ts';
 
 import type { CategoryNature, MatchType } from '../lib/db/enums.ts';
+import { readAllowedEmails } from '../lib/auth/allowlist.ts';
 
 /**
  * Seed obrigatorio de DATA-MODEL §3: 1 household, 2 members,
@@ -66,32 +67,11 @@ const HOUSEHOLD_ID = uuidv5('household:principal');
 
 /**
  * Os e-mails da allowlist vem do ambiente (RNF-01, e CONVENTIONS §9: segredo e
- * dado pessoal nao ficam em arquivo versionado). `AUTH_ALLOWED_EMAILS` e a
- * mesma variavel que o T-004 usa para recusar login fora da lista.
+ * dado pessoal nao ficam em arquivo versionado). A leitura e a validacao moram
+ * em `lib/auth/allowlist.ts`, o unico ponto que le `AUTH_ALLOWED_EMAILS`:
+ * seed e login consomem a MESMA allowlist, em vez de duas leituras que poderiam
+ * divergir (buraco de seguranca).
  */
-function readAllowlist(): readonly [string, string] {
-  const raw = process.env.AUTH_ALLOWED_EMAILS ?? '';
-  const emails = raw
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter((e) => e.length > 0);
-
-  if (emails.length !== 2) {
-    throw new Error(
-      `AUTH_ALLOWED_EMAILS precisa ter exatamente 2 e-mails separados por virgula; recebi ${emails.length}. ` +
-        'Preencha em .env.local antes de rodar o seed.',
-    );
-  }
-  // Os dois membros precisam ser distintos: `members.email` e unique, entao um
-  // e-mail repetido gravaria um membro so e o seed anunciaria dois.
-  if (emails[0] === emails[1]) {
-    throw new Error(
-      `AUTH_ALLOWED_EMAILS tem o mesmo e-mail duas vezes (${emails[0]}). ` +
-        'O household tem 2 membros distintos (SPEC §2, multiusuario).',
-    );
-  }
-  return [emails[0]!, emails[1]!];
-}
 
 // `as const` so fixa os dois literais de cor como somente-leitura; e dado de
 // exibicao, nada os reatribui (CONVENTIONS §6, justificativa do `as`).
@@ -323,7 +303,7 @@ function buildRules(): RuleRow[] {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  const [emailA, emailB] = readAllowlist();
+  const [emailA, emailB] = readAllowedEmails();
   const categoryRows = buildCategories();
   const ruleRows = buildRules();
 
