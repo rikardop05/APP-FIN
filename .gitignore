@@ -60,3 +60,4 @@ desktop.ini
 # Arquivo bruto de banco (fatura/extrato) — CONVENTIONS §9.
 # Nome completo, digitos de cartao e endereco nunca entram no historico.
 /.private/
+.neon
