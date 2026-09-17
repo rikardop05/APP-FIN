@@ -195,3 +195,25 @@ Na mesma `y=425` convivem um lançamento e uma linha de resumo que **não têm r
 | Valor | `~201–214` | `999,99` / `-9.999,99` | **sem `R$`**, sinal por `-`, à direita |
 | Marcador | `16–17` | `9` | dígito solto, fora da tabela |
 | Quadro-resumo | `> 320` | — | **não é lançamento** |
+
+### 8.2 De onde sai o ano (medido em 2026-09-17)
+
+A linha de lançamento do Santander traz `dd/MM` **sem ano**, igual ao Nubank e ao Mercado Pago. Mas
+o ano existe no arquivo, em data completa `dd/MM/aaaa`:
+
+| Página | y | x | Máscara |
+|---|---|---|---|
+| 2 | 748 | 401 | `99/99/9999` |
+| 2 | 689 | 499 | `99/99/9999` |
+| 2 | 195 | 527 | `99/99/9999` |
+
+Nenhuma ocorrência nas páginas 1, 3 e 4 — todas vivem no bloco-resumo da página 2. O rótulo de 10
+caracteres em `y=761, x=412` encabeça a coluna do primeiro (`x=401`), que é a data de vencimento.
+
+**Regra para o parser, e ela é deliberadamente robusta em vez de posicional:** procure a **primeira
+ocorrência de `\d{2}/\d{2}/\d{4}` fora da área de lançamentos** (`x > 250`, onde fica o
+quadro-resumo) e use o ano dela. Não fixe `y=748`: a altura do bloco-resumo depende de quanto texto
+promocional o banco imprimiu acima, e isso muda a cada fatura.
+
+Ordem obrigatória, igual aos outros dois bancos: **cabeçalho → parâmetro do chamador → linha com
+confiança baixa** para o usuário completar. Nunca do relógio.

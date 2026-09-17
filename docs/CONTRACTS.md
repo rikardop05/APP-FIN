@@ -330,7 +330,91 @@ function monthlyKpis(input: {
 }
 ```
 
-> Regra crítica (RC-03/RC-04): `transfer` e `credit_card_payment` **não entram** em `expenseCents`. `investment_contribution` sai em `contributionsCents`, separado da despesa.
+```ts
+/**
+ * Gasto por categoria no mês, com variação contra a média dos 3 meses anteriores.
+ * Conta apenas `kind === 'expense'`. Uma passada sobre as transações.
+ */
+function spendingByCategory(input: {
+  competence: Competence
+  transactions: { competence: Competence; amountCents: Cents; kind: TransactionKind; categoryId: string | null }[]
+  categories: { id: string; name: string; nature: CategoryNature }[]
+}): {
+  categoryId: string; name: string; nature: CategoryNature
+  spentCents: Cents                  // max(0, -liquido) — ver a regra de sinal abaixo
+  average3mCents: Cents              // média das 3 competências anteriores
+  variationBp: BasisPoints | null    // null quando a média é zero
+}[]
+
+/** Faturas cujo total informado não bate com a soma dos lançamentos. */
+function divergentStatements(statements: {
+  statementId: string
+  reportedTotalCents: Cents | null
+  transactions: { amountCents: Cents }[]
+}[]): { statementId: string; differenceCents: Cents }[]
+```
+
+### Decisões fixadas em 2026-09-17 (perguntas do Esquadro no T-115)
+
+**Regra crítica (RC-03/RC-04):** `transfer` e `credit_card_payment` **não entram em campo nenhum** —
+nem em `expenseCents`, nem em `incomeCents`, nem em `contributionsCents`. São invisíveis ao KPI.
+`investment_contribution` sai em `contributionsCents`, separado da despesa.
+
+**Sinal — cada balde é o LÍQUIDO na sua direção natural, com piso em zero.** Corrigido em
+2026-09-17, achado do Corvo na revisão do T-115; a primeira versão dizia "módulo", e estava errada.
+
+```
+incomeCents        = max(0,  soma dos kind 'income')
+expenseCents       = max(0, −soma dos kind 'expense')
+contributionsCents = max(0, −soma dos kind 'investment_contribution')
+```
+
+`surplusCents = income − expense` continua, e **pode** ser negativo — é déficit.
+
+**Por que não é módulo.** O cenário que derruba a regra antiga: um mês (ou uma categoria) em que só
+houve **estorno** — `kind: 'expense'` com valor **positivo**, dinheiro voltando. Em módulo, o painel
+anunciaria *"despesa: R$ 50,00"* num mês em que a família **recebeu** R$ 50 de volta. Número
+plausível e falso, que é o pior defeito possível aqui.
+
+O mesmo espelho vale nos outros dois baldes, e por isso a regra é uniforme e não só para despesa:
+estorno de receita (`income` negativo) não é ganho; resgate de investimento (`contribution`
+positivo) não é aporte.
+
+**Precedente que obriga esta escolha:** §5 já decidiu, no T-110, que *mês só com estorno não conta
+como comprometimento* (`totalCents < 0`, nunca `!= 0`). Era a mesma família, o mesmo estorno e a
+regra oposta. Duas leituras contraditórias do mesmo fato é exatamente o que produz número
+inexplicável no painel.
+
+**Limitação conhecida, deliberada:** quando o estorno supera o gasto, a sobra do estorno é **cortada
+pelo piso** e não aparece em nenhum balde. Não vira receita, porque estorno não é ganho. É perda de
+informação aceita em troca de nunca exibir "despesa negativa" num KPI. Não "conserte" isso sem
+reabrir a decisão.
+
+**Balde por `kind`, nunca por `categoryNature`.** `incomeCents` soma `kind: 'income'`; `expenseCents`
+soma `kind: 'expense'`; `contributionsCents` soma `kind: 'investment_contribution'`. O
+`categoryNature` entra **só** em `essentialShareBp`. Uma única fonte de verdade para classificar
+dinheiro evita que as duas divirjam.
+
+**`status`: soma `posted` e `planned`.** A família quer saber o custo do mês **inteiro**, não só o já
+lançado — parcela que cai dia 28 é despesa daquele mês mesmo em dia 3. O comprometimento *além* do
+mês já sai separado em `futureInstallmentsCents`.
+
+**Fórmulas:**
+- `surplusCents = incomeCents − expenseCents`. **Aporte NÃO é subtraído**: ele é *destino* da sobra,
+  não redução dela. Subtrair contaria duas vezes quem investe.
+- `savingsRateBp = surplus / income`, `null` quando `income` é zero.
+- `essentialShareBp = despesa essencial / income`, `null` quando `income` é zero. É fração da
+  **renda**, não da despesa — é a métrica de saúde financeira (regra 50/30/20), e fica coerente com
+  `savingsRateBp`, que também é sobre a renda.
+
+**`spendingByCategory` — quais categorias saem na lista:** as que tiveram gasto no mês **ou** em
+qualquer um dos 3 meses anteriores. Categoria zerada nos quatro fica **fora**. O motivo de não
+filtrar só pelo mês corrente: categoria que sumiu é sinal, não ausência — `spentCents: 0` com
+`average3mCents` alto é exatamente o que a família precisa ver.
+
+**Comprometimento futuro resumido: NÃO ganha assinatura nova.** `futureCommitment` (§5) já devolve
+`totalCents` e `lastCommittedCompetence`, que *é* o resumo. A tela chama aquilo direto. Criar um
+invólucro em `kpis.ts` seria camada redundante sobre função pura já testada.
 
 ## 15. Importação — `/lib/import`
 
@@ -379,10 +463,28 @@ interface GroupIntoRowsOptions {
 }
 function groupIntoRows(items: PdfTextItem[], opts?: GroupIntoRowsOptions): PdfTextRow[]
 
-/** Parsers por banco: mapeiam faixas de x para data | descricao | valor. */
-function parseNubankPdf(rows: PdfTextRow[]): ParseResult          // T-117
-function parseSantanderPdf(rows: PdfTextRow[]): ParseResult       // T-117b
-function parseMercadoPagoPdf(rows: PdfTextRow[]): ParseResult     // T-117c
+/**
+ * Parsers por banco: mapeiam faixas de x para data | descricao | valor.
+ *
+ * O segundo parametro e OPCIONAL e aditivo, e os tres bancos convergiram para a
+ * mesma forma sem combinarem — sinal de que o problema e do dominio, nao do layout:
+ * NENHUM dos tres imprime o ano na linha de lancamento.
+ *
+ *   interface <Banco>PdfParseOptions { defaultYear?: number }
+ *
+ * PRECEDENCIA DO ANO, obrigatoria e igual nos tres:
+ *   1. cabecalho do proprio arquivo (Nubank §6.2, Santander §8.2, MP §7);
+ *   2. defaultYear, informado pelo chamador;
+ *   3. nada disso: `occurredOn: null`, confidence baixa, o usuario completa na
+ *      tela de confirmacao. A linha NUNCA e descartada.
+ *
+ * O relogio NAO entra em nenhum degrau. Assumir "ano atual" quebra em silencio
+ * toda janeiro, quando se importa a fatura de dezembro — e o ESLint bloqueia
+ * `new Date()` em lib/import de proposito.
+ */
+function parseNubankPdf(rows: PdfTextRow[], opts?: NubankPdfParseOptions): ParseResult          // T-117
+function parseSantanderPdf(rows: PdfTextRow[], opts?: SantanderPdfParseOptions): ParseResult    // T-117b
+function parseMercadoPagoPdf(rows: PdfTextRow[], opts?: MercadoPagoPdfParseOptions): ParseResult // T-117c
 
 /** Identifica o banco pelo conteudo das primeiras linhas, para escolher o parser. */
 function detectPdfIssuer(rows: PdfTextRow[]): 'nubank' | 'santander' | 'mercadopago' | null

@@ -22,7 +22,11 @@ Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATI
 | T-120 | Tipos e detecção de origem | Garimpo | **done** `4e8efc3` | Revisão sem nenhum achado. `ColumnMap`/`ImportMapping` corretamente omitidos (Fase 4) |
 | T-121 | Detector de parcelas | Garimpo | **done** `4e8efc3` | F-02 e F-03 corrigidos. Tetos: **24** sem evidência, **99** com evidência escrita |
 | T-110 | Comprometimento futuro | Esquadro | **done** | Validado pelo Orquestrador: 17 testes conferidos à mão, lint e typecheck limpos. Fixou a semântica de `lastCommittedCompetence` |
-| T-119 | Parser de texto colado | Funil | review | Em revisão do Corvo |
+| T-112 | Tela de lançamentos | Lanterna | **done** | Verificado por imagem, desktop e 390px. Lote, filtro de não categorizados e `suggestRulePattern` exercitados. Dívida de UX mobile registrada |
+| T-115 | Dashboard Fase 1 | Esquadro (cálculo) / Lanterna (tela) | doing | `kpis.ts` **done**; a tela destrava agora |
+| T-117b | Parser Santander | Peneira | **done** | 20 testes. `xBands` aplicado; ano resolvido por §8.2, regra não-posicional |
+| T-117c | Parser Mercado Pago | Funil | **done** | 27 testes. Suposição de linha de continuação removida após medição |
+| T-119 | Parser de texto colado | Funil | **done** | 36 testes |
 | T-107 | Pipeline de preview | Peneira | todo | Ganhou requisito novo: desempatar parcela × data pelo `occurredOn` da linha |
 | T-117 | Extração de PDF + parser Nubank | Peneira | doing | `extract.ts` e `rows.ts` verdes. Layout do Nubank **medido em fatura real** e publicado anonimizado em `IMPORT-SOURCES.md` §6 |
 | T-004 | Autenticação | Estaca | **done** | Login real fim a fim. Os 3 critérios provados: 307 verificado pelo Orquestrador, token gravado no banco, recusa fora da allowlist testada em 3 camadas com falha fechada |
@@ -62,4 +66,50 @@ Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATI
 ## Dívida registrada
 
 - **Validação dos parsers contra fatura real fica no T-116.** O parser do Nubank foi construído sobre layout medido (`IMPORT-SOURCES.md` §6), mas com fixtures sintéticas. Santander e MP seguem sem medição.
+- **UX de mobile: o painel de filtros empurra a lista para fora da tela.** Em `/lancamentos` a 390px,
+  os sete campos de filtro ocupam a viewport inteira — vê-se o fim do painel e **um** lançamento.
+  Quem abre a tela no telefone rola sete campos antes da primeira transação. Isso inverte a
+  prioridade: a ação comum é **olhar** os lançamentos; filtrar é exceção. No desktop não acontece,
+  porque os filtros cabem em duas linhas. É defeito exclusivo do mobile, que é onde a família usa.
+  Correção provável: colapsar os filtros em acordeão com resumo (`12 lançamentos · 2 filtros ativos`).
+  **Decisão do humano em 2026-09-17: fica para uma passada dedicada de UI/UX**, com skill própria,
+  junto com as demais telas. Não corrigir isoladamente — T-113, T-114 e T-115 tendem a copiar o
+  mesmo padrão de cabeçalho, e a passada deve tratar todas de uma vez.
+
+- **`BUILD-PLAN` e roles distribuem posse por eixos diferentes, e se contradizem.**
+  O `BUILD-PLAN` declara posse **por tarefa** (`T-108` → `lib/db/queries/transactions.ts`); os roles
+  declaram posse **por agente** (Telas → `app/`, `components/`, `lib/db/queries/`). Enquanto um
+  agente tem uma tarefa só, as duas leituras coincidem. Quando tem várias tocando o mesmo diretório,
+  divergem — e o agente não tem como saber qual vale.
+
+  **Aconteceu duas vezes em 2026-09-17, nos dois sentidos:**
+  - o plano **deu** ao agente de telas um arquivo que não é dele (`lib/finance/kpis.ts`, no T-115).
+    Resolvido movendo o cálculo para o Esquadro, pela regra "tela não calcula";
+  - o plano **pareceu tirar** do agente de telas um arquivo que já era dele
+    (`lib/db/queries/transactions.ts`, listado no T-108 — que é tarefa do mesmo agente). Ele leu
+    "outra tarefa" como "outro dono", parou e perguntou. Custou uma rodada.
+
+  Nos dois casos o agente fez o certo ao parar. Mas a terceira vez vai acontecer, e pode cair num
+  agente menos cuidadoso.
+
+  **Correção:** a posse por agente (os roles) é a fonte de verdade; a lista do `BUILD-PLAN` é
+  indicativa, e serve para dizer *quais arquivos a tarefa toca*, não *de quem eles são*. Vale
+  escrever isso no cabeçalho do `BUILD-PLAN`, junto da nota que já existe lá sobre substituir stub
+  não ser violação de posse. Enquanto não estiver escrito, a regra é: **divergiu, pergunte ao
+  Orquestrador** — nunca deduza.
+
+- **O vocabulário do domínio mora na camada de banco, e a dependência está invertida.**
+  `TransactionKind` e `CategoryNature` são definidos em `lib/db/enums.ts`. A regra de pureza
+  (CONVENTIONS §5, com ESLint que cobre inclusive os `.test.ts`) impede `lib/finance/` e
+  `lib/import/` de importar de lá — **nem o tipo**. O resultado é que as camadas puras **redigitam**
+  as uniões à mão, e nada detecta divergência: acrescentar um valor no enum do banco não quebra nada,
+  e o KPI simplesmente deixa de cobrir o caso novo, em silêncio.
+  Um teste de paridade não resolve, porque ele também cairia sob a regra de camada.
+  **A correção é mover as uniões para um módulo puro compartilhado** (ex.: `lib/domain/enums.ts`),
+  com `lib/db/enums.ts` importando dali para montar o `pgEnum`. Quem define o que é um "tipo de
+  transação" é o domínio, não o Postgres. Com uma definição só, o drift fica impossível por
+  construção, em vez de apenas detectável. Achado do Corvo e do Esquadro no T-115.
+  **Não é urgente** — o schema está congelado e os enums estáveis — mas cruza a posse de dois
+  agentes (`lib/db/` e as camadas puras), então precisa de janela própria.
+
 - **O revisor não é mais de família de modelo diferente.** Corvo roda no mesmo DeepSeek dos implementadores, então a garantia de "ponto cego distinto" do `TEAM.md` §4 não vale; o role dele foi reescrito para exigir revisão por execução, e a validação final é sempre do Orquestrador.
