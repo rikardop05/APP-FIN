@@ -1,5 +1,17 @@
-import { CreditCard } from 'lucide-react';
-import { PageHeader, EmptyState } from '@/components/ui-kit';
+import { CartoesScreen } from '@/components/cards/cartoes-screen';
+
+export const dynamic = 'force-dynamic';
+
+function todayInSaoPaulo(): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
 
 /**
  * Stub do T-005 (layout e navegação) — só PageHeader e EmptyState.
@@ -7,18 +19,5 @@ import { PageHeader, EmptyState } from '@/components/ui-kit';
  * pelo T-113 (comprometimento futuro em 24 meses, uso de limite).
  */
 export default function CartoesPage() {
-  return (
-    <>
-      <PageHeader
-        title="Cartões"
-        description="Cartões e contas da família, faturas por mês, comprometimento futuro e parcelas em andamento."
-      />
-      <EmptyState
-        icon={CreditCard}
-        title="Nenhum cartão cadastrado"
-        description="Cadastre um cartão ou conta para começar a ver faturas e comprometimento futuro."
-        action={{ label: 'Ver lançamentos', href: '/lancamentos' }}
-      />
-    </>
-  );
+  return <CartoesScreen today={todayInSaoPaulo()} />;
 }

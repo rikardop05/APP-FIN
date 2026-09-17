@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import type { ComponentType } from 'react';
 import { cn } from '@/lib/utils';
+import { Button } from './button';
 
-type EmptyStateAction = {
-  label: string;
-  href: string;
-};
+type EmptyStateAction =
+  | { label: string; href: string; onClick?: never }
+  | { label: string; onClick: () => void; href?: never };
 
 type EmptyStateProps = {
   title: string;
@@ -42,12 +42,18 @@ export function EmptyState({
           </p>
         ) : null}
       </div>
-      <Link
-        href={action.href}
-        className="mt-2 inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-      >
-        {action.label}
-      </Link>
+      {'onClick' in action ? (
+        <Button className="mt-2" onClick={action.onClick}>
+          {action.label}
+        </Button>
+      ) : (
+        <Link
+          href={action.href}
+          className="mt-2 inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          {action.label}
+        </Link>
+      )}
     </div>
   );
 }
