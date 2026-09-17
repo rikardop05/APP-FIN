@@ -373,7 +373,11 @@ function extractPdfTextItems(bytes: Uint8Array, opts?: { password?: string }): P
  * O Santander emite cada celula como run separado: 884 runs, apenas 1 com data e valor juntos.
  * Agrupa por y (com tolerancia, default 2pt) e ordena por x.
  */
-function groupIntoRows(items: PdfTextItem[], opts?: { yTolerance?: number }): PdfTextRow[]
+interface GroupIntoRowsOptions {
+  yTolerance?: number                                  // default 2pt
+  xBands?: readonly (readonly [number, number])[]      // ver a nota abaixo
+}
+function groupIntoRows(items: PdfTextItem[], opts?: GroupIntoRowsOptions): PdfTextRow[]
 
 /** Parsers por banco: mapeiam faixas de x para data | descricao | valor. */
 function parseNubankPdf(rows: PdfTextRow[]): ParseResult          // T-117
@@ -382,6 +386,32 @@ function parseMercadoPagoPdf(rows: PdfTextRow[]): ParseResult     // T-117c
 
 /** Identifica o banco pelo conteudo das primeiras linhas, para escolher o parser. */
 function detectPdfIssuer(rows: PdfTextRow[]): 'nubank' | 'santander' | 'mercadopago' | null
+
+// xBands — acrescentado em 2026-09-16, medicao do Santander (IMPORT-SOURCES §8).
+//
+// O PROBLEMA: na fatura do Santander DUAS TABELAS INDEPENDENTES dividem as mesmas
+// linhas `y`. Lancamentos ficam em x < 250; um quadro-resumo fica em x > 320. Na
+// mesma y=425 convivem uma compra e um totalizador sem relacao entre si.
+//
+// Agrupar so por `y` cola as duas. As celulas preservam o `x`, entao um parser
+// consegue filtrar — mas o campo `text` da linha (celulas unidas por espaco) sai
+// contaminado, e e ele que alimenta heuristica simples, inclusive detectPdfIssuer.
+//
+// A SOLUCAO: faixas de `x` DECLARADAS pelo parser do banco, que e quem conhece a
+// geometria. Sem `xBands` nada muda — o default continua sendo uma linha por `y`,
+// que e o caso do Nubank e do Mercado Pago.
+//
+//   groupIntoRows(items, { xBands: [[0, 250], [320, 595]] })
+//
+// POR QUE NAO DETECCAO AUTOMATICA DE VAO: no Nubank a data esta em x=123, a
+// descricao em 185 e o valor em ~496. O vao entre descricao e valor e enorme e e
+// coluna legitima da MESMA tabela. Um limiar fixo partiria toda linha de lancamento
+// do Nubank em duas. Deteccao automatica exigiria achar corredores verticais que
+// PERSISTEM pela pagina inteira — bem mais caro, e desnecessario quando o parser
+// ja sabe a geometria do proprio banco.
+//
+// Celula fora de TODAS as faixas vira linha propria, nunca e descartada: e a regra
+// de "nenhuma linha some em silencio" aplicada a geometria.
 
 // text.ts — T-119, fallback universal
 type ParseConfidence = 'high' | 'medium' | 'low'
