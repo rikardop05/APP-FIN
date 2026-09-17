@@ -8,6 +8,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -642,3 +643,38 @@ export const householdSettings = pgTable('household_settings', {
   projectionMonths: smallint('projection_months').notNull().default(12),
   commitmentMonths: smallint('commitment_months').notNull().default(24),
 });
+
+// ---------------------------------------------------------------------------
+// verification_token — infraestrutura do Auth.js (magic link)
+// ---------------------------------------------------------------------------
+
+/**
+ * Store de tokens do magic link do Auth.js (T-004).
+ *
+ * **Historico (para nao reescrever decisao alheia):** a tabela foi decidida e
+ * escrita pelo proprio T-004, em 2026-09-16, porque o provider de e-mail do
+ * Auth.js exige persistir verification tokens. Foi ratificada pelo orquestrador
+ * na validacao do T-002b — a ratificacao veio **depois**, nao antes.
+ *
+ * **Excecao deliberada a duas convencoes**, ambas porque o contrato do adapter
+ * do Auth.js nao as permite:
+ * - nao tem `id uuid` nem `created_at`: a PK e o par `(identifier, token)`, e o
+ *   ciclo de vida e o `expires`;
+ * - nao tem `household_id`: o token e criado **antes** de existir sessao. A
+ *   fronteira de isolamento continua valendo para todo dado de dominio; esta
+ *   tabela guarda so o segredo efemero do login, e o `identifier` e o e-mail da
+ *   allowlist, que mapeia 1:1 para `members` (household unico, SPEC §2).
+ *
+ * O `token` guardado e o **hash** (SHA-256) do token enviado no e-mail, nunca o
+ * token em claro — quem escreve e o adapter em `lib/auth/adapter.ts`. A linha e
+ * removida no primeiro uso (`useVerificationToken`), o que da single-use.
+ */
+export const verificationTokens = pgTable(
+  'verification_token',
+  {
+    identifier: text('identifier').notNull(),
+    token: text('token').notNull(),
+    expires: timestamp('expires', { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.identifier, t.token] })],
+);

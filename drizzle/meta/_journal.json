@@ -8,6 +8,13 @@
       "when": 1789028239578,
       "tag": "0000_silent_zombie",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789590068889,
+      "tag": "0001_true_raider",
+      "breakpoints": true
     }
   ]
 }
