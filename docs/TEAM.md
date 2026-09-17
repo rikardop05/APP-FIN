@@ -12,27 +12,46 @@ Estado em **2026-09-16**. Atualizar quando a equipe mudar.
 
 | Codinome | Programa · modelo | Role | Posse exclusiva |
 |---|---|---|---|
-| **Claude Code** (eu) | Claude Code · Opus 5 | `Orquestrador` | `docs/`, e a ratificação de `lib/import/types.ts` |
+| **Claude Code** (eu) | Claude Code · Opus 5 | `Orquestrador` | `docs/`, a ratificação de `lib/import/types.ts`, **e os commits** |
 | **Estaca** | OpenCode · `deepseek-v4.1-flash` | `Infra e Schema APPFIN` | `lib/db/`, `drizzle/`, `scripts/seed.ts`, `lib/auth/`, `app/(auth)/`, `app/api/auth/`, `middleware.ts` |
 | **Esquadro** | OpenCode · `deepseek-v4.1-flash` | `Motor Financeiro APPFIN` | `lib/money/`, `lib/date/`, `lib/finance/` |
 | **Peneira** | OpenCode · `deepseek-v4.1-flash` | `Importacao APPFIN` | `lib/import/pdf/**` |
 | **Funil** | OpenCode · `deepseek-v4.1-flash` | `Importacao Texto APPFIN` | `lib/import/text.ts` **e mais nada** |
 | **Lanterna** | Codex · `gpt-5.6-luna` | `Telas APPFIN` | `app/`, `components/`, `lib/db/queries/` |
 | **Corvo** | OpenCode · `deepseek-v4.1-flash` | `Revisor APPFIN` | **nenhuma** — read-only |
-| **Cinzel** | OpenCode · `deepseek-v4.1-flash` | `Git Manager APPFIN` | só commits |
 
-Topologia: Bigorna e Prumo conectados a mim e ao Vigia. Vigia conectado aos dois.
+Topologia: todos ligados a mim; os cinco implementadores ligados também ao Corvo.
 
 ```
-                 Claude Code (Orquestrador)
-                  /       |       \      \
-            Bigorna     Prumo   Vigia   Enxada
-                  \       /       /
-                   `--- Vigia ---'
+            Claude Code (Orquestrador)
+        /     /      |      \        Estaca Esquadro Peneira Funil Lanterna
+        \     \      |      /      /
+         `------ Corvo --------'
 ```
 
-- Bigorna e Prumo pedem revisao direto ao Vigia, sem me atravessar.
-- Enxada e ligado somente a mim: entrega rascunho, eu integro ou passo ao dono do arquivo.
+- Os implementadores pedem revisão direto ao **Corvo**, sem me atravessar.
+- **Os commits são meus.** Nenhum implementador commita — todos entregam no working tree.
+- O Lanterna tem um portal (`http://localhost:3000`) para verificar tela por imagem.
+
+### Por que não há mais Git Manager (2026-09-17)
+
+O **Cinzel** foi dispensado. O papel existia para centralizar os commits num agente que conferisse
+os gates antes de cada um — bom desenho, execução inviável.
+
+Ele falhou **seis vezes** numa única sessão, sempre do mesmo jeito: pedido com mais de um passo
+voltava **parcialmente executado, sem aviso**. Dois de quatro commits saíam e os outros dois sumiam
+em silêncio; num caso foram quatro pedidos do mesmo commit até sair. Cada falha custava uma rodada
+de verificação, porque o relatório dizia que estava feito. Funcionou exatamente uma vez: quando o
+pedido foi reduzido a **uma ação única**.
+
+Os dois objetivos do papel — histórico limpo e gates conferidos — o Orquestrador já cumpria de
+qualquer forma, porque valida toda entrega antes de aceitar. O agente virou um intermediário que
+somava latência e um modo de falha silencioso, sem somar garantia.
+
+**Lição que vale além deste papel:** um agente em modelo rápido executa bem *uma* instrução por
+mensagem. A confiabilidade cai com o número de passos encadeados, e o sintoma é **omissão
+silenciosa** — o pior tipo, porque é indistinguível de sucesso até alguém conferir o artefato.
+Ver `ORCHESTRATION.md` §3.1.
 
 ## 2. Equipe completa desde 2026-09-10
 

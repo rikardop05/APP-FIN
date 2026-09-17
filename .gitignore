@@ -64,3 +64,7 @@ desktop.ini
 
 # Copias de .next feitas por inspecao de agente (quebram o lint do repo inteiro)
 .next-*/
+
+# Skills de fornecedor geradas por CLI (o `neon skills` escreve aqui e em .claude/).
+# Sao 272 KB de documentacao de terceiro, nao codigo do projeto.
+.agents/
