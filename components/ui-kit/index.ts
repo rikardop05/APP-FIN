@@ -5,3 +5,6 @@ export { EmptyState } from './empty-state';
 export { DataTable, type DataTableColumn } from './data-table';
 export { Badge } from './badge';
 export { Button } from './button';
+export { Checkbox } from './checkbox';
+export { Input } from './input';
+export { Select } from './select';
