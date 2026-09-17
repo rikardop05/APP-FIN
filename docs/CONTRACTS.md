@@ -570,6 +570,8 @@ type AppSession = {
  *
  * **Lança** quando não há sessão válida. Não devolve `null`: ver a nota abaixo.
  */
+class SessionMissingError extends Error {}   // o que requireSession lanca
+
 function requireSession(): Promise<AppSession>
 
 /** Versão não-lançante, só para onde a ausência de sessão é estado legítimo (ex.: a própria /login). */
@@ -601,3 +603,15 @@ sai é `requireSession()`.
 > Isto **não** é precedente para divergir do contrato sem avisar. A mudança deveria ter sido
 > proposta antes, não descoberta na validação — o custo aqui foi baixo só porque um único consumidor
 > tinha compilado contra ela.
+
+> **`SessionMissingError`, acrescentada em 2026-09-16 na validação do T-109.** O consumidor precisa
+> distinguir "sem sessão" (vira **401**) de qualquer outra falha (vira **500**). A primeira versão
+> lançava um `Error` cru, e as rotas passaram a testar `error.message.startsWith('Sessao ausente')`
+> — em quatro arquivos, de outro dono.
+>
+> Isso transformava **a mensagem de erro em API**: bastava reformular o texto em `session.ts` para as
+> quatro rotas pararem de reconhecer o caso e devolverem 500 no lugar de 401, sem erro de compilação
+> e sem teste vermelho. O usuário deslogado veria "erro interno" em vez de ir para o login.
+>
+> Por isso o contrato é a **classe**, não o texto. Consumidores testam `instanceof
+> SessionMissingError`; a mensagem fica livre para mudar.

@@ -3,7 +3,7 @@
 Mantido pelo orquestrador. Estados: `todo | doing | review | done | blocked`.
 Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATION.md` §9, equipe em `TEAM.md`.
 
-**Última atualização:** 2026-09-16 · 326 testes verdes · HEAD `20baa59` · entregas em voo no working tree
+**Última atualização:** 2026-09-17 · 407 testes verdes · HEAD `079c7e8` (empurrado para `origin/main`) · T-004 e T-109 aguardando commit
 
 ## Tarefas
 
@@ -25,7 +25,8 @@ Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATI
 | T-119 | Parser de texto colado | Funil | review | Em revisão do Corvo |
 | T-107 | Pipeline de preview | Peneira | todo | Ganhou requisito novo: desempatar parcela × data pelo `occurredOn` da linha |
 | T-117 | Extração de PDF + parser Nubank | Peneira | doing | `extract.ts` e `rows.ts` verdes. Layout do Nubank **medido em fatura real** e publicado anonimizado em `IMPORT-SOURCES.md` §6 |
-| T-004 | Autenticação | — | todo | **Sem dono ativo.** `AUTH_ALLOWED_EMAILS` já preenchido |
+| T-004 | Autenticação | Estaca | **done** | Login real fim a fim. Os 3 critérios provados: 307 verificado pelo Orquestrador, token gravado no banco, recusa fora da allowlist testada em 3 camadas com falha fechada |
+| T-109 | Contas e cartões (CRUD + tela) | Lanterna | **done** | Verificado por **imagem**, desktop e 390px, nos dois estados. `householdId` é 1º parâmetro obrigatório nas 9 queries |
 
 ## Decisões de escopo em vigor
 

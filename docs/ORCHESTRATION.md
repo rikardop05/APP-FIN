@@ -70,6 +70,20 @@ NÃO FAÇA
 - não "melhore" o escopo: entregue esta tarefa
 ```
 
+## 3.1 Armadilhas de ferramenta já pagas
+
+Cada uma destas custou pelo menos uma rodada. Registradas para não custarem de novo.
+
+| Sintoma | Causa | O que fazer |
+|---|---|---|
+| `maestri ask` digita o prompt no PowerShell, linha a linha, virando `CommandNotFoundException` | TUI do agente não subiu ainda | Dar tempo de boot antes do primeiro `ask`. Com Codex, o modelo se fixa no `--command` do recruit (`codex -m <modelo>`); um `--replace` só com `--preset` volta ao modelo padrão |
+| `maestri portal screenshot` não produz arquivo | **A janela do Maestri estava minimizada** — o portal não renderiza, então não há imagem | Pedir ao humano que restaure a janela. Depois: capturar e copiar **na mesma sequência**, porque o caminho devolvido é temporário e expira |
+| `portal snapshot` não serve para conferir tela | Ele devolve **árvore de acessibilidade em texto**, não imagem | Para imagem é `portal screenshot` |
+| Hydration mismatch cujo diff é `data-mref="..."` | **Ruído do próprio portal**, que injeta esses atributos para referenciar elementos (`mref` = maestri ref). Não existe no código nem no bundle | **Ignorar.** Qualquer outro diff de hydration é real e deve ser investigado |
+| Varredura em `app/` volta vazia e a conclusão fica errada | Glob de **PowerShell não casa `(app)` nem `[id]`** — parênteses e colchetes são sintaxe de wildcard. Falha **em silêncio**, sem erro | Usar `bash`/`grep -r` para varrer `app/`, ou `-LiteralPath`. Já produziu dois falsos negativos: "rotas `[id]` sem `requireSession`" e "nenhuma causa de hydration" |
+| Overlay do Next acusa `Runtime Error / JavaScript execution timed out after 10s`, em `<anonymous>`, sem arquivo nem componente | Instrumentação do portal, não o app. Verificado: `load` está em `useCallback([])` (sem loop de render), `/login` aberto em Chrome comum tem console 100% limpo, e o mesmo travamento ocorreu em `/login`, que não tem nada da tela de cartões | Ignorar dentro do portal. **Reconferir no T-116**, abrindo o app em navegador normal |
+| Entrega de agente volta pela metade, sem aviso | Pedido com **várias etapas encadeadas**. A última some silenciosamente | Um objetivo por mensagem. Vale especialmente para o Git Manager e para tarefas de captura |
+
 ## 4. Regras de paralelismo
 
 1. **Posse exclusiva é a regra que sustenta tudo.** Antes de disparar agentes simultâneos, confira que as listas de posse não se cruzam. Se cruzarem, serialize.

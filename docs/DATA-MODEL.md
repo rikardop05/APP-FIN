@@ -5,6 +5,7 @@
 
 Todas as tabelas: `id uuid primary key default gen_random_uuid()`.
 Todas, exceto as filhas de `households`, têm `household_id uuid not null references households(id) on delete cascade`.
+Exceção única a essas duas regras: `verification_token`, infraestrutura do Auth.js — sem `id` e sem `household_id` (ver §2).
 
 ---
 
@@ -287,6 +288,24 @@ Defaults ao criar plano: conservative 300/300 · moderate 500/400 · optimistic 
 | budget_warn_bp | integer not null default 8000 | semáforo amarelo em 80 % |
 | projection_months | smallint not null default 12 | |
 | commitment_months | smallint not null default 24 | |
+
+### verification_token
+Infraestrutura do Auth.js para o login por magic link (T-004). **Não é tabela de domínio** — nenhum dado financeiro mora aqui.
+> Adicionada em 2026-09-16 pelo T-004 (decisão do próprio agente: o provider de e-mail do Auth.js exige persistir verification tokens), ratificada pelo orquestrador depois, na validação.
+
+| coluna | tipo | notas |
+|---|---|---|
+| identifier | text not null | e-mail da allowlist (mapeia 1:1 para `members`) |
+| token | text not null | **hash** SHA-256 de `${token}${secret}`, como o Auth.js grava; o valor em claro nunca chega ao banco |
+| expires | timestamptz not null | TTL do link |
+
+`primary key (identifier, token)`
+
+> **Duas exceções deliberadas ao preâmbulo**, porque o contrato do adapter do Auth.js não as permite:
+> - **sem `id`/`created_at`** — a PK é o par `(identifier, token)` e o ciclo de vida é o `expires`;
+> - **sem `household_id`** — o token é criado **antes** de existir sessão. A fronteira de isolamento continua valendo para todo dado de domínio; aqui só mora o segredo efêmero do login.
+>
+> A linha é removida no primeiro uso (`useVerificationToken`), o que dá o single-use; tokens expirados e nunca usados são purgados no insert seguinte.
 
 ## 3. Seed obrigatório
 
