@@ -1,23 +1,18 @@
-import { ListChecks } from 'lucide-react';
-import { PageHeader, EmptyState } from '@/components/ui-kit';
+import { LancamentosScreen } from '@/components/transactions/lancamentos-screen';
 
-/**
- * Stub do T-005 (layout e navegação) — só PageHeader e EmptyState.
- * Substituída pelo T-112 (tabela filtrável, edição inline, categorização em lote).
- */
+export const dynamic = 'force-dynamic';
+
+function todayInSaoPaulo(): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 export default function LancamentosPage() {
-  return (
-    <>
-      <PageHeader
-        title="Lançamentos"
-        description="Receitas e despesas da família, filtráveis por período, categoria, cartão ou conta, responsável e texto."
-      />
-      <EmptyState
-        icon={ListChecks}
-        title="Nenhum lançamento ainda"
-        description="Os lançamentos aparecem aqui depois da primeira importação de fatura ou extrato, ou de um lançamento manual."
-        action={{ label: 'Importar fatura ou extrato', href: '/importar' }}
-      />
-    </>
-  );
+  return <LancamentosScreen today={todayInSaoPaulo()} />;
 }
