@@ -3,7 +3,7 @@
 Mantido pelo orquestrador. Estados: `todo | doing | review | done | blocked`.
 Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATION.md` §9, equipe em `TEAM.md`.
 
-**Última atualização:** 2026-09-23 · 483 testes verdes · HEAD `ef282c4`, sincronizado com `origin/main` · working tree limpo
+**Última atualização:** 2026-09-24 · 591 testes verdes · HEAD `0554474`, sincronizado · **Fase 1 implementada por inteiro; só o aceite (T-116) falta**
 
 ## Tarefas
 
@@ -23,19 +23,53 @@ Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATI
 | T-121 | Detector de parcelas | Garimpo | **done** `4e8efc3` | F-02 e F-03 corrigidos. Tetos: **24** sem evidência, **99** com evidência escrita |
 | T-110 | Comprometimento futuro | Esquadro | **done** | Validado pelo Orquestrador: 17 testes conferidos à mão, lint e typecheck limpos. Fixou a semântica de `lastCommittedCompetence` |
 | T-112 | Tela de lançamentos | Lanterna | **done** | Verificado por imagem, desktop e 390px. Lote, filtro de não categorizados e `suggestRulePattern` exercitados. Dívida de UX mobile registrada |
-| T-115 | Dashboard Fase 1 | Esquadro (cálculo) / Lanterna (tela) | doing | `kpis.ts` **done**; a tela destrava agora |
+| T-115 | Dashboard Fase 1 | Esquadro (cálculo) / Lanterna (tela) | **done** `0554474` | Horizonte lido do household, não fixo na tela |
 | T-117b | Parser Santander | Peneira | **done** | 20 testes. `xBands` aplicado; ano resolvido por §8.2, regra não-posicional |
 | T-117c | Parser Mercado Pago | Funil | **done** | 27 testes. Suposição de linha de continuação removida após medição |
 | T-119 | Parser de texto colado | Funil | **done** | 36 testes |
-| T-108 | Persistência da importação | — | blocked | Depende do T-107 |
-| T-111 | Tela de importação e confirmação | — | blocked | Depende do T-108. **A tela mais importante do projeto** |
-| T-113 | Comprometimento futuro na tela de cartões | — | todo | **DESTRAVADO** (T-110 e T-109 fechados) |
-| T-114 | Categorias e regras em /config | — | todo | **DESTRAVADO** (T-002, T-005, T-104 fechados) |
-| T-116 | Aceite de ponta a ponta da Fase 1 | — | blocked | Gate humano. Exige as faturas reais |
-| T-107 | Pipeline de preview | — | todo | **DESTRAVADO**: os três parsers e o texto colado fecharam. É o caminho crítico agora. Requisito extra: desempatar parcela × data pelo `occurredOn` da linha |
+| T-108 | Persistência da importação | Lanterna | **done** `fd32ac8` | Transação única com teste de rollback; dedupe provado de ponta a ponta |
+| T-111 | Tela de importação e confirmação | Lanterna | **done** `499abb2` | Os 7 passos percorridos na tela real. Competência vem do servidor |
+| T-113 | Comprometimento na tela de cartões | Lanterna | **done** `6546d37` | Verificado por imagem; mês positivo não desenha barra |
+| T-114 | Categorias e regras em /config | Funil | **done** `d9b557e` | Os 2 critérios provados por execução; cadeia gravação→leitura→motor fechada |
+| T-116 | Aceite de ponta a ponta da Fase 1 | — | **todo** | ⛔ **GATE HUMANO.** Exige validar os 3 parsers contra as faturas reais em `.private/` |
+| T-107 | Pipeline de preview | Peneira | **done** `14ccf3e` | Desempate parcela × data por `occurredOn`; invariante do summary como teste de propriedade |
 | T-117 | Extração de PDF + parser Nubank | Peneira | **done** `73933d8` | Layout medido em fatura real (§6). `groupIntoRows` ganhou `xBands` para o caso do Santander |
 | T-004 | Autenticação | Estaca | **done** | Login real fim a fim. Os 3 critérios provados: 307 verificado pelo Orquestrador, token gravado no banco, recusa fora da allowlist testada em 3 camadas com falha fechada |
 | T-109 | Contas e cartões (CRUD + tela) | Lanterna | **done** | Verificado por **imagem**, desktop e 390px, nos dois estados. `householdId` é 1º parâmetro obrigatório nas 9 queries |
+
+## Fase 2 — motores prontos
+
+| ID | Tarefa | Estado |
+|----|--------|--------|
+| T-201 | Recorrência | **done** `8441dbc` — `dueDay` é a regra, `startsOn` é o piso |
+| T-202 | Conciliação | **done** `4d14c49` — guloso sobre lista globalmente ordenada |
+| T-203 | Orçamento | **done** `ba9f71a` — 4 limites exatos; ausência de despesa ≠ ausência de dado |
+
+Faltam as telas: T-204 a T-208.
+
+## Decisões tomadas pelo Orquestrador em 2026-09-24 (**todas revisáveis**)
+
+O humano autorizou decidir sozinho o que fosse contido, marcando como revisável.
+
+| Decisão | Onde | Por quê |
+|---|---|---|
+| `N/M` ambíguo **único** vira data, não parcela | `lib/import/text.ts` | errar para data custa um clique; errar para parcela projeta M meses de despesa inexistente |
+| Horizonte lê `commitment_months` do household | T-115 | o SPEC tinha 12 e 24 para o mesmo conceito |
+| Média de orçamento divide por **todos** os meses | `lib/finance/budget.ts` | ausência de despesa não é ausência de dado — IPVA sugeriria orçamento mensal do valor anual |
+| `plannedCents = 0` → `usage: null` | `lib/finance/budget.ts` | "sem orçamento definido", não "estourou" |
+| Critério de melhor par: valor → data → id | `CONTRACTS` §9 | soma ponderada é inexplicável quando o pareamento sai errado |
+
+## Auditoria de contradição (2026-09-24)
+
+O Corvo varreu os seis documentos e achou **17 contradições**, mais quatro categorias confirmadas
+limpas (unidade de centavos, basis points, nulabilidade, ordenação). Relatório completo em
+`.private/auditoria-contradicoes.md` — fora do repositório, porque é diagnóstico e não documentação.
+
+**Três graves já corrigidas** (`bfc1aeb`): o `dedupeHash` que faria parcelas 3/10 e 4/10 colidirem e
+sumirem como duplicata; o horizonte 12 × 24; e o sinal de `installment_plans.total_cents`.
+
+**Restam 14 para triar**, a maioria em áreas de Fase 2 e 3 ainda não construídas. Quatro são de
+posse e propriedade de arquivo, e valem uma passada junto com a dívida de `BUILD-PLAN` × roles.
 
 ## Decisões de escopo em vigor
 
