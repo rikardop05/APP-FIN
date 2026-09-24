@@ -42,12 +42,20 @@ Quando o crédito de uso do Codex acabar, o terminal do **Lanterna** é trocado 
 maestri recruit "Lanterna" --command "opencode -m opencode-go/minimax-m3" --replace "Lanterna"
 ```
 
-Duas coisas a lembrar na hora:
+**Permissão:** o humano quer o terminal novo com **permissão total**, para não travar o trabalho.
+O Orquestrador **não consegue** configurar isso: quando tentou, no início da sessão de 2026-09-17, o
+harness recusou com o motivo *"Create Unsafe Agents"*, e a recusa não foi contornada. Quem concede é
+o humano, do lado dele — foi assim que os cinco terminais atuais ficaram sem prompt de aprovação.
+Então a sequência é: o Orquestrador cria o terminal, avisa, e o humano libera.
+
+Três coisas a lembrar na hora:
 
 1. **A troca zera o contexto.** A tarefa em andamento precisa ser reenviada inteira, com as decisões
    já tomadas na conversa perdida — ver a armadilha de reinício no `ORCHESTRATION.md` §3.1. O que
    está no *role* sobrevive; o que está só em mensagem, não.
-2. **⚠ Verificar se o minimax-m3 enxerga imagem.** O Lanterna é hoje o único agente com visão, e é
+2. **Pedir ao humano que libere a permissão** assim que o terminal existir, antes de despachar a
+   tarefa — senão o agente para no primeiro comando e a troca perde o sentido.
+3. **⚠ Verificar se o minimax-m3 enxerga imagem.** O Lanterna é hoje o único agente com visão, e é
    assim que as telas são validadas — foi o que pegou o CTA apontando para a rota errada, o
    `DataTable` com scroll horizontal a 390px e a leitura real de cada tela entregue. Se o modelo novo
    não tiver visão, essa capacidade some da equipe e a validação de tela volta a ser leitura de
