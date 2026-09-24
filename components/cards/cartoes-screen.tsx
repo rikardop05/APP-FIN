@@ -18,6 +18,9 @@ import {
   type CardRecord,
 } from './schemas';
 import { StatementList } from './statement-list';
+import { CommitmentSection } from './commitment/commitment-section';
+import { transactionResponseSchema, type Transaction } from '@/components/transactions/schemas';
+import { addCompetence, competenceEnd, competenceStart, toCompetence } from '@/lib/date';
 
 type DialogState =
   | { kind: 'account'; record?: AccountRecord }
@@ -60,6 +63,7 @@ export function CartoesScreen({ today }: CartoesScreenProps) {
   const [accounts, setAccounts] = useState<AccountList['accounts']>([]);
   const [cards, setCards] = useState<CardList['cards']>([]);
   const [members, setMembers] = useState<CardList['members']>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -73,17 +77,26 @@ export function CartoesScreen({ today }: CartoesScreenProps) {
         fetch('/api/accounts', { cache: 'no-store' }),
         fetch('/api/cards', { cache: 'no-store' }),
       ]);
+      const currentCompetence = toCompetence(today);
+      const transactionFrom = competenceStart(addCompetence(currentCompetence, -1));
+      const transactionTo = competenceEnd(addCompetence(currentCompetence, 23));
+      const transactionsResponse = await fetch(
+        `/api/transactions?from=${transactionFrom}&to=${transactionTo}`,
+        { cache: 'no-store' },
+      );
       const accountData = await readResponse(accountsResponse, accountListSchema);
       const cardData = await readResponse(cardsResponse, cardListSchema);
+      const transactionData = await readResponse(transactionsResponse, transactionResponseSchema);
       setAccounts(accountData.accounts);
       setCards(cardData.cards);
       setMembers(cardData.members);
+      setTransactions(transactionData.transactions);
     } catch (loadError) {
       setError(errorMessage(loadError));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [today]);
 
   useEffect(() => {
     void load();
@@ -309,6 +322,8 @@ export function CartoesScreen({ today }: CartoesScreenProps) {
               </div>
             )}
           </section>
+
+          {cards.length > 0 ? <CommitmentSection cards={cards} transactions={transactions} today={today} /> : null}
         </div>
       )}
 
