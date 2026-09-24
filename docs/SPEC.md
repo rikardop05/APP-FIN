@@ -256,7 +256,7 @@ Premissas globais editáveis: inflação (default IPCA 4,5 % a.a.), alíquota de
 | Sobra / déficit | receita − despesa |
 | Taxa de poupança | (receita − despesa) / receita |
 | Comprometimento com essenciais | despesas de `nature = 'essential'` / receita |
-| Parcelas a vencer (12 m) | soma das parcelas futuras |
+| Parcelas a vencer (24 m — o `commitment_months` do household, nunca um número fixo na tela) | soma das parcelas futuras |
 
 **Linha 2 — gráficos**
 

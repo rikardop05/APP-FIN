@@ -155,7 +155,18 @@ function suggestRulePattern(rawDescription: string): { pattern: string; matchTyp
 ## 7. Deduplicação — `/lib/finance/dedupe.ts`
 
 ```ts
-function normalizeDescription(raw: string): string   // minúsculo, sem acento, espaços colapsados, sufixo de parcela removido
+function normalizeDescription(raw: string): string
+// ATENCAO - normalizeDescription e dedupeHash tratam a parcela de forma OPOSTA,
+// e de proposito (achado 2 da auditoria de 2026-09-24):
+//
+//   normalizeDescription REMOVE o sufixo de parcela;
+//   dedupeHash PRESERVA o numero da parcela.
+//
+// Sem essa distincao, "3/10" e "4/10" da mesma compra gerariam o MESMO hash, e o
+// unique parcial (household_id, dedupe_hash) descartaria a segunda parcela como
+// duplicata - a familia perderia uma parcela real do proprio cartao a cada mes.
+// O comportamento correto ja esta em lib/finance/dedupe.ts, que reinjeta o
+// marcador `#n/m` na string canonica antes de gerar o hash.   // minúsculo, sem acento, espaços colapsados, sufixo de parcela removido
 
 function dedupeHash(input: {
   sourceId: string          // credit_card_id ou account_id

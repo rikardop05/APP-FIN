@@ -82,7 +82,7 @@ Bloco paralelo A (só depende de T-003) — **4 agentes simultâneos:**
 ### T-102 · Parcelas · P
 **Depende de:** T-003 · **Posse:** `lib/finance/installments.ts` + teste
 **Entrega:** CONTRACTS §4.
-**Aceite:** R$ 100,00 em 3x gera 33,34 / 33,33 / 33,33 somando 100,00; 10x gera 10 competências consecutivas cruzando virada de ano; `replanInstallments` preserva as realizadas.
+**Aceite:** -R$ 100,00 em 3x gera -33,34 / -33,33 / -33,33 (sinal de despesa, CONVENTIONS §2; `installment_plans.total_cents` e negativo por schema) somando 100,00; 10x gera 10 competências consecutivas cruzando virada de ano; `replanInstallments` preserva as realizadas.
 
 ### T-103 · Dedupe e normalização · P
 **Depende de:** T-003 · **Posse:** `lib/finance/dedupe.ts` + teste
