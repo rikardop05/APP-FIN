@@ -3,7 +3,7 @@
 Mantido pelo orquestrador. Estados: `todo | doing | review | done | blocked`.
 Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATION.md` §9, equipe em `TEAM.md`.
 
-**Última atualização:** 2026-09-17 · 407 testes verdes · HEAD `079c7e8` (empurrado para `origin/main`) · T-004 e T-109 aguardando commit
+**Última atualização:** 2026-09-23 · 483 testes verdes · HEAD `ef282c4`, sincronizado com `origin/main` · working tree limpo
 
 ## Tarefas
 
@@ -11,7 +11,7 @@ Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATI
 |----|--------|--------|--------|------|
 | T-001 | Bootstrap do projeto | Bigorna | **done** | commit `588289c`. Regra de camada no ESLint faz CONVENTIONS §5 falhar o lint de verdade |
 | T-002a | Schema, migrations e seed (offline) | Bigorna | **done** | 18 tabelas, 14 enums, 43 FKs, 4 checks, 2 uniques parciais. Migration única, regenerada limpa |
-| T-002b | Aplicar migration e provar seed idempotente | Estaca | doing | **Desbloqueado**: Neon provisionado, migration aplicada, 18 tabelas/14 enums/4 checks conferidos por query. Rodando o seed real |
+| T-002b | Aplicar migration e provar seed idempotente | Estaca | **done** | Migration aplicada (18 tabelas, 14 enums, 4 checks conferidos por query). Seed idempotente provado em 3 execuções. Check conta-XOR-cartão rejeitando |
 | T-003 | Primitivos de dinheiro e data | Prumo | **done** | commit `e6cdefe`. Zero dependência: UTC + `Intl`. date-fns não entrou |
 | T-005 | Layout, navegação e ui-kit | Vitral | **done** `f1d4d6a` | 9 rotas em 200, zero formatação monetária fora do `Money`. V-02 a V-09 corrigidos e conferidos pelo Orquestrador: colação pt-BR, painel `Mais` acessível, ação dos stubs dentro do shell |
 | T-100 | Inventário de formatos por banco | Enxada | **done** | Sem OFX nos três bancos. Checklist de captura em `IMPORT-SOURCES.md` §5 |
@@ -27,8 +27,13 @@ Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATI
 | T-117b | Parser Santander | Peneira | **done** | 20 testes. `xBands` aplicado; ano resolvido por §8.2, regra não-posicional |
 | T-117c | Parser Mercado Pago | Funil | **done** | 27 testes. Suposição de linha de continuação removida após medição |
 | T-119 | Parser de texto colado | Funil | **done** | 36 testes |
-| T-107 | Pipeline de preview | Peneira | todo | Ganhou requisito novo: desempatar parcela × data pelo `occurredOn` da linha |
-| T-117 | Extração de PDF + parser Nubank | Peneira | doing | `extract.ts` e `rows.ts` verdes. Layout do Nubank **medido em fatura real** e publicado anonimizado em `IMPORT-SOURCES.md` §6 |
+| T-108 | Persistência da importação | — | blocked | Depende do T-107 |
+| T-111 | Tela de importação e confirmação | — | blocked | Depende do T-108. **A tela mais importante do projeto** |
+| T-113 | Comprometimento futuro na tela de cartões | — | todo | **DESTRAVADO** (T-110 e T-109 fechados) |
+| T-114 | Categorias e regras em /config | — | todo | **DESTRAVADO** (T-002, T-005, T-104 fechados) |
+| T-116 | Aceite de ponta a ponta da Fase 1 | — | blocked | Gate humano. Exige as faturas reais |
+| T-107 | Pipeline de preview | — | todo | **DESTRAVADO**: os três parsers e o texto colado fecharam. É o caminho crítico agora. Requisito extra: desempatar parcela × data pelo `occurredOn` da linha |
+| T-117 | Extração de PDF + parser Nubank | Peneira | **done** `73933d8` | Layout medido em fatura real (§6). `groupIntoRows` ganhou `xBands` para o caso do Santander |
 | T-004 | Autenticação | Estaca | **done** | Login real fim a fim. Os 3 critérios provados: 307 verificado pelo Orquestrador, token gravado no banco, recusa fora da allowlist testada em 3 camadas com falha fechada |
 | T-109 | Contas e cartões (CRUD + tela) | Lanterna | **done** | Verificado por **imagem**, desktop e 390px, nos dois estados. `householdId` é 1º parâmetro obrigatório nas 9 queries |
 
