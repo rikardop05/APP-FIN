@@ -255,3 +255,53 @@ export function diffMonths(a: Competence, b: Competence): number {
     toMonthIndex(left.year, left.month) - toMonthIndex(right.year, right.month)
   );
 }
+
+/**
+ * Deslocamento do calendario civil em dias, relativo a 1970-01-01. O 719468 e
+ * o offset do `days_from_civil` de Howard Hinnant: alinha a origem do algoritmo
+ * (0000-03-01) com a era Unix. Constante explicada para nao virar numero magico.
+ */
+const CIVIL_EPOCH_OFFSET = 719468;
+
+/**
+ * Dias desde 1970-01-01. Espera ano/mes/dia ja validados por `parseIsoDate`.
+ *
+ * Algoritmo civil inteiro de Hinnant, sem `Date`: o ano comeca em marco (para o
+ * dia extra do bissexto cair no FIM do ciclo) e o tempo e contado em eras de 400
+ * anos (146097 dias). E o mesmo espirito de `toMonthIndex` — aritmetica de
+ * inteiros, deterministica por construcao, sem fuso nem ICU.
+ */
+function daysSinceEpoch(year: number, month: number, day: number): number {
+  const shiftedYear = month <= 2 ? year - 1 : year;
+  const era = Math.floor(shiftedYear / 400);
+  const yearOfEra = shiftedYear - era * 400;
+  const shiftedMonth = month + (month > 2 ? -3 : 9);
+  const dayOfYear = Math.floor((153 * shiftedMonth + 2) / 5) + day - 1;
+  const dayOfEra =
+    yearOfEra * 365 +
+    Math.floor(yearOfEra / 4) -
+    Math.floor(yearOfEra / 100) +
+    dayOfYear;
+  return era * 146097 + dayOfEra - CIVIL_EPOCH_OFFSET;
+}
+
+/**
+ * Distancia em dias entre duas datas, no sentido `a - b`:
+ * `diffDays('2026-03-10', '2026-03-05')` = `5`, e o inverso = `-5`.
+ *
+ * Mesma orientacao de `diffMonths` e de `differenceInDays(dateLeft, dateRight)`
+ * do date-fns. Invariante que fixa o sentido:
+ * `diffDays(a, b) === -diffDays(b, a)`.
+ *
+ * Existe em `lib/date` e nao em quem precisa (ex.: a janela de data da
+ * conciliacao) porque CONVENTIONS §4 concentra aqui toda a aritmetica de
+ * calendario.
+ */
+export function diffDays(a: IsoDate, b: IsoDate): number {
+  const left = parseIsoDate(a);
+  const right = parseIsoDate(b);
+  return (
+    daysSinceEpoch(left.year, left.month, left.day) -
+    daysSinceEpoch(right.year, right.month, right.day)
+  );
+}

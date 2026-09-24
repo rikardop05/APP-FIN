@@ -6,6 +6,7 @@ import {
   competenceEnd,
   competenceRange,
   competenceStart,
+  diffDays,
   diffMonths,
   formatDateBR,
   toCompetence,
@@ -291,5 +292,57 @@ describe('diffMonths', () => {
   it('recusa competencia invalida', () => {
     expect(() => diffMonths('2026-13', '2026-01')).toThrow(RangeError);
     expect(() => diffMonths('2026-01-01', '2026-01')).toThrow(RangeError);
+  });
+});
+
+describe('diffDays', () => {
+  it('positivo quando a primeira data e a mais recente', () => {
+    // 10/03 - 05/03 = 5 dias.
+    expect(diffDays('2026-03-10', '2026-03-05')).toBe(5);
+    expect(diffDays('2026-03-31', '2026-03-01')).toBe(30);
+  });
+
+  it('negativo quando a primeira data e a mais antiga (antisimetrico)', () => {
+    expect(diffDays('2026-03-05', '2026-03-10')).toBe(-5);
+    expect(diffDays('2026-01-01', '2026-12-31')).toBe(-364);
+    expect(diffDays('2026-03-10', '2026-03-05')).toBe(
+      -diffDays('2026-03-05', '2026-03-10'),
+    );
+  });
+
+  it('zero para a mesma data', () => {
+    expect(diffDays('2026-05-05', '2026-05-05')).toBe(0);
+  });
+
+  it('conta o dia extra do bissexto', () => {
+    // 2026 nao e bissexto: 28/02 -> 01/03 = 1 dia.
+    expect(diffDays('2026-03-01', '2026-02-28')).toBe(1);
+    // 2024 e bissexto: 28/02 -> 01/03 passa por 29/02 = 2 dias.
+    expect(diffDays('2024-03-01', '2024-02-28')).toBe(2);
+    // 2000 e bissexto (divisivel por 400).
+    expect(diffDays('2000-03-01', '2000-02-28')).toBe(2);
+    // 1900 NAO e bissexto (divisivel por 100, nao por 400).
+    expect(diffDays('1900-03-01', '1900-02-28')).toBe(1);
+  });
+
+  it('cruza a virada de ano e conta o ano inteiro', () => {
+    expect(diffDays('2027-01-01', '2026-12-31')).toBe(1);
+    // 2026 e ano comum -> 365 dias; 2024 e bissexto -> 366.
+    expect(diffDays('2027-01-01', '2026-01-01')).toBe(365);
+    expect(diffDays('2025-01-01', '2024-01-01')).toBe(366);
+  });
+
+  it('400 anos civis valem exatamente 146097 dias (97 bissextos)', () => {
+    // 400 * 365 = 146000 dias, mais 97 dias bissextos da regra gregoriana
+    // (100 anos divisiveis por 4 menos 3 seculos nao-bissextos, mais 1 seculo
+    // divisivel por 400) = 146097. Valor ancorado a mao, nao diffDays x diffDays.
+    expect(diffDays('2426-03-05', '2026-03-05')).toBe(146097);
+    expect(diffDays('2026-03-05', '1626-03-05')).toBe(146097);
+  });
+
+  it('recusa data invalida', () => {
+    expect(() => diffDays('2026-02-30', '2026-02-28')).toThrow(RangeError);
+    expect(() => diffDays('2026-02-28', '28/02/2026')).toThrow(RangeError);
+    expect(() => diffDays('2026-02', '2026-02-28')).toThrow(RangeError);
   });
 });

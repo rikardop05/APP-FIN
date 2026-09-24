@@ -273,6 +273,37 @@ não por inverter a ordem para todos.
 O `id` no fim não é detalhe: sem ele, dois candidatos idênticos em valor e data resolveriam pela
 ordem de chegada do banco, e a mesma conciliação daria resultados diferentes em máquinas diferentes.
 
+### As outras quatro decisões do T-202 — fixadas em 2026-09-24
+
+**Algoritmo: guloso sobre a lista GLOBALMENTE ordenada, não guloso por varredura.** Monte *todos* os
+pares válidos (os que passam categoria, tolerância e janela), ordene pelo `score`, e percorra essa
+lista atribuindo o par quando **os dois lados ainda estiverem livres**.
+
+Isso não é o mesmo que "para cada realizado, pegue o primeiro previsto que serve" — e a diferença é
+justamente a que produz os dois órfãos. Se o realizado A consome o previsto X que era o par quase
+perfeito do realizado B, sobram A mal pareado e B sem par. Ordenar globalmente antes de atribuir faz
+os melhores pares serem consumidos primeiro.
+
+Não vale um algoritmo ótimo (Hungarian): a escala doméstica é de dezenas de linhas, e o ganho não
+paga a complexidade nem a perda de explicabilidade.
+
+**Base da tolerância: o valor PREVISTO.** `|posted − planned| / |planned|` em basis points. A
+referência é o que o usuário configurou, não o que o banco mandou — senão a tolerância se desloca
+junto com o erro que ela deveria detectar. `planned` zero não entra em candidato (divisão por zero).
+
+**Categoria nula NÃO casa, nem com outra nula.** `categoryId` null significa *desconhecida*, e
+desconhecida não estabelece "mesma categoria". Casar dois nulos seria parear por **ausência de
+sinal**.
+
+> Consequência deliberada: lançamento realizado ainda não categorizado nunca concilia. É o
+> comportamento desejado — empurra o usuário a categorizar primeiro, que é a ação que de fato
+> resolve a ambiguidade. Um pareamento automático ali esconderia a pendência real sob uma
+> conciliação falsa.
+
+**Diferença de dias: diferença absoluta em dias de calendário** entre os dois `occurredOn`, calculada
+por `lib/date` (nunca aritmética de `Date`). `dayWindow` é **inclusivo**: `dayWindow: 3` aceita até 3
+dias de distância, para mais ou para menos.
+
 ## 10. Orçamento — `/lib/finance/budget.ts`
 
 ```ts
