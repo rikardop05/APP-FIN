@@ -87,6 +87,18 @@ Cada uma destas custou pelo menos uma rodada. Registradas para não custarem de 
 | Agente volta com o prompt vazio, sem lembrar da tarefa, e nada foi escrito | **O terminal reiniciou** — o Codex se atualizou sozinho (0.154.0 → 0.156.1 em 2026-09-23) e o contexto foi zerado. Não é bloqueio nem recusa | Reenviar a tarefa **inteira**, incluindo decisões já tomadas na conversa perdida. E a regra que isso impõe: **o que precisa sobreviver a um reinício vai no role ou nos docs, nunca só numa mensagem** |
 | Entrega de agente volta pela metade, sem aviso | Pedido com **várias etapas encadeadas**. A última some silenciosamente | Um objetivo por mensagem. Vale especialmente para o Git Manager e para tarefas de captura |
 
+> **O Orquestrador também é um modo de falha.** Em 2026-09-24 o Esquadro ficou **1h37 parado**
+> esperando um OK que nunca veio: a instrução dizia "reporte antes de começar o próximo", ele
+> reportou, e o Orquestrador não voltou. O agente agiu certo; o gargalo era eu.
+>
+> A regra "não inferir progresso do silêncio" vale **nos dois sentidos**. Um agente calado pode estar
+> trabalhando, travado, morto — **ou esperando por mim**. Sempre que uma instrução institui um ponto
+> de parada, o ponto de parada passa a exigir vigilância de quem o criou.
+>
+> Na prática: ao mandar "reporte antes do próximo", armar a vigilância junto. Ou, quando a fila é
+> conhecida e as tarefas não dependem umas das outras, não instituir o ponto de parada — deixar o
+> agente seguir e validar o conjunto.
+
 > **O denominador comum das três armadilhas de terminal.** Reinício por atualização de CLI, boot
 > travado ao retomar sessão pesada e entrega parcial silenciosa produzem **o mesmo sintoma**: o
 > agente fica calado. Silêncio não distingue "trabalhando", "travado" e "morreu" — e as três
