@@ -184,6 +184,53 @@ interface PlannedOccurrence { competence: Competence; date: IsoDate; amountCents
 function expandRecurrence(input: RecurrenceInput, window: { from: Competence; months: number }): PlannedOccurrence[]
 ```
 
+### `dueDay` é a regra; `startsOn` é o piso
+
+Fixado em 2026-09-23 (dúvida do Esquadro no T-201). O contrato declarava os dois campos mas não
+dizia como se combinam quando a data de início cai **depois** do dia de vencimento no mês inicial.
+
+**Toda ocorrência cai no `dueDay`** (clampado para meses curtos — dia 31 vira 28/29/30 e **volta**
+para 31 no mês seguinte, nunca "gruda"). **Nenhuma ocorrência cai antes de `startsOn`.** A cadência
+é ancorada na **competência** de `startsOn`, e a primeira ocorrência é o primeiro vencimento dessa
+cadência que caia em `startsOn` ou depois.
+
+Exemplo — `startsOn = 2026-03-10`, `dueDay = 5`:
+
+| Frequência | Ocorrências |
+|---|---|
+| mensal | `2026-04-05`, `2026-05-05`, `2026-06-05`, … |
+| bimestral | `2026-05-05`, `2026-07-05`, `2026-09-05`, … |
+
+Março é pulado porque `05/03` cai antes de `10/03`, mas **a cadência continua contada a partir de
+março** — por isso o bimestral dá maio e não abril.
+
+**Por que não as alternativas:**
+
+- *Primeira ocorrência = a própria `startsOn`* faria a primeira cair num dia diferente de todas as
+  outras (`10/03`, depois `05/04`, `05/05`…). O usuário informou "vence dia 5"; uma parcela no dia 10
+  contradiz o que ele declarou, e a conciliação com o realizado erraria a janela de data.
+- *Usar o `dueDay` já na competência de `startsOn`* geraria `05/03`, **antes** do início — o que
+  contradiz o significado de "começa em".
+
+A regra em uma frase: **`dueDay` decide o dia, `startsOn` decide a partir de quando, e nenhum dos
+dois cede ao outro.**
+
+**`one_off` segue a mesma regra, sem caso especial.** Gera **exatamente uma** ocorrência: o primeiro
+`dueDay` que caia em `startsOn` ou depois. Quando `oneOffCompetence` vem preenchido, ele **fixa a
+competência** e o dia continua sendo o `dueDay` clampado.
+
+`oneOffCompetence` **ausente não significa "nenhuma ocorrência"**. Devolver lista vazia violaria o
+aceite do T-201 e, pior, sumiria em silêncio com uma despesa que o usuário cadastrou — ele veria o
+lançamento salvo e nunca projetado. O campo é opcional porque o schema só o tem em `incomes`, não em
+despesas; ausência é o caso **normal** para despesa avulsa, não exceção.
+
+> Nota de schema: `one_off_competence` existe em `incomes` e **não** em despesas recorrentes.
+> Assimetria observada pelo Esquadro no T-201. Não foi corrigida — a regra acima torna a coluna
+> dispensável para despesa —, mas fica registrada caso alguém encontre o caso que a exigia.
+
+```ts
+```
+
 ## 9. Conciliação previsto × realizado — `/lib/finance/reconcile.ts`
 
 ```ts

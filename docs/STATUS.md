@@ -71,6 +71,24 @@ Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATI
 ## Dívida registrada
 
 - **Validação dos parsers contra fatura real fica no T-116.** O parser do Nubank foi construído sobre layout medido (`IMPORT-SOURCES.md` §6), mas com fixtures sintéticas. Santander e MP seguem sem medição.
+- **Revisão de código aprovou, duas vezes, funcionalidade que não funcionava.** No T-004 o login
+  nunca tinha rodado de ponta a ponta, com 405 testes verdes. No T-114 o diálogo "Nova regra" abria
+  vazio — a condição de render usava o registro como flag, e em regra nova o registro é `null`, então
+  **criar regra, que é a função central da tela, estava quebrado**. Nos dois casos o Orquestrador
+  havia validado assinaturas, posse, Zod, ordenação e `householdId`, e dado OK.
+
+  Nenhuma dessas conferências toca condição de render nem fluxo de navegação. **Revisão de código e
+  execução verificam coisas diferentes**, e para tela a segunda não é opcional — quem achou os dois
+  defeitos foi quem abriu a tela, não quem leu o diff.
+
+  **Consequência para T-111 e T-115:** nenhuma tela é aceita sem alguém percorrer o caminho do
+  usuário, incluindo os estados vazios e os diálogos de criação. "Compila, tipa e testa" não cobre
+  isso.
+
+- **Legibilidade a 390px do /config não foi verificada.** Os três prints de mobile do T-114 falharam
+  (ver `ORCHESTRATION.md` §3.1, `portal resize` derruba a renderização). Os dois critérios de aceite
+  estão provados por execução; o que falta é convenção de projeto. Vai junto na passada de UI/UX.
+
 - **UX de mobile: o painel de filtros empurra a lista para fora da tela.** Em `/lancamentos` a 390px,
   os sete campos de filtro ocupam a viewport inteira — vê-se o fim do painel e **um** lançamento.
   Quem abre a tela no telefone rola sete campos antes da primeira transação. Isso inverte a
