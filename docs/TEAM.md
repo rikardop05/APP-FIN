@@ -33,6 +33,27 @@ Topologia: todos ligados a mim; os cinco implementadores ligados também ao Corv
 - **Os commits são meus.** Nenhum implementador commita — todos entregam no working tree.
 - O Lanterna tem um portal (`http://localhost:3000`) para verificar tela por imagem.
 
+### Contingência do Lanterna: Codex sem crédito (decidida em 2026-09-23)
+
+Quando o crédito de uso do Codex acabar, o terminal do **Lanterna** é trocado por OpenCode com
+`opencode-go/minimax-m3`, e o do Codex é encerrado. Autorizado pelo humano.
+
+```bash
+maestri recruit "Lanterna" --command "opencode -m opencode-go/minimax-m3" --replace "Lanterna"
+```
+
+Duas coisas a lembrar na hora:
+
+1. **A troca zera o contexto.** A tarefa em andamento precisa ser reenviada inteira, com as decisões
+   já tomadas na conversa perdida — ver a armadilha de reinício no `ORCHESTRATION.md` §3.1. O que
+   está no *role* sobrevive; o que está só em mensagem, não.
+2. **⚠ Verificar se o minimax-m3 enxerga imagem.** O Lanterna é hoje o único agente com visão, e é
+   assim que as telas são validadas — foi o que pegou o CTA apontando para a rota errada, o
+   `DataTable` com scroll horizontal a 390px e a leitura real de cada tela entregue. Se o modelo novo
+   não tiver visão, essa capacidade some da equipe e a validação de tela volta a ser leitura de
+   código. A alternativa com visão declarada no mesmo catálogo é
+   `opencode-go/deepseek-v4-flash-vision-exp`.
+
 ### Por que não há mais Git Manager (2026-09-17)
 
 O **Cinzel** foi dispensado. O papel existia para centralizar os commits num agente que conferisse
