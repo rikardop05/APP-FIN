@@ -625,6 +625,23 @@ function buildImportPreview(input: {
     installmentPlansDetected: number; totalCents: Cents
     uncategorizedCount: number
   }
+  // INVARIANTE DO summary, fixada em 2026-09-23 (duvida do Peneira no T-107):
+  //
+  //   rowsNew + rowsDuplicated === rowsRead
+  //
+  // `rowsNew` e "toda linha que NAO e duplicata", ou seja, tudo que sera importado -
+  // inclui os quatro estados menos 'duplicate' (new, installment_first,
+  // installment_part). NAO e "state === 'new'" literal.
+  //
+  // Por que: toda linha lida tem de cair em EXATAMENTE um balde, senao o resumo nao
+  // fecha na conta e o usuario nao consegue conferir. Com a leitura literal, um lote de
+  // 1 duplicata + 1 parcelada + 3 novas daria rowsNew=3 e rowsDuplicated=1 sobre 5
+  // lidas - e a quinta linha ficaria invisivel na aritmetica, sem o usuario saber o que
+  // houve com ela.
+  //
+  // `installmentPlansDetected` e ORTOGONAL, nao um terceiro balde: conta PLANOS, nao
+  // linhas. Uma parcelada em 10x e 1 plano. A tela le "5 lidas: 4 novas (1 inicia
+  // parcelamento em 10x), 1 duplicada".
   diagnostics: ParseDiagnostic[]
 }
 ```
