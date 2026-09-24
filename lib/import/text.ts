@@ -38,13 +38,18 @@
  * decidir o seculo sem ler o relogio, e um ano errado num lancamento e pior que
  * um campo em branco. A linha cai em `missing: ['date']` e o usuario completa.
  *
- * ## Sem desempate de parcela × data
+ * ## `N/M` ambiguo: parcela ou data
  *
- * `detectInstallment` (T-121) e chamado com a descricao que sobra; a parcela
- * reconhecida entra em `installment`. O `N/M` ambiguo (parcela ou data) **nao**
- * e desempatado aqui: quem tem o `occurredOn` da propria linha e desempata e o
- * `buildImportPreview` (T-107), como manda o contrato. Ler o globo `Date` aqui
- * seria, alem de proibido (CONVENTIONS §4), o lugar errado para essa decisao.
+ * `detectInstallment` (T-121) decide se um `N/M` sem ano fecha como parcela.
+ * Quando a linha tem **outra** data, o `N/M` fica como parcela e a data real e
+ * consumida. Quando o `N/M` e o **unico** candidato a data, ele e tratado como
+ * **data** — decisao assimetrica: errar para data custa ao usuario marcar o
+ * parcelamento a mao (recuperavel); errar para parcela deixa a linha **sem
+ * data** e projeta `M` meses de despesa que talvez nao exista, e o
+ * `buildImportPreview` (T-107) fica sem `occurredOn` para desempatar. A linha
+ * sai com `confidence: 'low'` e `sourceLine` intacto, para o usuario conferir.
+ * **REVISAVEL**: e heuristica, nao regra de dominio fechada; se uma fatura real
+ * mostrar o contrario, reabre.
  *
  * ## Sinal do valor
  *
@@ -236,6 +241,12 @@ interface ParsedLine {
   description: string;
   /** Diagnostico especifico desta linha, quando a linha esta corrompida. */
   diagnostic: { message: string } | null;
+  /**
+   * A data veio de um `N/M` ambiguo (unico candidato da linha): poderia ser
+   * parcela. Rebaixa a confianca para o usuario conferir. Ver a secao
+   * "`N/M` ambiguo: parcela ou data" no topo. **REVISAVEL**.
+   */
+  ambiguousDate: boolean;
 }
 
 function pad2(value: number): string {
@@ -385,22 +396,26 @@ function readDate(
 ): {
   date: ParsedLine['date'];
   diagnostic: ParsedLine['diagnostic'];
+  ambiguous: boolean;
 } {
   let problem: { raw: string; kind: 'invalid' | 'yearless' } | null = null;
+  // Primeiro `N/M` sem ano que fechou como parcela. So vira data no fallback,
+  // se nenhuma data "segura" aparecer na linha.
+  let ambiguousFallback: DateCandidate | null = null;
 
   for (const candidate of collectDateCandidates(line, order)) {
     if (!candidate.named && isParcelMarker(line, candidate.start)) continue;
 
     // `N/M` sem ano e ambiguo: pode ser parcela ou data. `detectInstallment`
-    // (T-121) ja carrega o criterio de dominio — `10/09` (dia > mes) nao fecha
-    // como parcela e continua sendo data; `03/10` fecha e nao e consumido aqui.
-    // Consumir a parcela como data apagaria o sinal de parcelamento da
-    // descricao e criaria uma data fantasma (achado 2 da revisao).
+    // (T-121) decide — `10/09` (dia > mes) nao fecha como parcela e e data;
+    // `03/10` fecha. Nao consumimos aqui ainda: guardamos para o fallback, para
+    // nao roubar a data quando houver uma data "segura" mais adiante.
     if (
       !candidate.named &&
       candidate.year === null &&
       detectInstallment(candidate.raw) !== null
     ) {
+      ambiguousFallback ??= candidate;
       continue;
     }
 
@@ -424,16 +439,43 @@ function readDate(
         inferredYear: candidate.year === null,
       },
       diagnostic: null,
+      ambiguous: false,
     };
   }
 
-  if (problem === null) return { date: null, diagnostic: null };
+  // Nenhuma data "segura" na linha. Se o unico candidato era um `N/M` ambiguo,
+  // trate-o como DATA (ver o topo do arquivo): errar para data e recuperavel;
+  // errar para parcela deixa a linha sem data e projeta `M` meses de despesa
+  // que talvez nao exista. **REVISAVEL**.
+  if (ambiguousFallback !== null) {
+    const year = ambiguousFallback.year ?? defaultYear;
+    const iso =
+      year === null ? null : buildIsoDate(year, ambiguousFallback.month, ambiguousFallback.day);
+    if (iso !== null) {
+      return {
+        date: {
+          iso,
+          start: ambiguousFallback.start,
+          end: ambiguousFallback.end,
+          inferredYear: ambiguousFallback.year === null,
+        },
+        diagnostic: null,
+        ambiguous: true,
+      };
+    }
+    problem ??= {
+      raw: ambiguousFallback.raw,
+      kind: year === null ? 'yearless' : 'invalid',
+    };
+  }
+
+  if (problem === null) return { date: null, diagnostic: null, ambiguous: false };
 
   const message =
     problem.kind === 'invalid'
       ? `Data inválida nesta linha: "${problem.raw}". Confira a data na tela de confirmação.`
       : `A data "${problem.raw}" não tem ano e nenhuma competência padrão foi informada.`;
-  return { date: null, diagnostic: { message } };
+  return { date: null, diagnostic: { message }, ambiguous: false };
 }
 
 /** Sinal a direita (`1.234,56-`) vira sinal a esquerda, que `parseBRL` entende. */
@@ -514,6 +556,7 @@ function parseLine(
     amount: amountResult.amount,
     description: tidy(description),
     diagnostic,
+    ambiguousDate: dateResult.ambiguous,
   };
 }
 
@@ -523,8 +566,10 @@ function parseLine(
  * Linha que rende data+valor+descricao sai com `confidence: 'high'`; data sem
  * ano (preenchida por `defaultCompetence`) ou descricao ausente rebaixam para
  * `'medium'`; linha sem data ou sem valor sai com `'low'`, `missing` preenchido
- * e `sourceLine` — nunca descartada. O lote nunca lanca por causa de uma linha
- * ruim, e `reportedTotalCents` e sempre `null` (texto colado nao imprime total).
+ * e `sourceLine` — nunca descartada. Data inferida de um `N/M` ambiguo tambem
+ * sai `'low'` (ver a secao de ambiguidade no topo). O lote nunca lanca por causa
+ * de uma linha ruim, e `reportedTotalCents` e sempre `null` (texto colado nao
+ * imprime total).
  */
 export function parsePastedText(
   raw: string,
@@ -565,6 +610,11 @@ export function parsePastedText(
 
     let confidence: ParseConfidence;
     if (parsed.date === null || parsed.amount === null) {
+      confidence = 'low';
+    } else if (parsed.ambiguousDate) {
+      // Data inferida de um `N/M` que tambem parecia parcela: baixa confianca
+      // para a tela destacar a linha com o texto bruto e o usuario conferir.
+      // REVISAVEL (ver o topo do arquivo).
       confidence = 'low';
     } else if (missing.length > 0 || parsed.date.inferredYear) {
       confidence = 'medium';

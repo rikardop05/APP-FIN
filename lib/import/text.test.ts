@@ -297,16 +297,36 @@ describe('parsePastedText — confianca e faltantes', () => {
 });
 
 describe('parsePastedText — achados da revisao (Corvo)', () => {
-  it('N/M ambiguo nao e consumido como data: fica na descricao como parcela', () => {
-    // `03/10` fecha como parcela (dia <= mes) e nao ha outra data: o parser nao
-    // inventa a data nem apaga o sinal de parcelamento.
+  it('N/M ambiguo como UNICO candidato vira data, nao parcela (caso do Lanterna)', () => {
+    // '01/09 UBER -25,50': se virasse parcela, a linha ficaria SEM data e
+    // projetaria 9 meses de despesa inexistente. Errar para data e recuperavel;
+    // a linha sai com baixa confianca e o texto bruto visivel (sourceLine).
+    const result = parsePastedText('01/09 UBER -25,50', { defaultCompetence: '2026-09' });
+    const row = result.rows[0];
+    expect(row?.occurredOn).toBe('2026-09-01');
+    expect(row?.installment).toBeNull();
+    expect(row?.amountCents).toBe(-2550);
+    expect(row?.rawDescription).toBe('UBER');
+    expect(row?.confidence).toBe('low');
+    expect(row?.sourceLine).toBe('01/09 UBER -25,50');
+  });
+
+  it('N/M ambiguo com OUTRA data presente continua sendo parcela', () => {
+    const row = onlyRow('10/09/2026 MERCADO LIVRE 03/10 R$ 50,00');
+    expect(row.occurredOn).toBe('2026-09-10');
+    expect(row.installment).toEqual({ current: 3, total: 10 });
+    expect(row.confidence).toBe('high');
+  });
+
+  it('N/M ambiguo unico e sem defaultCompetence: nao ha ano para datar', () => {
+    // Sem competencia nao da para montar a data: a linha fica sem data, nunca
+    // com um ano inventado. O N/M permanece na descricao.
     const result = parsePastedText('MERCADO LIVRE 03/10 50,00');
     const row = result.rows[0];
     expect(row?.occurredOn).toBeNull();
     expect(row?.missing).toContain('date');
     expect(row?.confidence).toBe('low');
     expect(row?.rawDescription).toBe('MERCADO LIVRE 03/10');
-    expect(row?.installment).toEqual({ current: 3, total: 10 });
   });
 
   it('data com dia > mes continua sendo data, nao parcela', () => {

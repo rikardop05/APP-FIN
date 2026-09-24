@@ -1,24 +1,20 @@
-import { Upload } from 'lucide-react';
-import { PageHeader, EmptyState } from '@/components/ui-kit';
+import { ImportScreen } from '@/components/import/import-screen';
 
-/**
- * Stub do T-005 (layout e navegação) — só PageHeader e EmptyState.
- * Substituída pelo T-111 (upload de PDF com senha, texto colado, tela de
- * confirmação editável linha a linha, histórico de lotes com desfazer).
- */
-export default function ImportarPage() {
-  return (
-    <>
-      <PageHeader
-        title="Importar"
-        description="Envie o PDF da fatura ou cole o texto de um extrato. Nada é gravado antes da sua confirmação."
-      />
-      <EmptyState
-        icon={Upload}
-        title="Nenhuma importação ainda"
-        description="O envio de PDF e o card de texto colado ainda não estão disponíveis nesta tela."
-        action={{ label: 'Ver lançamentos', href: '/lancamentos' }}
-      />
-    </>
+export const dynamic = 'force-dynamic';
+
+function todayInSaoPaulo(): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
   );
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+export default function ImportarPage() {
+  return <ImportScreen today={todayInSaoPaulo()} />;
 }
