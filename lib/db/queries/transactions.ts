@@ -6,6 +6,7 @@ import {
   gte,
   ilike,
   inArray,
+  isNotNull,
   isNull,
   lte,
   or,
@@ -359,6 +360,31 @@ export async function listTransactionFilterOptions(
     cards: cardRows,
     members: memberRows,
   };
+}
+
+/**
+ * Hashes already persisted for this household.
+ *
+ * Import preview and commit use the set only as input to the pure pipeline;
+ * the household predicate remains here so a hash from another family can
+ * never make this family's import look duplicated.
+ */
+export async function listTransactionDedupeHashes(
+  householdId: string,
+): Promise<Set<string>> {
+  const rows = await db
+    .select({ dedupeHash: transactions.dedupeHash })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.householdId, householdId),
+        isNotNull(transactions.dedupeHash),
+      ),
+    );
+
+  return new Set(
+    rows.flatMap((row) => (row.dedupeHash === null ? [] : [row.dedupeHash])),
+  );
 }
 
 export async function getTransactionForRule(
