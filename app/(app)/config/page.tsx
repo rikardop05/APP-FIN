@@ -1,23 +1,11 @@
-import { Settings } from 'lucide-react';
-import { PageHeader, EmptyState } from '@/components/ui-kit';
+import { ConfigScreen } from './config-screen';
+
+export const dynamic = 'force-dynamic';
 
 /**
- * Stub do T-005 (layout e navegação) — só PageHeader e EmptyState.
- * Substituída pelo T-114 (categorias, regras, membros e premissas globais).
+ * T-114: categorias (2 niveis, `nature` na folha), regras (CRUD, reordenacao,
+ * hits), membros e premissas globais. Substitui o stub do T-005.
  */
 export default function ConfigPage() {
-  return (
-    <>
-      <PageHeader
-        title="Configurações"
-        description="Categorias, regras de categorização, contas, membros e premissas globais."
-      />
-      <EmptyState
-        icon={Settings}
-        title="Nada configurado ainda"
-        description="Categorias e regras aparecem aqui para edição depois do seed inicial."
-        action={{ label: 'Ver lançamentos', href: '/lancamentos' }}
-      />
-    </>
-  );
+  return <ConfigScreen />;
 }
