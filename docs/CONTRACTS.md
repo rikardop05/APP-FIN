@@ -248,6 +248,31 @@ function matchPlannedToPosted(
 }
 ```
 
+### Critério de "melhor par" — fixado em 2026-09-24
+
+Dúvida do Esquadro no T-202. O contrato declarava "melhor par primeiro" sem dizer o que torna um par
+melhor que outro.
+
+**A ordem é: menor diferença relativa de valor → menor diferença de dias → menor `id`.** O `score`
+devolvido é o custo do par: a diferença relativa de valor em basis points inteiros, menor é melhor.
+
+**O que torna isso simples é que `toleranceBp` e `dayWindow` já são filtros duros.** Todo candidato
+que chega ao desempate **já passou nos dois** — está dentro da tolerância de valor *e* dentro da
+janela de data. O desempate não decide "é este mesmo?", decide apenas qual entre aprovados.
+
+Por isso a soma ponderada de valor e data foi descartada: ela exige escolher um peso arbitrário
+(quanto vale um dia em basis points?), e **um pareamento errado fica inexplicável**. "Valor mais
+próximo; a data desempatou" é uma frase que alguém entende ao investigar; "menor soma normalizada"
+não é.
+
+Valor antes de data porque **datas se aglomeram** — dia 5, 10 e 15 concentram vencimentos, então a
+data discrimina pouco entre candidatos. Valor é o sinal mais espalhado. O caso em que o valor varia
+de mês a mês (conta de luz) é tratado pela `toleranceBp` daquela despesa ser configurada mais larga,
+não por inverter a ordem para todos.
+
+O `id` no fim não é detalhe: sem ele, dois candidatos idênticos em valor e data resolveriam pela
+ordem de chegada do banco, e a mesma conciliação daria resultados diferentes em máquinas diferentes.
+
 ## 10. Orçamento — `/lib/finance/budget.ts`
 
 ```ts
