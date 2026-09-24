@@ -17,7 +17,7 @@ Estado em **2026-09-16**. Atualizar quando a equipe mudar.
 | **Esquadro** | OpenCode · `deepseek-v4.1-flash` | `Motor Financeiro APPFIN` | `lib/money/`, `lib/date/`, `lib/finance/` |
 | **Peneira** | OpenCode · `deepseek-v4.1-flash` | `Importacao APPFIN` | `lib/import/pdf/**` |
 | **Funil** | OpenCode · `deepseek-v4.1-flash` | `Importacao Texto APPFIN` | `lib/import/text.ts` **e mais nada** |
-| **Lanterna** | Codex · `gpt-5.6-luna` | `Telas APPFIN` | `app/`, `components/`, `lib/db/queries/` |
+| **Lanterna** | OpenCode · `minimax-m3` | `Telas APPFIN` | `app/`, `components/`, `lib/db/queries/` |
 | **Corvo** | OpenCode · `deepseek-v4.1-flash` | `Revisor APPFIN` | **nenhuma** — read-only |
 
 Topologia: todos ligados a mim; os cinco implementadores ligados também ao Corvo.
@@ -33,7 +33,22 @@ Topologia: todos ligados a mim; os cinco implementadores ligados também ao Corv
 - **Os commits são meus.** Nenhum implementador commita — todos entregam no working tree.
 - O Lanterna tem um portal (`http://localhost:3000`) para verificar tela por imagem.
 
-### Contingência do Lanterna: Codex sem crédito (decidida em 2026-09-23)
+### Lanterna migrou para MiniMax-M3 em 2026-09-24 — contingência executada
+
+O crédito do Codex acabou às 22h02 de 2026-09-24, com reset só em **23 de outubro**. A contingência
+abaixo foi executada: o terminal virou OpenCode com `opencode-go/minimax-m3`, no mesmo nó, com
+conexões e portal preservados.
+
+**A visão sobreviveu, e foi testada antes de confiar.** O modelo leu
+`.private/prints/t113-1-desktop.png` e descreveu conteúdo que **não existe no código** — os valores
+dos dados de teste que já tinham sido apagados do banco. Não havia como inferir do repositório; ele
+leu o pixel. A capacidade que pegou o CTA errado no T-109 e o `DataTable` com scroll no T-112 está
+preservada.
+
+O teste que vale, se isso se repetir: pedir o conteúdo de uma imagem que **não** possa ser deduzido
+do código, e instruir explicitamente a responder "não enxergo" em vez de adivinhar.
+
+### Contingência original (decidida em 2026-09-23)
 
 Quando o crédito de uso do Codex acabar, o terminal do **Lanterna** é trocado por OpenCode com
 `opencode-go/minimax-m3`, e o do Codex é encerrado. Autorizado pelo humano.
