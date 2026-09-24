@@ -82,8 +82,21 @@ Cada uma destas custou pelo menos uma rodada. Registradas para não custarem de 
 | Hydration mismatch cujo diff é `data-mref="..."` | **Ruído do próprio portal**, que injeta esses atributos para referenciar elementos (`mref` = maestri ref). Não existe no código nem no bundle | **Ignorar.** Qualquer outro diff de hydration é real e deve ser investigado |
 | Varredura em `app/` volta vazia e a conclusão fica errada | Glob de **PowerShell não casa `(app)` nem `[id]`** — parênteses e colchetes são sintaxe de wildcard. Falha **em silêncio**, sem erro | Usar `bash`/`grep -r` para varrer `app/`, ou `-LiteralPath`. Já produziu dois falsos negativos: "rotas `[id]` sem `requireSession`" e "nenhuma causa de hydration" |
 | Overlay do Next acusa `Runtime Error / JavaScript execution timed out after 10s`, em `<anonymous>`, sem arquivo nem componente | Instrumentação do portal, não o app. Verificado: `load` está em `useCallback([])` (sem loop de render), `/login` aberto em Chrome comum tem console 100% limpo, e o mesmo travamento ocorreu em `/login`, que não tem nada da tela de cartões | Ignorar dentro do portal. **Reconferir no T-116**, abrindo o app em navegador normal |
+| Agente fica calado, o terminal mostra só a linha de lançamento e o TUI nunca aparece; `maestri ask` não produz nem eco no shell | **Boot travado ao retomar sessão pesada.** O OpenCode relança com `-s ses_...` para continuar de onde parou; quando aquela sessão está grande (o Esquadro estava em 42% de contexto), o boot pende indefinidamente. Indistinguível de "agente pensando" | Reiniciar com sessão limpa: `maestri recruit "<Nome>" --command "opencode -m <modelo>" --replace "<Nome>"` (sem `-s`). Sondar com um `ask` trivial **antes** de despachar tarefa. O contexto se perde, então reenviar a tarefa inteira |
 | Agente volta com o prompt vazio, sem lembrar da tarefa, e nada foi escrito | **O terminal reiniciou** — o Codex se atualizou sozinho (0.154.0 → 0.156.1 em 2026-09-23) e o contexto foi zerado. Não é bloqueio nem recusa | Reenviar a tarefa **inteira**, incluindo decisões já tomadas na conversa perdida. E a regra que isso impõe: **o que precisa sobreviver a um reinício vai no role ou nos docs, nunca só numa mensagem** |
 | Entrega de agente volta pela metade, sem aviso | Pedido com **várias etapas encadeadas**. A última some silenciosamente | Um objetivo por mensagem. Vale especialmente para o Git Manager e para tarefas de captura |
+
+> **O denominador comum das três armadilhas de terminal.** Reinício por atualização de CLI, boot
+> travado ao retomar sessão pesada e entrega parcial silenciosa produzem **o mesmo sintoma**: o
+> agente fica calado. Silêncio não distingue "trabalhando", "travado" e "morreu" — e as três
+> aconteceram no mesmo dia, 2026-09-23, custando quatro rodadas.
+>
+> A contramedida é uma só: **nunca inferir progresso do silêncio.** Verificar o artefato — o arquivo
+> em disco, a saída de `git status`, o teste rodando — e não o relatório nem a ausência dele. Quando
+> um agente passa tempo demais mudo, sondar com um `ask` trivial antes de supor qualquer coisa.
+>
+> Corolário que já se pagou duas vezes: **o que precisa sobreviver a um reinício vai no role ou nos
+> docs, nunca só numa mensagem.** Contexto de conversa evapora; role e `docs/` são recarregados.
 
 ## 4. Regras de paralelismo
 
