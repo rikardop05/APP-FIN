@@ -618,6 +618,28 @@ function detectPdfIssuer(rows: PdfTextRow[]): 'nubank' | 'santander' | 'mercadop
 // Celula fora de TODAS as faixas vira linha propria, nunca e descartada: e a regra
 // de "nenhuma linha some em silencio" aplicada a geometria.
 
+// N/M AMBIGUO: QUEM DECIDE O QUE - atualizado em 2026-09-24
+//
+// A divisao entre o parser de texto e o pipeline mudou depois do exercicio de
+// ponta a ponta da T-111. Ela agora e:
+//
+// - text.ts (T-119) resolve o caso do candidato UNICO: se o `N/M` e a unica
+//   coisa que pode ser data na linha, vira DATA, com confidence 'low' e o
+//   sourceLine intacto. Precisa de `defaultCompetence` para ter o ano; sem ele,
+//   devolve occurredOn null;
+// - o pipeline (T-107) desempata quando ha OUTRA data na linha: um `N/M` que
+//   coincide com o dia e o mes do `occurredOn` e data, nao parcela.
+//
+// POR QUE A DIVISAO E ESSA: o desempate do T-107 compara com o `occurredOn`. Se
+// o parser tivesse consumido a unica data como parcela, `occurredOn` viria null
+// e o desempate ficaria inalcancavel - foi exatamente o que acontecia com
+// "01/09 UBER -25,50".
+//
+// A REGRA DE SEGURANCA que orienta os dois: errar para DATA custa ao usuario
+// marcar a parcela a mao; errar para PARCELA deixa a linha sem data E projeta M
+// meses de despesa que talvez nao exista. Os dois erros nao custam o mesmo.
+// **REVISAVEL**: e heuristica, nao regra de dominio fechada.
+
 // text.ts — T-119, fallback universal
 type ParseConfidence = 'high' | 'medium' | 'low'
 interface TextParseOptions {

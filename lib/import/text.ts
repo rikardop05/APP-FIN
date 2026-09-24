@@ -384,6 +384,11 @@ function isParcelMarker(line: string, index: number): boolean {
   return PARCEL_BEFORE.test(line.slice(0, index));
 }
 
+/** Mensagem pt-BR de data inexistente no calendario. */
+function invalidDateMessage(raw: string): string {
+  return `Data inválida nesta linha: "${raw}". Confira a data na tela de confirmação.`;
+}
+
 /**
  * Escolhe a data da linha: o primeiro candidato valido, na ordem em que aparece.
  * Candidato invalido e pulado para tentar o proximo; so vira diagnostico se
@@ -459,7 +464,14 @@ function readDate(
           end: ambiguousFallback.end,
           inferredYear: ambiguousFallback.year === null,
         },
-        diagnostic: null,
+        // Nao zera um `problem` ja acumulado: se a linha tambem trazia uma data
+        // inexistente (`31/04 05/09 ...`), o aviso daquela data continua indo
+        // para a tela, mesmo com o fallback resolvendo a linha (achado 1 da
+        // revisao). `yearless` nao entra: o fallback resolveu a data.
+        diagnostic:
+          problem !== null && problem.kind === 'invalid'
+            ? { message: invalidDateMessage(problem.raw) }
+            : null,
         ambiguous: true,
       };
     }
@@ -473,7 +485,7 @@ function readDate(
 
   const message =
     problem.kind === 'invalid'
-      ? `Data inválida nesta linha: "${problem.raw}". Confira a data na tela de confirmação.`
+      ? invalidDateMessage(problem.raw)
       : `A data "${problem.raw}" não tem ano e nenhuma competência padrão foi informada.`;
   return { date: null, diagnostic: { message }, ambiguous: false };
 }

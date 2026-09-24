@@ -320,13 +320,71 @@ describe('parsePastedText — achados da revisao (Corvo)', () => {
 
   it('N/M ambiguo unico e sem defaultCompetence: nao ha ano para datar', () => {
     // Sem competencia nao da para montar a data: a linha fica sem data, nunca
-    // com um ano inventado. O N/M permanece na descricao.
+    // com um ano inventado. O N/M permanece na descricao e continua parcela.
     const result = parsePastedText('MERCADO LIVRE 03/10 50,00');
     const row = result.rows[0];
     expect(row?.occurredOn).toBeNull();
     expect(row?.missing).toContain('date');
     expect(row?.confidence).toBe('low');
     expect(row?.rawDescription).toBe('MERCADO LIVRE 03/10');
+    expect(row?.installment).toEqual({ current: 3, total: 10 });
+  });
+
+  it('fallback nao engole o diagnostico de outra data invalida na linha', () => {
+    // `31/04` nao existe (problem); `05/09` fecha como parcela (fallback). A
+    // linha e datada pelo fallback, mas o aviso da data invalida continua.
+    const result = parsePastedText('31/04 05/09 LOJA SINTETICA 50,00', {
+      defaultCompetence: '2026-09',
+    });
+    const row = result.rows[0];
+    expect(row?.occurredOn).toBe('2026-09-05');
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.message).toContain('31/04');
+  });
+
+  it('fallback perde para uma data segura posterior na linha', () => {
+    // `03/10` ambiguo vem primeiro, mas a data completa `10/09/2026` vence.
+    const row = onlyRow('03/10 MERCADO SINTETICO 10/09/2026 R$ 50,00');
+    expect(row.occurredOn).toBe('2026-09-10');
+    expect(row.installment).toEqual({ current: 3, total: 10 });
+    expect(row.confidence).toBe('high');
+  });
+
+  it('PARC protege o N/M mesmo sendo unico: nao vira fallback', () => {
+    const result = parsePastedText('PARC 03/10 UBER -25,50', { defaultCompetence: '2026-09' });
+    const row = result.rows[0];
+    expect(row?.occurredOn).toBeNull();
+    expect(row?.missing).toContain('date');
+    expect(row?.installment).toEqual({ current: 3, total: 10 });
+  });
+
+  it('dateOrder ymd nao cria candidato dd/mm: o N/M fica na descricao', () => {
+    const row = onlyRow('03/10 LOJA SINTETICA 50,00', {
+      dateOrder: 'ymd',
+      defaultCompetence: '2026-09',
+    });
+    expect(row.occurredOn).toBeNull();
+    expect(row.missing).toContain('date');
+    expect(row.installment).toEqual({ current: 3, total: 10 });
+  });
+
+  it('dateOrder mdy inverte dia/mes no fallback', () => {
+    const row = onlyRow('03/10 LOJA SINTETICA 50,00', {
+      dateOrder: 'mdy',
+      defaultCompetence: '2026-09',
+    });
+    expect(row.occurredOn).toBe('2026-03-10');
+    expect(row.installment).toBeNull();
+    expect(row.confidence).toBe('low');
+  });
+
+  it('custo aceito: parcela sem outra data vira compra datada (REVISAVEL)', () => {
+    // Espelho da assimetria: 'NETFLIX 03/12 39,90' (parcela 3/12) sai datada e
+    // sem projecao. Tradeoff consciente; ver o topo de text.ts.
+    const row = onlyRow('NETFLIX 03/12 39,90', { defaultCompetence: '2026-09' });
+    expect(row.occurredOn).toBe('2026-12-03');
+    expect(row.installment).toBeNull();
+    expect(row.confidence).toBe('low');
   });
 
   it('data com dia > mes continua sendo data, nao parcela', () => {
