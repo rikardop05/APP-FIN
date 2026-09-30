@@ -29,6 +29,8 @@ const confirmedRowSchema = z.object({
   forceDuplicate: z.boolean().optional(),
 });
 
+const competenceSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Competência inválida.');
+
 export const recalculateBodySchema = z.object({
   sourceKind: z.enum(['credit_card', 'account']),
   sourceId: z.string().uuid(),
@@ -39,6 +41,11 @@ export const recalculateBodySchema = z.object({
     })
     .nullable(),
   rows: z.array(confirmedRowSchema).max(2_000),
+  /**
+   * Competência declarada da fatura. Quando a origem é cartão, é obrigatória
+   * — mesma regra que no commit. Em conta é ignorada.
+   */
+  statementCompetence: competenceSchema.nullable(),
 });
 
 export type RecalculateBody = z.infer<typeof recalculateBodySchema>;

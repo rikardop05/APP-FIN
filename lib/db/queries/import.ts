@@ -13,6 +13,7 @@ import {
   transactions,
 } from '@/lib/db/schema';
 import { statementWindow, type CardCycleConfig } from '@/lib/finance/billing';
+import type { Competence } from '@/lib/date';
 import {
   finalizeImport,
   type ConfirmedRow,
@@ -56,6 +57,13 @@ export type CommitImportInput = {
   confirmedRows: ConfirmedRow[];
   reportedTotalCents: Cents | null;
   allowReimport: boolean;
+  /**
+   * Competência DECLARADA da fatura (do mesmo campo `defaultCompetence` que o
+   * upload usa). Obrigatória quando `sourceKind === 'credit_card'` (validado pelo
+   * `commitBodySchema`); `null` quando a origem é conta. Não vem do motor — vem
+   * da escolha do usuário na tela.
+   */
+  statementCompetence: Competence | null;
 };
 
 export type CommitImportResult = FinalizeResult & {
@@ -234,11 +242,14 @@ async function findOrCreateStatement(
   householdId: string,
   source: ImportSourceContext,
   result: FinalizeResult,
+  statementCompetence: Competence,
 ): Promise<string | null> {
   if (source.creditCardId === null || source.cardCycle === null) return null;
-  const sourceTransaction = result.transactions.find((row) => row.rawDescription !== '') ?? result.transactions[0];
-  if (sourceTransaction === undefined) return null;
-  const window = statementWindow(sourceTransaction.competence, source.cardCycle);
+  // A competência da fatura é DECLARADA: vem da tela, não de uma transação
+  // qualquer. Pegar de uma transação era chute (pegar a primeira que o parser
+  // emitiu), e a primeira transação não é fonte legítima dessa informação —
+  // uma fatura contém compras de vários meses por construção.
+  const window = statementWindow(statementCompetence, source.cardCycle);
   const [existing] = await tx
     .select({ id: statements.id })
     .from(statements)
@@ -246,7 +257,7 @@ async function findOrCreateStatement(
     .where(
       and(
         eq(statements.creditCardId, source.creditCardId),
-        eq(statements.period, sourceTransaction.competence),
+        eq(statements.period, statementCompetence),
         eq(creditCards.householdId, householdId),
       ),
     )
@@ -257,7 +268,7 @@ async function findOrCreateStatement(
     .insert(statements)
     .values({
       creditCardId: source.creditCardId,
-      period: sourceTransaction.competence,
+      period: statementCompetence,
       closingDate: window.closingDate,
       dueDate: window.dueDate,
       reportedTotalCents: result.totals.reportedCents,
@@ -278,6 +289,12 @@ export async function commitImport(
     throw new Error('O failpoint de teste não pode ser usado em produção.');
   }
   return db.transaction(async (tx) => {
+    // Quando a origem é cartão, a fatura precisa de competência declarada. O
+    // schema garante, mas em produção (sem Zod no caminho) uma chamada
+    // direta sem o campo não deve chegar aqui em silêncio — falha alto.
+    if (input.sourceKind === 'credit_card' && input.statementCompetence === null) {
+      throw new Error('Competência da fatura ausente. Informe em "Competência padrão".');
+    }
     const source = await sourceContextInTransaction(tx, householdId, input.sourceKind, input.sourceId);
     const previous = await tx
       .select({ id: importBatches.id, status: importBatches.status })
@@ -302,6 +319,7 @@ export async function commitImport(
       cardCycle: source.cardCycle,
       existingHashes,
       reportedTotalCents: input.reportedTotalCents,
+      statementCompetence: input.statementCompetence,
     });
     if (source.sourceKind === 'account' && result.installmentPlans.length > 0) {
       throw new ImportAccountInstallmentError();
@@ -327,7 +345,18 @@ export async function commitImport(
     if (batch === undefined) throw new Error('Não foi possível criar o lote de importação.');
     if (options.failAfter === 'batch') throw new Error('Falha de teste após o lote.');
 
-    const statementId = await findOrCreateStatement(tx, householdId, source, result);
+    const statementId = source.creditCardId === null
+      ? null
+      : await findOrCreateStatement(
+          tx,
+          householdId,
+          source,
+          result,
+          // Narrowed em runtime pelo `if` que jogou lá em cima quando a origem é
+          // cartão sem competência. Em conta `findOrCreateStatement` retorna
+          // `null` no primeiro `if` e nunca chega a usar a competência.
+          input.statementCompetence as Competence,
+        );
     if (statementId !== null) {
       await tx
         .update(importBatches)

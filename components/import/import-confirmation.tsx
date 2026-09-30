@@ -59,6 +59,13 @@ type ImportConfirmationProps = {
   sourceId: string;
   members: MemberItem[];
   categories: CategoryNode[];
+  /**
+   * Competência da fatura (o "Competência padrão" da tela). Obrigatória no
+   * commit quando a origem é cartão — é a fonte da verdade para o `period` da
+   * fatura em `lib/db/queries/import.ts`. A tela de cima (ImportScreen) já a
+   * tem em mãos; passamos adiante em vez de inferir.
+   */
+  defaultCompetence: string;
   onBack: () => void;
   onCommitted: (batchId: string) => void;
 };
@@ -174,6 +181,7 @@ export function ImportConfirmation({
   sourceId,
   members,
   categories,
+  defaultCompetence,
   onBack,
   onCommitted,
 }: ImportConfirmationProps) {
@@ -281,6 +289,7 @@ export function ImportConfirmation({
           confirmedRows,
           reportedTotalCents: null,
           allowReimport: false,
+          defaultCompetence,
         }),
       });
       const body: unknown = await response.json().catch(() => null);

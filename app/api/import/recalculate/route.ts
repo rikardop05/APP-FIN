@@ -44,6 +44,7 @@ export async function POST(request: Request) {
       cardCycle: input.cardCycle,
       existingHashes: new Set<string>(),
       reportedTotalCents: null,
+      statementCompetence: input.statementCompetence,
     });
     const competenceResult = finalizeImport({
       rows: input.rows.map((row) => ({ ...row, include: true })),
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
       cardCycle: input.cardCycle,
       existingHashes: new Set<string>(),
       reportedTotalCents: null,
+      statementCompetence: input.statementCompetence,
     });
     const competenceByIndex = input.rows.map((row) => {
       const transaction = competenceResult.transactions.find(

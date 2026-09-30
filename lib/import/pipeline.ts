@@ -108,6 +108,21 @@ export interface BuildImportPreviewInput {
   rules: Rule[];
   existingHashes: Set<string>;
   today: IsoDate;
+  /**
+   * Competencia da **FATURA** importada (a escolhida na tela), ou `null`.
+   *
+   * Numa fatura de cartao a competencia e **declarada, nao inferida**: tudo que
+   * esta impresso naquela fatura e cobrado naquele ciclo. Por isso, quando
+   * `sourceKind === 'credit_card'` e este campo vem preenchido, **toda linha
+   * recebe esta competencia** — inclusive parcelas antigas, cuja data de compra
+   * e de meses antes (a parcela 11/12 cai na fatura corrente, nao na fatura da
+   * compra). `null` = sem escolha (texto colado): a competencia volta a ser
+   * derivada de `occurredOn`. Na conta (`'account'`) o campo e ignorado.
+   *
+   * Nome escolhido de proposito: nao e o `defaultCompetence` do parser, que
+   * serve so para dar o ANO de uma data sem ano; confundir os dois e facil.
+   */
+  statementCompetence: Competence | null;
 }
 
 /** Saida de `buildImportPreview`. */
@@ -127,6 +142,36 @@ function competenceFor(
     return billingPeriodFor(occurredOn, cardCycle).competence;
   }
   return toCompetence(occurredOn);
+}
+
+/**
+ * Competencia DECLARADA da fatura, quando a origem e cartao. `null` para conta ou
+ * quando a fatura nao trouxe competencia — nesse caso `competenceFor` decide.
+ */
+function declaredCardCompetence(
+  sourceKind: SourceKind,
+  statementCompetence: Competence | null,
+): Competence | null {
+  return sourceKind === 'credit_card' ? statementCompetence : null;
+}
+
+/**
+ * Competencia de uma linha de cartao, resolvida.
+ *
+ * A fatura vence a data: se a origem e cartao e a competencia da fatura foi
+ * informada, e ela. Fora disso, deriva de `occurredOn` (conta; ou fatura sem
+ * competencia informada, como texto colado).
+ */
+function resolveCompetence(
+  occurredOn: IsoDate,
+  sourceKind: SourceKind,
+  cardCycle: CardCycleConfig | null,
+  statementCompetence: Competence | null,
+): Competence {
+  return (
+    declaredCardCompetence(sourceKind, statementCompetence) ??
+    competenceFor(occurredOn, sourceKind, cardCycle)
+  );
 }
 
 /** Dia e mes de uma data ja validada, sem aritmetica de calendario. */
@@ -171,6 +216,11 @@ function planKey(description: string, total: number): string {
  * Monta o preview de uma importacao: competencia, hash de dedupe, sugestao de
  * categoria e deteccao de parcela (com desempate), sem gravar nada.
  *
+ * Competencia: numa fatura de cartao com `statementCompetence` informada, **toda
+ * linha recebe a competencia da fatura** — nao a derivada da data da compra (uma
+ * parcela 11/12 cai na fatura corrente, nao na fatura de 11 meses atras). Sem
+ * competencia (texto colado) ou em conta, deriva de `occurredOn`.
+ *
  * Nao toca banco e nao le relogio: recebe `existingHashes` e `today` prontos.
  */
 export function buildImportPreview(
@@ -184,10 +234,17 @@ export function buildImportPreview(
 
     const occurredOn = row.occurredOn;
     const amountCents = row.amountCents;
+    // A competencia da fatura e DECLARADA: se veio, toda linha pertence a ela,
+    // mesmo sem data de compra. Sem ela, deriva de `occurredOn` como antes.
+    const declared = declaredCardCompetence(
+      input.sourceKind,
+      input.statementCompetence,
+    );
     const competence =
-      occurredOn === null
+      declared ??
+      (occurredOn === null
         ? null
-        : competenceFor(occurredOn, input.sourceKind, input.cardCycle);
+        : competenceFor(occurredOn, input.sourceKind, input.cardCycle));
 
     const hash =
       occurredOn === null || amountCents === null
@@ -301,6 +358,13 @@ export interface FinalizeInput {
   cardCycle: CardCycleConfig | null;
   existingHashes: Set<string>;
   reportedTotalCents: Cents | null;
+  /**
+   * Competencia da **FATURA** (mesma regra de `BuildImportPreviewInput`). Quando
+   * preenchida e a origem e cartao, toda linha confirmada recebe esta competencia
+   * e as parcelas futuras sao projetadas a partir dela. `null` = deriva de
+   * `occurredOn` (comportamento anterior).
+   */
+  statementCompetence: Competence | null;
 }
 
 /** Uma transacao pronta para gravar. */
@@ -342,16 +406,22 @@ export interface FinalizeResult {
 }
 
 /**
- * Data de saida do caixa (DATA-MODEL): em item de fatura e o vencimento da
- * fatura; em conta, e a propria data do fato.
+ * Data de saida do caixa (DATA-MODEL): em item de fatura e o vencimento **da
+ * fatura em que a linha e cobrada** (a competencia), nao o vencimento da fatura
+ * em que a data da compra cairia — uma parcela antiga e cobrada na fatura
+ * corrente, nao na do mes da compra. Em conta, e a propria data do fato.
  */
 function cashDateFor(
   occurredOn: IsoDate,
+  competence: Competence,
   sourceKind: SourceKind,
   cardCycle: CardCycleConfig | null,
 ): IsoDate | null {
   if (sourceKind !== 'credit_card') return occurredOn;
-  return cardCycle === null ? null : billingPeriodFor(occurredOn, cardCycle).dueDate;
+  if (cardCycle === null) return null;
+  // `competenceStart` cai sempre na propria competencia (o 1o dia e <= o
+  // fechamento), entao `billingPeriodFor` devolve o vencimento dela.
+  return billingPeriodFor(competenceStart(competence), cardCycle).dueDate;
 }
 
 /** Descricao de uma parcela gerada: "Mercado Livre (4/10)". */
@@ -404,10 +474,11 @@ export function finalizeImport(input: FinalizeInput): FinalizeResult {
     }
     seen.add(hash);
 
-    const competence = competenceFor(
+    const competence = resolveCompetence(
       row.occurredOn,
       input.sourceKind,
       input.cardCycle,
+      input.statementCompetence,
     );
 
     let planRef: number | null = null;
@@ -450,6 +521,7 @@ export function finalizeImport(input: FinalizeInput): FinalizeResult {
             competence: childCompetence,
             cashDate: cashDateFor(
               childOccurredOn,
+              childCompetence,
               input.sourceKind,
               input.cardCycle,
             ),
@@ -476,7 +548,12 @@ export function finalizeImport(input: FinalizeInput): FinalizeResult {
     transactions.push({
       occurredOn: row.occurredOn,
       competence,
-      cashDate: cashDateFor(row.occurredOn, input.sourceKind, input.cardCycle),
+      cashDate: cashDateFor(
+        row.occurredOn,
+        competence,
+        input.sourceKind,
+        input.cardCycle,
+      ),
       description: row.description,
       rawDescription: row.rawDescription,
       amountCents: row.amountCents,

@@ -475,6 +475,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
           sourceId={preview.sourceId}
           members={members}
           categories={categories}
+          defaultCompetence={competence}
           onBack={returnToInput}
           onCommitted={handleCommitted}
         />

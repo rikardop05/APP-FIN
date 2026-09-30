@@ -79,6 +79,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('commitImport atomicity'
             ],
             reportedTotalCents: null,
             allowReimport: false,
+            statementCompetence: '2026-09',
           },
           { failAfter: 'transactions' },
         ),
@@ -169,6 +170,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('import dedupe and rever
       ],
       reportedTotalCents: null,
       allowReimport: false,
+      statementCompetence: '2026-09',
     };
 
     try {
@@ -216,6 +218,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('import dedupe and rever
       ],
       reportedTotalCents: null,
       allowReimport: false,
+      statementCompetence: '2026-09',
     };
     const second = {
       ...first,
@@ -287,6 +290,96 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('import dedupe and rever
       expect(remainingTransactions).toHaveLength(0);
       expect(remainingPlans).toHaveLength(0);
       expect(remainingStatements).toHaveLength(0);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  /**
+   * A regra que este teste descreve: `period` da fatura vem da escolha do
+   * usuário ("Competência padrão"), não de uma transação do lote. Um cartão
+   * carrega compras de vários meses (parcelas, estornos que cruzam o
+   * fechamento) — nenhuma transação é fonte legítima dessa informação.
+   *
+   * Quatro linhas em quatro competências diferentes, fatura declarada em uma
+   * quinta: o `period` da fatura gravada é a quinta, não a primeira nem a
+   * maioria nem nada inferido.
+   */
+  it('uses the declared statementCompetence, not any transaction competence', async () => {
+    const fixture = await createImportFixture('statement-period');
+    const { commitImport } = await import('./import');
+    const input = {
+      fileName: 'competencias-diferentes.txt',
+      fileHash: 'e'.repeat(64),
+      bankKey: null,
+      format: 'text' as const,
+      sourceKind: 'credit_card' as const,
+      sourceId: fixture.cardId,
+      confirmedRows: [
+        {
+          index: 0,
+          include: true,
+          occurredOn: '2025-10-05',
+          description: 'Compra de 2025-10',
+          rawDescription: 'Compra de 2025-10',
+          amountCents: cents(-1000),
+          categoryId: null,
+          memberId: null,
+          installment: null,
+        },
+        {
+          index: 1,
+          include: true,
+          occurredOn: '2025-11-05',
+          description: 'Compra de 2025-11',
+          rawDescription: 'Compra de 2025-11',
+          amountCents: cents(-2000),
+          categoryId: null,
+          memberId: null,
+          installment: null,
+        },
+        {
+          index: 2,
+          include: true,
+          occurredOn: '2025-12-05',
+          description: 'Compra de 2025-12',
+          rawDescription: 'Compra de 2025-12',
+          amountCents: cents(-3000),
+          categoryId: null,
+          memberId: null,
+          installment: null,
+        },
+        {
+          index: 3,
+          include: true,
+          occurredOn: '2026-01-05',
+          description: 'Compra de 2026-01',
+          rawDescription: 'Compra de 2026-01',
+          amountCents: cents(-4000),
+          categoryId: null,
+          memberId: null,
+          installment: null,
+        },
+      ],
+      reportedTotalCents: null,
+      allowReimport: false,
+      // A fatura e de 2026-02. As linhas estao em quatro meses diferentes,
+      // nenhum deles e 2026-02. A escolha do usuario e que vale.
+      statementCompetence: '2026-02',
+    };
+
+    try {
+      await commitImport(fixture.householdId, input);
+      const [statement] = await fixture.db
+        .select({ period: fixture.schema.statements.period })
+        .from(fixture.schema.statements)
+        .innerJoin(
+          fixture.schema.creditCards,
+          eq(fixture.schema.creditCards.id, fixture.schema.statements.creditCardId),
+        )
+        .where(eq(fixture.schema.creditCards.householdId, fixture.householdId));
+      expect(statement).toBeDefined();
+      expect(statement?.period).toBe('2026-02');
     } finally {
       await fixture.cleanup();
     }

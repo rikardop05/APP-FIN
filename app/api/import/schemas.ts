@@ -64,17 +64,38 @@ const confirmedRowSchema = z.object({
   forceDuplicate: z.boolean().optional(),
 });
 
-export const commitBodySchema = z.object({
+/**
+ * Competência da **FATURA** que está sendo confirmada. Numa fatura de cartão
+ * a competência é DECLARADA (a tela sempre a tem em mãos — é o "Competência
+ * padrão"); sem ela, o caminho de gravação não tem como saber o mês da fatura
+ * e o defeito clássico é chutar a partir de uma transação qualquer. Por isso é
+ * **obrigatória** quando a origem é cartão: faltou, 400 com mensagem clara,
+ * sem fallback. Em conta o campo não se aplica (não há fatura) — opcional,
+ * ignorado.
+ */
+const baseCommitFields = {
   fileName: z.string().trim().min(1).max(240),
   fileHash: z.string().regex(/^[a-f0-9]{64}$/, 'Hash do arquivo inválido.'),
   bankKey: z.string().trim().min(1).max(40).nullable(),
   format: z.enum(['pdf', 'text']),
-  sourceKind: z.enum(['credit_card', 'account']),
   sourceId: z.string().uuid(),
   confirmedRows: z.array(confirmedRowSchema).max(2_000),
   reportedTotalCents: centsSchema.nullable(),
   allowReimport: z.boolean().default(false),
-});
+};
+
+export const commitBodySchema = z.discriminatedUnion('sourceKind', [
+  z.object({
+    ...baseCommitFields,
+    sourceKind: z.literal('credit_card'),
+    defaultCompetence: competenceSchema,
+  }),
+  z.object({
+    ...baseCommitFields,
+    sourceKind: z.literal('account'),
+    defaultCompetence: competenceSchema.optional(),
+  }),
+]);
 
 export const revertBodySchema = z.object({
   batchId: z.string().uuid(),

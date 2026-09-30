@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { Competence } from '@/lib/date';
 import type { CardCycleConfig } from '@/lib/finance/billing';
 import type { Rule } from '@/lib/finance/categorization';
 import { dedupeHash } from '@/lib/finance/dedupe';
@@ -30,12 +31,16 @@ function parseResult(rows: ParsedRow[]): ParseResult {
   return { rows, diagnostics: [], reportedTotalCents: null };
 }
 
-function preview(rows: ParsedRow[], overrides?: {
-  rules?: Rule[];
-  existingHashes?: Set<string>;
-  cardCycle?: CardCycleConfig | null;
-  sourceKind?: 'credit_card' | 'account';
-}) {
+function preview(
+  rows: ParsedRow[],
+  overrides?: {
+    rules?: Rule[];
+    existingHashes?: Set<string>;
+    cardCycle?: CardCycleConfig | null;
+    sourceKind?: 'credit_card' | 'account';
+    statementCompetence?: Competence | null;
+  },
+) {
   return buildImportPreview({
     parse: parseResult(rows),
     sourceId: SOURCE_ID,
@@ -44,6 +49,7 @@ function preview(rows: ParsedRow[], overrides?: {
     rules: overrides?.rules ?? [],
     existingHashes: overrides?.existingHashes ?? new Set<string>(),
     today: '2026-09-20',
+    statementCompetence: overrides?.statementCompetence ?? null,
   });
 }
 
@@ -70,6 +76,7 @@ function finalize(rows: ConfirmedRow[], overrides?: Partial<FinalizeInput>) {
     cardCycle: CARD,
     existingHashes: new Set<string>(),
     reportedTotalCents: null,
+    statementCompetence: null,
     ...overrides,
   });
 }
@@ -453,5 +460,83 @@ describe('buildImportPreview — pagamento da fatura anterior (gate T-116)', () 
     );
 
     expect(result.rows[0]?.state).toBe('installment_part');
+  });
+});
+
+describe('competencia da fatura e projecao de parcelas (decisao do Ricardo)', () => {
+  // Santander fecha antes do dia 11 (por isso a compra de 11/10 cai na fatura de
+  // novembro) — reproduz o caso real da parcela 11/12.
+  const CARD_SANTANDER: CardCycleConfig = { closingDay: 10, dueDay: 20 };
+  const parcela = parsed({
+    occurredOn: '2025-10-11',
+    rawDescription: 'CARTAO DE TODOS Parcela 11/12',
+    amountCents: cents(-260),
+  });
+
+  it('a linha de cartao recebe a competencia da FATURA, nao a da compra', () => {
+    const result = preview([parcela], {
+      statementCompetence: '2026-09',
+      cardCycle: CARD_SANTANDER,
+    });
+
+    expect(result.rows[0]?.occurredOn).toBe('2025-10-11');
+    expect(result.rows[0]?.competence).toBe('2026-09');
+    expect(result.rows[0]?.installment).toEqual({ current: 11, total: 12 });
+  });
+
+  it('sem competencia da fatura, segue derivando de occurredOn (fallback)', () => {
+    const result = preview([parcela], { cardCycle: CARD_SANTANDER });
+    expect(result.rows[0]?.competence).toBe('2025-11');
+  });
+
+  it('na conta, a competencia continua vindo da data (campo ignorado)', () => {
+    const result = preview([parcela], {
+      sourceKind: 'account',
+      statementCompetence: '2026-09',
+      cardCycle: CARD_SANTANDER,
+    });
+    expect(result.rows[0]?.competence).toBe('2025-10');
+  });
+
+  it('projecao: 11/12 em 2026-09 sobra so a 12a, em 2026-10', () => {
+    const result = finalize(
+      [
+        confirmed({
+          occurredOn: '2025-10-11',
+          description: 'CARTAO DE TODOS',
+          rawDescription: 'CARTAO DE TODOS Parcela 11/12',
+          amountCents: cents(-260),
+          installment: { current: 11, total: 12 },
+        }),
+      ],
+      { statementCompetence: '2026-09', cardCycle: CARD_SANTANDER },
+    );
+
+    expect(result.installmentPlans).toEqual([
+      {
+        ref: 1,
+        description: 'CARTAO DE TODOS',
+        totalCents: cents(-3120),
+        installmentsCount: 12,
+        firstCompetence: '2025-11',
+        categoryId: null,
+      },
+    ]);
+    expect(result.transactions).toHaveLength(2);
+
+    const confirmedTx = result.transactions.find(
+      (transaction) => transaction.installmentNumber === 11,
+    );
+    expect(confirmedTx).toMatchObject({
+      competence: '2026-09',
+      occurredOn: '2025-10-11',
+      cashDate: '2026-09-20',
+    });
+
+    const projected = result.transactions.find(
+      (transaction) => transaction.installmentNumber === 12,
+    );
+    expect(projected?.competence).toBe('2026-10');
+    expect(projected?.cashDate).toBe('2026-10-20');
   });
 });

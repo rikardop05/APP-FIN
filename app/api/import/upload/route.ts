@@ -100,6 +100,7 @@ export async function POST(request: Request) {
       rules: preparation.rules,
       existingHashes: preparation.existingHashes,
       today: input.today,
+      statementCompetence: input.defaultCompetence ?? null,
     });
 
     return NextResponse.json({

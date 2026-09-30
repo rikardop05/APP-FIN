@@ -19,6 +19,10 @@ export async function POST(request: Request) {
     const result = await commitImport(householdId, {
       ...parsed.data,
       confirmedRows: parsed.data.confirmedRows,
+      // O schema chama o campo `defaultCompetence` (mesmo nome do upload, de onde
+      // o usuário escolheu); o motor quer `statementCompetence`. Conta: o campo
+      // é opcional, vira `null`. Cartão: o schema validou que veio preenchido.
+      statementCompetence: parsed.data.defaultCompetence ?? null,
     });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
