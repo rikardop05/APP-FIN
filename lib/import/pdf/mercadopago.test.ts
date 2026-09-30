@@ -482,3 +482,31 @@ describe('parseMercadoPagoPdf — ponta a ponta com a geometria medida (§7)', (
     expect(result.reportedTotalCents).toBeNull();
   });
 });
+
+describe('parseMercadoPagoPdf — gate T-116: tracos de menos e virada de ano', () => {
+  it('le estorno com U+2212 (minus sign) como entrada', () => {
+    const result = parseMercadoPagoPdf([
+      headerRow(),
+      transactionRow(680, {
+        date: '14/07',
+        description: 'ESTORNO SINTETICO',
+        value: '\u2212R$ 50,00',
+      }),
+    ]);
+    expect(result.rows[0]?.amountCents).toBe(5000);
+  });
+
+  it('parcela de compra antiga (data depois do vencimento) volta um ano', () => {
+    const result = parseMercadoPagoPdf([
+      headerRow(),
+      transactionRow(680, {
+        date: '24/11',
+        description: 'LOJA SINTETICA',
+        value: 'R$ 11,63',
+        installment: 'Parcela 8 de 12',
+      }),
+    ]);
+    expect(result.rows[0]?.occurredOn).toBe('2025-11-24');
+    expect(result.rows[0]?.installment).toEqual({ current: 8, total: 12 });
+  });
+});

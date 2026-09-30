@@ -368,3 +368,47 @@ describe('parseNubankPdf — ponta a ponta sobre fixture com a geometria medida'
     expect(result.reportedTotalCents).toBe(-37000);
   });
 });
+
+describe('parseNubankPdf — gate T-116: tracos de menos e virada de ano', () => {
+  const header = makeRow(782, [{ x: 327, y: 782, text: 'Fatura 15 SET 2026' }]);
+
+  it('le credito com U+2212 (minus sign) como entrada, nao despesa', () => {
+    const result = parseNubankPdf([
+      header,
+      transactionRow(700, {
+        date: '07 SET',
+        description: 'ESTORNO ANONIMO',
+        value: '\u2212R$ 1.208,96',
+      }),
+    ]);
+    expect(result.rows[0]?.amountCents).toBe(120896);
+  });
+
+  it('le credito com U+2013 (en dash) como entrada', () => {
+    const result = parseNubankPdf([
+      header,
+      transactionRow(700, {
+        date: '07 SET',
+        description: 'ESTORNO ANONIMO',
+        value: '\u2013R$ 1.208,96',
+      }),
+    ]);
+    expect(result.rows[0]?.amountCents).toBe(120896);
+  });
+
+  it('data depois da referencia da fatura volta um ano', () => {
+    const result = parseNubankPdf([
+      header,
+      transactionRow(700, { date: '20 DEZ', description: 'LOJA', value: 'R$ 10,00' }),
+    ]);
+    expect(result.rows[0]?.occurredOn).toBe('2025-12-20');
+  });
+
+  it('data antes da referencia fica no ano da fatura', () => {
+    const result = parseNubankPdf([
+      header,
+      transactionRow(700, { date: '22 AGO', description: 'LOJA', value: 'R$ 10,00' }),
+    ]);
+    expect(result.rows[0]?.occurredOn).toBe('2026-08-22');
+  });
+});

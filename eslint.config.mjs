@@ -195,6 +195,10 @@ const config = [
       'build/**',
       'coverage/**',
       'next-env.d.ts',
+      // Gitignorado (.gitignore:62) e fora do produto: guarda as faturas reais e
+      // os scripts de diagnostico descartaveis do gate. Sem esta linha, um
+      // rascunho ali reprova o lint da equipe inteira -- aconteceu no T-116.
+      '.private/**',
     ],
   },
   ...compat.extends('next/core-web-vitals', 'next/typescript'),

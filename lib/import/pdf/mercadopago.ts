@@ -63,6 +63,13 @@
  *    usuario completar na tela de confirmacao (CONTRACTS §15: `null` = nao lido,
  *    nunca sentinela, nunca descartada).
  *
+ * **Virada de ano (gate T-116).** Uma data `dd/MM` sem ano que cai **depois** do
+ * vencimento impresso e do ano anterior. Medido: a fatura que vence `20/07/2026`
+ * traz `24/11 ... Parcela 8 de 12`; a compra e `2025-11-24`, nao `2026-11-24`.
+ * Sem isso, uma unica linha joga a fatura inteira para a competencia errada. A
+ * referencia do **documento vence** o parametro; o parametro so fornece o ano
+ * quando o cabecalho nao traz data completa, e nesse caso sem virada.
+ *
  * ## Decisao de contrato: a secao de cartao
  *
  * `ParsedRow` nao tem campo de cartao, e adicionar um seria mudanca de contrato
@@ -82,6 +89,11 @@ import { detectInstallment } from '@/lib/import/installments';
 import type { ParseDiagnostic, ParseResult, ParsedRow } from '@/lib/import/types';
 import type { PdfTextRow } from '@/lib/import/pdf/rows';
 import { cents, parseBRL, type Cents } from '@/lib/money';
+import {
+  PDF_MONEY_TOKEN,
+  yearForDateWithoutYear,
+  type ReferenceDate,
+} from '@/lib/import/pdf/shared';
 
 /** Faixa horizontal `[minX, maxX)` em pontos. */
 interface XBand {
@@ -178,10 +190,12 @@ export const MERCADOPAGO_LAYOUT = {
   transactionRegion: { minY: 30, maxY: 770 },
 
   /**
-   * MEDIDO (§7): valor com `R$` e decimal com virgula (`A$ 999,99`), alinhado a
-   * direita. Marcado como global para `matchAll`.
+   * MEDIDO (§7 + gate T-116): valor com `R$` e decimal com virgula, alinhado a
+   * direita. Token compartilhado, por causa dos tracos de menos que um PDF emite
+   * (o Mercado Pago medido usa so U+002D, mas o defeito no Nubank e Santander
+   * mostrou que a classe tem de ser a mesma nos tres).
    */
-  moneyToken: /-?\s*R\$\s*\d[\d.,]*|-?\d{1,3}(?:\.\d{3})*,\d{2}/g,
+  moneyToken: PDF_MONEY_TOKEN,
 
   /**
    * **SUPOSICAO** (nao coberto pela medicao §7): a fatura de cartao imprime a
@@ -322,14 +336,15 @@ function installmentFor(row: PdfTextRow): string {
 }
 
 /**
- * Ano do cabecalho da fatura, ou `null`.
+ * Data de referencia da fatura, lida do cabecalho (§7: `Vencimento: dd/MM/yyyy`,
+ * `y=776`).
  *
  * So olha linhas **fora da area de transacao** e com um marcador de
  * fatura/vencimento/periodo. Uma descricao que contenha "fatura" e um `20xx` nao
- * define o ano de todas as linhas — encontrar o ano errado e pior que nao
- * encontrar, porque o erro e silencioso.
+ * define a referencia. E a fonte da virada de ano: `24/11` numa fatura que vence
+ * `20/07` e do ano anterior.
  */
-function headerYear(rows: PdfTextRow[]): number | null {
+function headerReference(rows: PdfTextRow[]): ReferenceDate | null {
   for (const row of rows) {
     if (inTransactionRegion(row)) continue;
     const lower = row.text.toLowerCase();
@@ -337,29 +352,30 @@ function headerYear(rows: PdfTextRow[]): number | null {
       continue;
     }
     const match = MERCADOPAGO_LAYOUT.fullDatePattern.exec(row.text);
-    if (match !== null) return Number(match[3]);
+    if (match === null) continue;
+    const year = Number(match[3]);
+    const month = Number(match[2]);
+    const day = Number(match[1]);
+    if (
+      !Number.isInteger(year) ||
+      year < 1000 ||
+      year > 9999 ||
+      month < 1 ||
+      month > 12 ||
+      day < 1 ||
+      day > 31
+    ) {
+      continue;
+    }
+    return { year, month, day };
   }
   return null;
 }
 
-/** Ano resolvido na ordem cabecalho -> parametro -> `null`. Ver topo do arquivo. */
-function resolveYear(
-  rows: PdfTextRow[],
-  opts: MercadoPagoPdfParseOptions | undefined,
-): number | null {
-  const fromHeader = headerYear(rows);
-  if (fromHeader !== null) return fromHeader;
-
-  const candidate = opts?.defaultYear;
-  if (
-    candidate !== undefined &&
-    Number.isInteger(candidate) &&
-    candidate >= 1000 &&
-    candidate <= 9999
-  ) {
-    return candidate;
-  }
-  return null;
+/** Ano valido do parametro, ou `null`. */
+function validYear(value: number | undefined): number | null {
+  if (value === undefined) return null;
+  return Number.isInteger(value) && value >= 1000 && value <= 9999 ? value : null;
 }
 
 /** Secoes de cartao distintas da fatura, na ordem de aparicao. */
@@ -405,7 +421,8 @@ export function parseMercadoPagoPdf(
 
   const cards = collectCardDigits(rows);
   const multiCard = cards.size > 1;
-  const year = resolveYear(rows, opts);
+  const reference = headerReference(rows);
+  const fallbackYear = validYear(opts?.defaultYear);
   const totals: Cents[] = [];
 
   let currentCard: string | null = null;
@@ -436,7 +453,19 @@ export function parseMercadoPagoPdf(
       }
 
       const dateMatch = matchDate(dateCell);
-      const rowYear = dateMatch?.explicitYear ?? year;
+      // `dd/MM` sem ano: o ano sai da referencia da fatura, com virada quando a
+      // data cai depois dela (medido: `24/11` na fatura que vence `20/07` e do
+      // ano anterior).
+      const rowYear =
+        dateMatch === null
+          ? null
+          : (dateMatch.explicitYear ??
+            yearForDateWithoutYear({
+              month: dateMatch.month,
+              day: dateMatch.day,
+              reference,
+              fallbackYear,
+            }));
 
       // Ano so para validar o par mes/dia quando o ano real e desconhecido
       // (bissexto, para 29/02 nao ser recusado por engano). **Nunca** entra em

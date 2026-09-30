@@ -8,6 +8,8 @@ import {
   bpToDecimal,
   cents,
   formatBRL,
+  MINUS_DASH_CLASS,
+  MINUS_DASH_CODE_POINTS,
   parseBRL,
 } from '@/lib/money';
 
@@ -120,10 +122,49 @@ describe('parseBRL', () => {
     expect(parseBRL('R$\u202F1.234,56')).toBe(123456);
   });
 
-  it('aceita o sinal de menos tipografico U+2212, que PDF de fatura emite', () => {
-    // Recusar faria o parser de PDF descartar toda linha negativa em silencio.
-    expect(parseBRL('−R$ 10,00')).toBe(-1000);
-    expect(parseBRL('−10,00')).toBe(-1000);
+  // Gate T-116: a lista de tracos e UMA so, exportada por lib/money. Este bloco
+  // percorre a exportacao em vez de repetir literais — se a lista mudar, isto
+  // acompanha; o teste do consumidor que divergir quebra, que e o objetivo.
+  for (const codePoint of MINUS_DASH_CODE_POINTS) {
+    const label = `U+${codePoint.toString(16).toUpperCase().padStart(4, '0')}`;
+    const dash = String.fromCodePoint(codePoint);
+
+    it(`${label} normaliza para o mesmo Cents do hifen ASCII`, () => {
+      expect(parseBRL(`${dash}10,00`)).toBe(parseBRL('-10,00'));
+      expect(parseBRL(`${dash}10,00`)).toBe(-1000);
+      expect(parseBRL(`R$ ${dash}10,00`)).toBe(-1000);
+      expect(parseBRL(`${dash}1.234,56`)).toBe(parseBRL('-1.234,56'));
+    });
+  }
+
+  it('MINUS_DASH_CLASS serve DENTRO de [...] numa RegExp (uso do token dos parsers)', () => {
+    const re = new RegExp(`[${MINUS_DASH_CLASS}]`);
+    for (const codePoint of MINUS_DASH_CODE_POINTS) {
+      expect(re.test(String.fromCodePoint(codePoint))).toBe(true);
+    }
+    // O travessao NAO esta na classe — a exclusao e decisao de lib/money.
+    expect(re.test('\u2014')).toBe(false);
+  });
+
+  const dashRejected: readonly (readonly [string, string])[] = [
+    ['U+2014 EM DASH (travessao de prosa, nao menos)', '\u2014'],
+    ['U+2015 HORIZONTAL BAR', '\u2015'],
+    ['U+2500 BOX DRAWINGS LIGHT HORIZONTAL', '\u2500'],
+    ['U+FE58 SMALL EM DASH', '\uFE58'],
+  ];
+
+  for (const [name, dash] of dashRejected) {
+    it(`${name} continua recusado (devolve null)`, () => {
+      expect(parseBRL(`${dash}10,00`)).toBeNull();
+      expect(parseBRL(`R$ ${dash}10,00`)).toBeNull();
+    });
+  }
+
+  it('traco no meio do numero continua reprovando o corpo numerico', () => {
+    // A normalizacao so ajuda na POSICAO DE SINAL; interior continua null.
+    expect(parseBRL('10\u201320')).toBeNull();
+    expect(parseBRL('10\u201020')).toBeNull();
+    expect(parseBRL('10\u221220')).toBeNull();
   });
 
   it('recusa convencao de layout de extrato: quem decide a direcao e o parser', () => {

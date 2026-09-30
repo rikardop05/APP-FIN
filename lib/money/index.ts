@@ -111,6 +111,49 @@ export function formatBRL(
 }
 
 /**
+ * Codigos dos tracos que valem como sinal de menos — a UNICA lista do sistema.
+ *
+ * U+002D entra (o hifen ASCII, base de comparacao) junto dos tracos que um PDF
+ * emite no lugar dele: U+2010, U+2011, U+2013, U+2212 e U+FF0D. U+2014 (em
+ * dash/travessao) e os demais tracos de pontuacao ficam FORA — o porque esta em
+ * `parseBRL`.
+ *
+ * Quem precisa reconhecer ou normalizar esses tracos (o token monetario dos
+ * parsers de PDF, por exemplo) monta a classe a partir daqui, em vez de manter a
+ * propria lista: DUAS listas da mesma coisa, em dois arquivos, de dois agentes, e
+ * exatamente como o defeito do gate T-116 nasceu. Acrescentar um traco e mudar
+ * ESTE array e mais nada, com a justificativa no comentario — e o teste do
+ * consumidor que divergir quebra. O array e a fonte; `MINUS_DASH_CLASS` e
+ * derivada dele.
+ */
+export const MINUS_DASH_CODE_POINTS: readonly number[] = [
+  0x002d, // hyphen-minus ASCII (o sinal canonico)
+  0x2010, // hyphen
+  0x2011, // non-breaking hyphen
+  0x2013, // en dash (medido no Santander)
+  0x2212, // minus sign (medido no Nubank)
+  0xff0d, // fullwidth hyphen-minus (forma de largura dupla do U+002D)
+];
+
+/**
+ * A lista acima como fragmento de classe de regex, para uso DENTRO de `[...]`:
+ *
+ *   new RegExp(`[${MINUS_DASH_CLASS}]?\\s*R\\$\\s*\\d[\\d.,]*`)
+ *
+ * Sai SEM os colchetes de proposito — e o pedaco interno, que quem monta a
+ * expressao concatena entre eles. E derivada de `MINUS_DASH_CODE_POINTS` (nunca
+ * escrita a mao), entao as duas nao podem divergir. Cada code point vai escapado
+ * (`\uXXXX`) para o `-` do ASCII nao virar operador de intervalo dentro da
+ * classe.
+ */
+export const MINUS_DASH_CLASS: string = MINUS_DASH_CODE_POINTS.map(
+  (codePoint) => `\\u${codePoint.toString(16).padStart(4, '0')}`,
+).join('');
+
+/** RegExp de normalizacao, montada da classe para nao repetir a lista. */
+const MINUS_DASH_RE = new RegExp(`[${MINUS_DASH_CLASS}]`, 'g');
+
+/**
  * Le um valor digitado ou vindo de arquivo. Devolve `null` para qualquer coisa
  * que nao seja um valor monetario inequivoco — nunca lanca, nunca chuta.
  *
@@ -135,10 +178,24 @@ export function parseBRL(input: string): Cents | null {
 
   // O \s do JS ja cobre NBSP (U+00A0) e narrow NBSP (U+202F), que e o que Intl
   // e extrato de banco colocam entre o simbolo e o numero.
-  // U+2212 e o sinal de menos tipografico: PDF de fatura emite esse, nao o
-  // hifen ASCII. E o mesmo caractere semanticamente, entao normaliza — recusar
-  // faria o parser de PDF descartar toda linha negativa em silencio.
-  const compact = input.replace(/\s/g, '').replace(/\u2212/g, '-');
+  //
+  // Traco no lugar do sinal de menos. Um PDF de fatura nem sempre emite o hifen
+  // ASCII (U+002D). Medido nas faturas reais no gate T-116: o Nubank usa U+2212
+  // (minus sign) e o Santander usa U+2013 (en dash) como sinal. Sem normalizar,
+  // o token nao casa o regex, parseBRL devolve null e o parser perde o sinal — o
+  // efeito combinado ja fez um credito de R$ 1.208,96 entrar como despesa.
+  //
+  // O conjunto exato vive em MINUS_DASH_CODE_POINTS (a lista unica); aqui so
+  // normalizamos. O alcance e curto de proposito: so a POSICAO DE SINAL muda o
+  // resultado, porque um traco no MEIO do numero ja reprovava o corpo [\d.,]+
+  // antes e continua reprovando — "10-20" segue null.
+  //
+  // U+2014 (EM DASH) NAO entra, de proposito: o glifo e o travessao de prosa,
+  // nao o menos, e nenhuma fonte medida o usa como sinal. Aceita-lo trocaria um
+  // falso negativo (perder o sinal) por um falso positivo (ler um travessao de
+  // texto como sinal de numero), e falso positivo em dinheiro e pior. Pela mesma
+  // razao qualquer outro traco de pontuacao (U+2015, U+2500, U+FE58...) fica fora.
+  const compact = input.replace(/\s/g, '').replace(MINUS_DASH_RE, '-');
   if (compact === '') return null;
 
   const shape = /^([+-]?)(R\$)?([+-]?)([\d.,]+)$/i.exec(compact);

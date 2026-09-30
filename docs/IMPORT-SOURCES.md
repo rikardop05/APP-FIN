@@ -217,3 +217,69 @@ promocional o banco imprimiu acima, e isso muda a cada fatura.
 
 Ordem obrigatória, igual aos outros dois bancos: **cabeçalho → parâmetro do chamador → linha com
 confiança baixa** para o usuário completar. Nunca do relógio.
+
+## 9. O que o gate humano do T-116 mediu (2026-09-30)
+
+As três faturas reais passaram pela tela de importação pela primeira vez. Tudo
+abaixo foi medido nos arquivos, não inferido. As §6/§7/§8 continuam válidas — o
+que segue é o que elas **não** registravam.
+
+### 9.1 O sinal de menos não é um caractere só
+
+Contagem de caracteres tipo traço nos três PDFs:
+
+| Fatura | U+002D `-` | U+2212 `−` | U+2013 `–` |
+|---|---|---|---|
+| Nubank | 15 | **2** | — |
+| Santander | 148 | — | **2** |
+| Mercado Pago | 1 | — | — |
+
+**O mesmo documento usa os dois.** No Nubank, medido com a posição:
+
+| Onde | x | Texto | Caractere |
+|---|---|---|---|
+| linha de resumo | 492 | `-R$ 1.182,81` | U+002D |
+| linha de transação | 486 | `−R$ 1.208,96` | **U+2212** |
+
+Não há regra: o mesmo emissor alterna dentro do arquivo. Qualquer expressão que
+procure valor monetário tem de aceitar a classe inteira, e o teste tem de cobrir
+um caso por caractere. Foi a duplicação literal do `moneyToken` nos três layouts
+que deixou o defeito em triplicata.
+
+### 9.2 Data sem ano pode ser do ano anterior
+
+Nubank (`07 ago`) e Mercado Pago (`24/11`) imprimem a data da compra **sem ano**.
+Dar a elas o ano da fatura é errado quando a compra é antiga — e compra parcelada
+é antiga por definição.
+
+Medido na fatura MP de julho/2026 (fecha 14, vence 20/07/2026):
+
+```
+x40:"24/11"   x94:"<descricao>"   x393:"Parcela 8 de 12"   x517:"R$ 11,63"
+```
+
+Parcela 8 de 12 em julho/2026 ⇒ a compra é de **24/11/2025**. A própria linha
+carrega a prova: o número da parcela diz há quantos meses ela ocorreu.
+
+Uma linha errada arrastou a fatura inteira para a competência 2026-12 no painel.
+**A regra:** data sem ano não pode cair depois da referência da fatura; quando
+cai, é do ano anterior.
+
+### 9.3 A fatura contém linhas que não são lançamento
+
+| Linha | Nubank, medido | Por quê |
+|---|---|---|
+| pagamento da fatura anterior | #123, `Pagamento em 07 ago`, x185 | `credit_card_payment` da **conta** (RF-CC-04), não do cartão. Importar pelo cartão conta duas vezes quando o extrato da conta entrar. |
+| linhas de `R$ 0,00` | #124 e #125, x504 | informativas |
+
+Nenhuma delas pode sumir em silêncio — o contrato proíbe. Elas são reconhecidas,
+marcadas, e chegam à confirmação já desmarcadas, com o motivo visível.
+
+### 9.4 O que isto diz sobre os testes
+
+Os três defeitos conviviam com 591 testes verdes, porque toda fixture era
+sintética e foi escrita pelo mesmo entendimento que escreveu o parser. Fixture
+sintética prova que o parser faz o que o autor quis; só o arquivo real prova o
+que o banco faz. A medição anonimizada das §6/§7/§8 fechou parte dessa distância
+e não fechou esta parte: ela registrou posição e formato, não o repertório de
+caracteres nem o alcance dos valores.

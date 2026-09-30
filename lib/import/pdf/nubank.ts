@@ -42,7 +42,7 @@
  * paginas. A resolucao, nesta ordem:
  *
  * 1. **Cabecalho da fatura** (fatura/emissao/vencimento), lido das proprias
- *    linhas.
+ *    linhas; a data completa de la e a **referencia da fatura**.
  * 2. **Parametro do chamador** (`opts.defaultYear`) — a tela sabe a competencia
  *    importada. **Nunca** do relogio: `new Date()` e proibido em `/lib`
  *    (CONVENTIONS §4) e "ano atual" quebra em silencio todo janeiro.
@@ -50,6 +50,14 @@
  *    o usuario completar na tela de confirmacao (o tipo `ParsedRow` nao carrega
  *    `confidence`; em PDF, o canal de baixa confianca e o diagnostico). A linha
  *    nunca e chutada nem engolida em silencio.
+ *
+ * **Virada de ano (gate T-116).** Uma data `dd MMM` sem ano que cai **depois** da
+ * referencia da fatura e do ano anterior — uma fatura de setembro nao pode conter
+ * uma compra de dezembro do mesmo ano. A referencia do **documento vence** o
+ * parametro: ela e a data impressa pela propria fatura; o parametro e a
+ * competencia que o usuario escolheu, que pode estar errada. O parametro so
+ * fornece o ano quando o documento nao traz data completa — e, nesse caso, sem
+ * virada (nao ha referencia para comparar).
  *
  * Modulo puro (CONVENTIONS §5): sem I/O, sem `Date`, sem `process.env`. Toda
  * conta de calendario passa por `lib/date` (`clampDayToMonth`).
@@ -59,6 +67,11 @@ import { clampDayToMonth, type IsoDate } from '@/lib/date';
 import { detectInstallment } from '@/lib/import/installments';
 import type { ParsedRow, ParseDiagnostic, ParseResult } from '@/lib/import/types';
 import type { PdfTextRow } from '@/lib/import/pdf/rows';
+import {
+  PDF_MONEY_TOKEN,
+  yearForDateWithoutYear,
+  type ReferenceDate,
+} from '@/lib/import/pdf/shared';
 import { cents, parseBRL, type Cents } from '@/lib/money';
 
 /** Faixa horizontal `[minX, maxX)` em pontos. */
@@ -147,11 +160,22 @@ export const NUBANK_LAYOUT = {
   } as Readonly<Record<string, number>>,
 
   /**
-   * MEDIDO (§6.1/§6.2): token monetario (`R$ 9.999,99`, com `-` no credito) e o
-   * ano de 4 digitos do cabecalho.
+   * MEDIDO (§6.1/§6.2 + gate T-116): token monetario e data completa do
+   * cabecalho. O token vem de `shared.ts` para cobrir todos os tracos de menos
+   * que um PDF emite — o Nubank real mistura U+002D e U+2212, e so o ASCII
+   * fazia um credito entrar como despesa.
    */
-  moneyToken: /-?\s*R\$\s*\d[\d.,]*|-?\d{1,3}(?:\.\d{3})*,\d{2}/g,
-  yearToken: /\b(20\d{2})\b/,
+  moneyToken: PDF_MONEY_TOKEN,
+
+  /**
+   * MEDIDO (§6.2): data completa do cabecalho, `dd MMM aaaa` (`Fatura 15 SET
+   * 2026`, `Data de vencimento: 15 SET 2026`), e a variante numerica
+   * `dd/mm/aaaa`. Usada como referencia da fatura para a virada de ano.
+   */
+  headerDatePatterns: [
+    /(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{4})/,
+    /(\d{1,2})\s*(?:de\s+)?([A-Za-z]{3})\.?\s*(?:de\s+)?(\d{4})/i,
+  ] as readonly RegExp[],
 
   /**
    * MEDIDO (§6.2): o ano aparece na linha de fatura/emissao (`y=782`) e na de
@@ -349,48 +373,44 @@ function leftmostX(row: PdfTextRow): number | null {
 }
 
 /**
- * Ano do cabecalho da fatura, ou `null`.
+ * Data de referencia da fatura, lida do cabecalho (§6.2).
  *
- * So olha linhas **fora da area de transacao** (cabecalho/rodape) que contenham
- * um marcador de fatura/emissao/vencimento/periodo. Restringir ao cabecalho
- * evita que uma linha de continuacao com a palavra "fatura" e um `20xx` defina o
- * ano de todas as linhas — encontrar o ano errado e pior que nao encontrar,
- * porque o erro e silencioso.
+ * So olha linhas **fora da area de transacao** que contenham um marcador de
+ * fatura/emissao/vencimento/periodo. Restringir ao cabecalho evita que uma
+ * descricao com "fatura" e um `20xx` definam a referencia. E a fonte da virada
+ * de ano: uma data `dd MMM` sem ano que cai depois dela e do ano anterior.
  */
-function headerYear(rows: PdfTextRow[]): number | null {
-  for (let index = 0; index < rows.length; index += 1) {
-    const row = rows[index];
-    if (row === undefined) continue;
+function headerReference(rows: PdfTextRow[]): ReferenceDate | null {
+  for (const row of rows) {
     if (inTransactionRegion(row)) continue;
     if (anchoredDate(row) !== null) continue;
     const lower = row.text.toLowerCase();
     if (!NUBANK_LAYOUT.yearMarkers.some((marker) => lower.includes(marker))) {
       continue;
     }
-    const match = NUBANK_LAYOUT.yearToken.exec(row.text);
-    if (match !== null) return Number(match[1]);
+    for (const pattern of NUBANK_LAYOUT.headerDatePatterns) {
+      const match = pattern.exec(row.text);
+      if (match === null) continue;
+      const year = Number(match[3]);
+      if (!Number.isInteger(year) || year < 1000 || year > 9999) continue;
+      const second = match[2] ?? '';
+      const month = /^\d+$/.test(second)
+        ? Number(second)
+        : NUBANK_LAYOUT.monthNumbers[second.toUpperCase()];
+      const day = Number(match[1]);
+      if (month === undefined || month < 1 || month > 12 || day < 1 || day > 31) {
+        continue;
+      }
+      return { year, month, day };
+    }
   }
   return null;
 }
 
-/** Ano resolvido na ordem cabecalho -> parametro -> `null`. Ver topo do arquivo. */
-function resolveYear(
-  rows: PdfTextRow[],
-  opts: NubankPdfParseOptions | undefined,
-): number | null {
-  const fromHeader = headerYear(rows);
-  if (fromHeader !== null) return fromHeader;
-
-  const candidate = opts?.defaultYear;
-  if (
-    candidate !== undefined &&
-    Number.isInteger(candidate) &&
-    candidate >= 1000 &&
-    candidate <= 9999
-  ) {
-    return candidate;
-  }
-  return null;
+/** Ano valido do parametro, ou `null`. */
+function validYear(value: number | undefined): number | null {
+  if (value === undefined) return null;
+  return Number.isInteger(value) && value >= 1000 && value <= 9999 ? value : null;
 }
 
 /** Valor da linha de total, lido da coluna de valor (ou da linha inteira). */
@@ -429,7 +449,8 @@ export function parseNubankPdf(
 ): ParseResult {
   const parsedRows: ParsedRow[] = [];
   const diagnostics: ParseDiagnostic[] = [];
-  const year = resolveYear(rows, opts);
+  const reference = headerReference(rows);
+  const fallbackYear = validYear(opts?.defaultYear);
   let reportedTotalCents: Cents | null = null;
   let previous: ParsedRow | null = null;
   let currentPage: number | null = null;
@@ -491,7 +512,14 @@ export function parseNubankPdf(
     const amountSource = valueCells.length > 0 ? joinCells(valueCells) : row.text;
     const amount = findLastAmount(amountSource) ?? findLastAmount(row.text);
 
-    const rowYear = dateMatch.explicitYear ?? year;
+    const rowYear =
+      dateMatch.explicitYear ??
+      yearForDateWithoutYear({
+        month: dateMatch.month,
+        day: dateMatch.day,
+        reference,
+        fallbackYear,
+      });
     const occurredOn =
       rowYear === null ? null : buildIsoDate(rowYear, dateMatch.month, dateMatch.day);
 

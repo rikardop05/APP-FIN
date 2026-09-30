@@ -3,7 +3,7 @@
 Mantido pelo orquestrador. Estados: `todo | doing | review | done | blocked`.
 Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATION.md` §9, equipe em `TEAM.md`.
 
-**Última atualização:** 2026-09-24 · 591 testes verdes · HEAD `0554474`, sincronizado · **Fase 1 implementada por inteiro; só o aceite (T-116) falta**
+**Última atualização:** 2026-09-30 · 633 testes verdes · HEAD `4e2e6ce`, sincronizado · **T-116 em execução: o gate humano achou 4 defeitos que 591 testes verdes não achavam**
 
 ## Tarefas
 
@@ -31,7 +31,7 @@ Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATI
 | T-111 | Tela de importação e confirmação | Lanterna | **done** `499abb2` | Os 7 passos percorridos na tela real. Competência vem do servidor |
 | T-113 | Comprometimento na tela de cartões | Lanterna | **done** `6546d37` | Verificado por imagem; mês positivo não desenha barra |
 | T-114 | Categorias e regras em /config | Funil | **done** `d9b557e` | Os 2 critérios provados por execução; cadeia gravação→leitura→motor fechada |
-| T-116 | Aceite de ponta a ponta da Fase 1 | — | **todo** | ⛔ **GATE HUMANO.** Exige validar os 3 parsers contra as faturas reais em `.private/` |
+| T-116 | Aceite de ponta a ponta da Fase 1 | Ricardo (gate) | **doing** | ⛔ **GATE HUMANO, em execução desde 2026-09-30.** As 3 faturas reais passaram pela tela. 4 defeitos achados, 3 corrigidos — ver §Gate abaixo |
 | T-107 | Pipeline de preview | Peneira | **done** `14ccf3e` | Desempate parcela × data por `occurredOn`; invariante do summary como teste de propriedade |
 | T-117 | Extração de PDF + parser Nubank | Peneira | **done** `73933d8` | Layout medido em fatura real (§6). `groupIntoRows` ganhou `xBands` para o caso do Santander |
 | T-004 | Autenticação | Estaca | **done** | Login real fim a fim. Os 3 critérios provados: 307 verificado pelo Orquestrador, token gravado no banco, recusa fora da allowlist testada em 3 camadas com falha fechada |
@@ -170,3 +170,42 @@ posse e propriedade de arquivo, e valem uma passada junto com a dívida de `BUIL
   agentes (`lib/db/` e as camadas puras), então precisa de janela própria.
 
 - **O revisor não é mais de família de modelo diferente.** Corvo roda no mesmo DeepSeek dos implementadores, então a garantia de "ponto cego distinto" do `TEAM.md` §4 não vale; o role dele foi reescrito para exigir revisão por execução, e a validação final é sempre do Orquestrador.
+
+## O que o gate humano do T-116 achou (2026-09-30)
+
+As três faturas reais passaram pela tela de importação pela primeira vez. Quatro
+defeitos, **nenhum deles visível nos 591 testes verdes**. Medições em
+`IMPORT-SOURCES.md` §9.
+
+| # | Defeito | Causa | Efeito | Estado |
+|---|---|---|---|---|
+| G-01 | Toda importação de PDF morria com 500 genérico | webpack do servidor empacotava `pdfjs-dist` sem emitir `pdf.worker.mjs` | nenhum PDF importava | **corrigido** `4ea732f` |
+| G-02 | Crédito virou despesa | `moneyToken` só aceitava `-` U+002D; o Nubank usa `−` U+2212 na linha de transação | pagamento de R$ 1.208,96 entrou como despesa | **corrigido**, verificado na fatura real |
+| G-03 | Fatura inteira na competência errada | `dd/MM` sem ano recebia o ano da fatura; a compra era da parcela 8/12, de 2025 | MP foi para 2026-12 | **corrigido**, verificado na fatura real |
+| G-04 | Pagamento da fatura anterior entra como lançamento | nenhum parser reconhece a linha | dupla contagem quando o extrato da conta entrar (RF-CC-04) | em execução (Peneira) |
+
+Fora da importação, o mesmo gate achou que o `/` servia a landing provisória do
+T-001: `app/page.tsx` e `app/(app)/page.tsx` resolviam os dois para `/`, e o
+dashboard do T-115 nunca tinha sido visto. Corrigido em `4e2e6ce`.
+
+### A lição, que vale mais que os quatro defeitos
+
+Os 591 testes eram verdes e as fixtures eram todas sintéticas — escritas pelo
+mesmo entendimento que escreveu o parser. Uma fixture sintética prova que o
+parser faz o que o autor quis; só o arquivo real prova o que o banco faz.
+
+A medição anonimizada das §6/§7/§8, feita justamente para fechar essa distância,
+registrou **posição e formato** — e não o repertório de caracteres (G-02) nem o
+alcance das datas (G-03). Medir não basta: é preciso medir a dimensão certa, e a
+dimensão errada não se anuncia.
+
+### Uma contradição entre agentes, arbitrada
+
+Esquadro excluiu U+2014 do `parseBRL` com argumento escrito; Peneira o incluiu na
+lista dela, que roda antes e venceria em silêncio. Arbitrado a favor do Esquadro:
+zero ocorrências nos três PDFs, e o token varre a linha inteira, prosa jurídica
+inclusive. A causa — **duas listas da mesma coisa em dois arquivos** — foi
+fechada: `lib/money` exporta `MINUS_DASH_CODE_POINTS` e o parser deriva dela.
+
+É a mesma raiz do G-02: o `moneyToken` estava duplicado literalmente em três
+layouts, e por isso o defeito nasceu em triplicata.

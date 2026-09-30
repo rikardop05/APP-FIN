@@ -389,3 +389,39 @@ describe('parseSantanderPdf — caminho cifrado (RC4) continua seguro', () => {
     );
   });
 });
+
+describe('parseSantanderPdf — gate T-116: tracos de menos e virada de ano', () => {
+  const reference = makeRow(750, [{ x: 401, y: 750, text: '22/08/2026' }]);
+
+  it('le credito com U+2013 (en dash) como entrada', () => {
+    const result = parseSantanderPdf(
+      [transactionRow(700, { date: '22/08', description: 'ESTORNO', value: '\u20139.999,99' })],
+      { defaultYear: 2026 },
+    );
+    expect(result.rows[0]?.amountCents).toBe(999999);
+  });
+
+  it('le credito com U+2212 (minus sign) como entrada', () => {
+    const result = parseSantanderPdf(
+      [transactionRow(700, { date: '22/08', description: 'ESTORNO', value: '\u22129.999,99' })],
+      { defaultYear: 2026 },
+    );
+    expect(result.rows[0]?.amountCents).toBe(999999);
+  });
+
+  it('data depois da referencia do resumo volta um ano', () => {
+    const result = parseSantanderPdf([
+      reference,
+      transactionRow(700, { date: '20/12', description: 'LOJA', value: '10,00' }),
+    ]);
+    expect(result.rows[0]?.occurredOn).toBe('2025-12-20');
+  });
+
+  it('data antes da referencia fica no ano do documento', () => {
+    const result = parseSantanderPdf([
+      reference,
+      transactionRow(700, { date: '05/08', description: 'LOJA', value: '10,00' }),
+    ]);
+    expect(result.rows[0]?.occurredOn).toBe('2026-08-05');
+  });
+});
