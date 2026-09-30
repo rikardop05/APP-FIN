@@ -54,6 +54,32 @@ Nunca misturar. Nunca traduzir um identificador já existente no schema.
 
 **Regra dura:** nada em `/lib/finance` e `/lib/import` importa `/lib/db`, `next/*`, `fs`, `fetch` ou lê `process.env`. São funções que recebem dados e devolvem dados. Um agente que precise quebrar isso está resolvendo o problema no lugar errado — deve parar e reportar, não adaptar.
 
+**Corolário sobre enums, fixado em 2026-09-30.** A regra dura obriga as camadas puras a
+**redigitar** os enums do banco como união literal — `/lib/finance/kpis.ts` faz isso com
+`TransactionKind` e `CategoryNature`, e não há alternativa: o import está barrado. Essa cópia é
+necessária e vive guardada por `tests/enums-espelho.test.ts`, que quebra se os dois lados
+divergirem (o teste mora em `tests/` porque precisa importar os dois, coisa que um teste dentro de
+`/lib/finance` também não poderia).
+
+**Em todo lugar que PODE importar, importar é obrigatório.** `/lib/db/queries`, `/app` e
+`/components` não têm barreira nenhuma — ali a união literal escrita à mão é duplicação gratuita:
+
+```ts
+// errado, em /lib/db/queries: cópia que pode divergir em silêncio
+export type IncomeKind = 'salary' | 'pro_labore' | 'variable' | 'rent' | 'other';
+
+// certo: derivado da fonte, não pode divergir
+import { incomeKind } from '@/lib/db/enums';
+export type IncomeKind = (typeof incomeKind.enumValues)[number];
+```
+
+É o mesmo princípio de §6 ("tipos derivam do Zod, não são escritos duas vezes"), e a razão de
+insistir é que **o teste não salva este caso**: o espelho cobre os enums que alguém lembrou de
+listar, e um enum novo entra sem guarda. Já aconteceu — `IncomeKind` foi redigitado em
+`/lib/db/queries/recurring.ts` durante o T-204, divergiu do banco, e passou pelo espelho verde
+porque o espelho não olhava para ele. Derivar torna o drift impossível; espelhar o torna apenas
+improvável, e só onde alguém lembrou.
+
 ## 6. Validação
 
 - Um schema Zod por fronteira: formulário, corpo de rota, linha de arquivo importado.
