@@ -61,6 +61,14 @@
  */
 
 import { addCompetence, competenceStart, type Competence } from '@/lib/date';
+import {
+  CATEGORY_NATURES,
+  TRANSACTION_KINDS,
+  TRANSACTION_STATUSES,
+  type CategoryNature,
+  type TransactionKind,
+  type TransactionStatus,
+} from '@/lib/finance/enum-mirrors';
 import { reconcileStatement } from '@/lib/finance/billing';
 import {
   addCents,
@@ -71,34 +79,28 @@ import {
 } from '@/lib/money';
 
 /**
- * Espelho de `transaction_kind` de `lib/db/enums.ts` (DATA-MODEL §1).
- *
- * Declarado aqui, e nao importado, porque CONVENTIONS §5 proibe `/lib/finance`
- * de alcancar `/lib/db` — o ESLint bloqueia o import, inclusive de tipo. A
- * fonte de verdade continua sendo o enum do banco; estes literais tem de
- * acompanhar qualquer valor novo la. Mudar um lado so e bug silencioso de
- * classificacao.
+ * Espelho de `transaction_kind` / `category_nature` / `transaction_status` do
+ * banco. Os literais e os tipos vem de `enum-mirrors.ts` (fonte unica da camada
+ * pura) e sao REEXPORTADOS aqui porque `MonthlyKpisInput` os usa e consumidores
+ * ja importam `TransactionKind`/`CategoryNature` deste modulo. Nao ha segunda
+ * lista: `enum-mirrors.ts` e quem declara, `tests/enums-espelho.test.ts` e quem
+ * guarda a paridade com o banco.
  */
-export type TransactionKind =
-  | 'expense'
-  | 'income'
-  | 'transfer'
-  | 'credit_card_payment'
-  | 'investment_contribution';
-
-/** Espelho de `category_nature` de `lib/db/enums.ts`. Ver nota acima. */
-export type CategoryNature =
-  | 'essential'
-  | 'non_essential'
-  | 'investment'
-  | 'income';
+export {
+  CATEGORY_NATURES,
+  TRANSACTION_KINDS,
+  TRANSACTION_STATUSES,
+  type CategoryNature,
+  type TransactionKind,
+  type TransactionStatus,
+};
 
 export interface MonthlyKpisInput {
   competence: Competence;
   transactions: {
     amountCents: Cents;
     kind: TransactionKind;
-    status: 'posted' | 'planned';
+    status: TransactionStatus;
     categoryNature: CategoryNature;
   }[];
   futureInstallmentsCents: Cents;
@@ -220,6 +222,17 @@ export function monthlyKpis(input: MonthlyKpisInput): MonthlyKpis {
       case 'credit_card_payment':
         // Invisiveis: RC-03. Nao tocam nenhum acumulador.
         break;
+      default: {
+        // Exaustividade: `transaction.kind` e `TransactionKind`, que vem de
+        // `enum-mirrors.ts` e e guardado contra o banco por
+        // `tests/enums-espelho.test.ts`. Se um `kind` NOVO entrar no pgEnum e no
+        // espelho, `transaction.kind` deixa de ser `never` aqui e isto vira erro
+        // de compilacao — em vez de o KPI ignorar o kind novo em silencio
+        // (achado do Corvo). O espelho promete que as listas batem; este `never`
+        // promete que todo consumidor trata todo membro.
+        const exhaustive: never = transaction.kind;
+        throw new Error(`kind nao tratado no KPI: ${String(exhaustive)}`);
+      }
     }
   }
 

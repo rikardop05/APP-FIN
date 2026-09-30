@@ -51,6 +51,7 @@
  */
 
 import { competenceRange, type Competence } from '@/lib/date';
+import type { TransactionStatus } from '@/lib/finance/enum-mirrors';
 import {
   addCents,
   basisPoints,
@@ -64,7 +65,7 @@ export interface CommitmentInput {
     competence: Competence;
     amountCents: Cents;
     creditCardId: string;
-    status: 'posted' | 'planned';
+    status: TransactionStatus;
   }[];
   fromCompetence: Competence;
   months: number;
