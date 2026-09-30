@@ -191,10 +191,31 @@ Na mesma `y=425` convivem um lançamento e uma linha de resumo que **não têm r
 | Elemento | x | Máscara | Observação |
 |---|---|---|---|
 | Data + descrição | `33` | `99/99 AAAA…` | **fundidas**, separar por string |
-| Data auxiliar | `168` | `99/99` | opcional |
+| **Parcela** | `168` | `99/99` | coluna própria, como no Mercado Pago. **Medida como "data auxiliar" em 2026-09-16 — errado**, ver §8.3 |
 | Valor | `~201–214` | `999,99` / `-9.999,99` | **sem `R$`**, sinal por `-`, à direita |
 | Marcador | `16–17` | `9` | dígito solto, fora da tabela |
 | Quadro-resumo | `> 320` | — | **não é lançamento** |
+
+### 8.3 A coluna `x=168` é parcela, não data (corrigido em 2026-09-30)
+
+A medição de 2026-09-16 registrou `x=168` como "data auxiliar, opcional", pela máscara `99/99`.
+Ela é a **coluna de parcela**. A linha real da seção "Parcelamentos":
+
+```
+x16:"9"   x33:"99/99 AAAAAA AA AAAAA"   x168:"99/99"   x214:"9,99"
+```
+
+onde o `x168` é `11/12` — parcela 11 de 12.
+
+O custo do engano não foi o parser ler errado: foi ele **não ler**. A faixa foi criada para manter
+`x=168` fora da descrição, o que está certo, e a parcela passou a ser procurada só no texto. O dado
+ficou isolado, correto e morto. O parser do Santander devolvia **zero** planos de parcela numa
+fatura que tem cinco.
+
+**A máscara não classifica a coluna.** `99/99` serve para `dd/MM` e para `N/M`, e as duas convivem
+no mesmo documento — no Santander, `11/10` é data e `11/12` é parcela, na mesma linha. Distinguir
+exige o cabeçalho da seção ou a aritmética de `N <= M`, não o formato. É a mesma lição do repertório
+de caracteres em §9.1: medir a posição e o formato não basta se a **classificação** vier de palpite.
 
 ### 8.2 De onde sai o ano (medido em 2026-09-17)
 
