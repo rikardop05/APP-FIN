@@ -178,6 +178,38 @@ estar usando. Lá era o `.next`; aqui é o banco. **Sempre que dois agentes pode
 escrever no mesmo lugar sem se anunciar, alguém vai medir um alvo em movimento** —
 e o mais caro não é o dado corrompido, é a conclusão errada tirada dele.
 
+### 4.2c `git stash` com agente escrevendo é destrutivo — não é só medição ruim
+
+**Errei isto em 2026-09-30 e quase custou 2.548 linhas de trabalho.** Para conferir se um commit
+compilava sozinho, dei `git stash -u` numa árvore em que dois agentes estavam escrevendo. O `-u`
+**remove os arquivos não rastreados do disco** — e eram justamente as entregas em andamento do
+T-204 e do T-206. Enquanto a árvore estava guardada, os agentes recriaram parte dos arquivos; no
+`stash pop`, o Git recusou restaurar por cima do que já existia e devolveu *"could not restore
+untracked files from stash"*.
+
+Nada se perdeu, mas por sorte: o que estava no disco era **mais novo** que o stash. Se os agentes
+tivessem parado em vez de continuar, a árvore teria voltado sem os arquivos e eu não saberia dizer
+o que faltava.
+
+É de família com §4.2 (o `.next` reescrito sob quem lê) e §4.2b (o banco escrito sob quem mede),
+mas é pior que as duas: lá o risco é uma **leitura errada**; aqui o risco é **apagar trabalho**.
+
+Regras:
+
+1. **Nunca `git stash` — muito menos `-u` — com agente escrevendo.** Confira `git status` e o
+   estado dos terminais antes; na dúvida, não faça.
+2. **Para conferir se um commit compila sozinho, não mexa na árvore.** Um `tsconfig` temporário que
+   exclui os caminhos não rastreados dá a mesma resposta sem tocar em arquivo nenhum. `git show
+   <commit>:<arquivo>` responde "o que exatamente entrou" sem checkout.
+3. **Se o `pop` falhar, não force.** Confira arquivo por arquivo o que está no disco e compare o
+   tamanho com `git stash show -u --stat`. Disco mais novo = nada perdido. Só então descarte.
+4. **Contar teste também exige árvore parada** — mas para isso o `stash` é a ferramenta errada pelo
+   mesmo motivo. Espere os agentes pararem, ou conte com o que há e diga que a árvore estava viva.
+
+O denominador comum de §4.2, §4.2b e §4.2c: **o repositório é um recurso compartilhado e mutável, e
+o orquestrador não é dono exclusivo dele só porque coordena.** Toda operação que assume árvore
+parada precisa provar que ela está parada antes.
+
 ### 4.3 Verifique se o agente está vivo antes de mandar prompt
 
 Aprendido em 2026-09-10, duas vezes: o TUI de um recruta pode sair e deixar o terminal num shell puro. Nesse estado, o texto de `maestri ask` **é digitado no shell**, e cada linha do prompt vira tentativa de comando. Na primeira vez, um pedido de revisão de 30 linhas virou 30 erros de `CommandNotFoundException` no PowerShell do Vigia — inofensivo por sorte, mas é execução de texto arbitrário num shell.
