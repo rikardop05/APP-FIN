@@ -141,6 +141,43 @@ Regras:
 3. **Gate de build vermelho com dev no ar não é reprovação.** Antes de reprovar entrega por build, confira que não há servidor de ninguém no ar: `netstat -ano | grep LISTENING` nas portas 30xx/32xx.
 4. Quem sobe, derruba. Não deixe para depois.
 
+### 4.2b Agente não escreve no banco da casa
+
+**Decidido em 2026-09-30, no gate T-116, depois do estrago.** O banco em
+`DATABASE_URL` é o da casa do Ricardo, não um ambiente de teste. Nenhum agente
+cria, altera, desativa ou apaga conta, cartão, categoria, regra ou lançamento
+nele — nem para exercitar uma tela, nem "só um temporário".
+
+O que aconteceu: durante o aceite, um agente foi tirar um print, desativou o
+cartão **MP** que o Ricardo tinha acabado de cadastrar e criou um **Nubank**
+duplicado. No meio do fluxo dele. Duas consequências, e a segunda é a pior:
+
+1. O Ricardo perdeu a origem que estava usando, sem aviso.
+2. Uma tela que eu estava medindo respondeu `400 Conta ou cartão inválido` com o
+   cartão aparentemente selecionado. Eu diagnostiquei dessincronia entre DOM e
+   React e **quase despachei um bug inventado**. O 400 estava certo: o cartão
+   havia deixado de existir como origem válida entre a escolha e o envio.
+
+O banco ainda carrega o rastro disso: `Importação QA` ×2, `T108 Temporary Card`,
+`T108 Final Temporary` e dois `Nubank` que ninguém cadastrou.
+
+Regras:
+
+1. **Quem precisa de dado para exercitar tela, pede ao Ricardo.** Custa um pedido
+   a mais na tarefa e elimina a classe inteira.
+2. **Dado sintético em arquivo, nunca no banco.** Para exercitar importação existe
+   o gerador de PDF sintético; para exercitar tela, fixture. Nenhum dos dois toca
+   em `DATABASE_URL`.
+3. **Quem escreveu, avisa.** Se aconteceu por engano, diga no relato. O silêncio
+   custa mais que o erro: foi o silêncio que me fez medir um alvo em movimento.
+4. **Vale para mim também.** O Orquestrador não é exceção — eu li o banco o dia
+   inteiro, e leitura continua permitida. Escrita, não.
+
+Tem a mesma forma de §4.2: um recurso compartilhado, mutável, que ninguém declara
+estar usando. Lá era o `.next`; aqui é o banco. **Sempre que dois agentes podem
+escrever no mesmo lugar sem se anunciar, alguém vai medir um alvo em movimento** —
+e o mais caro não é o dado corrompido, é a conclusão errada tirada dele.
+
 ### 4.3 Verifique se o agente está vivo antes de mandar prompt
 
 Aprendido em 2026-09-10, duas vezes: o TUI de um recruta pode sair e deixar o terminal num shell puro. Nesse estado, o texto de `maestri ask` **é digitado no shell**, e cada linha do prompt vira tentativa de comando. Na primeira vez, um pedido de revisão de 30 linhas virou 30 erros de `CommandNotFoundException` no PowerShell do Vigia — inofensivo por sorte, mas é execução de texto arbitrário num shell.

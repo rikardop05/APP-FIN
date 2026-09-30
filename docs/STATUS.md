@@ -3,7 +3,7 @@
 Mantido pelo orquestrador. Estados: `todo | doing | review | done | blocked`.
 Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATION.md` §9, equipe em `TEAM.md`.
 
-**Última atualização:** 2026-09-30 · 623 testes verdes · HEAD `d04b3ba`, sincronizado · **T-116 em execução: o gate humano achou 4 defeitos que 591 testes verdes não achavam**
+**Última atualização:** 2026-09-30 · 628 testes verdes · HEAD `d618c9f`, sincronizado · **T-116 em execução: o gate humano achou 4 defeitos que 591 testes verdes não achavam**
 
 ## Tarefas
 
@@ -236,3 +236,33 @@ O commit `d04b3ba` e a versão anterior deste arquivo diziam **633 testes**. Sã
 **619**. Contei enquanto a Peneira editava a árvore, ou seja, medi um alvo em
 movimento — a mesma classe das armadilhas de `ORCHESTRATION` §3.1. Contagem de
 teste só vale com a árvore parada, e `git stash -u` é o jeito de garantir isso.
+
+## Pendências abertas ao fim do T-116 (2026-09-30)
+
+Os 4 defeitos do gate estão corrigidos e verificados por imagem em desktop e
+402px. O que ficou em aberto:
+
+| # | Pendência | Com quem |
+|---|---|---|
+| P-1 | **Limpar o banco da casa.** 56 lançamentos, 3 faturas, 6 lotes e 4 planos foram gravados pelos parsers defeituosos. Mais 6 cartões que ninguém cadastrou (`Importação QA` ×2, `T108` ×2, dois `Nubank`). SQL pronto, entregue ao Ricardo — o harness bloqueou a exclusão em massa do meu lado. | Ricardo |
+| P-2 | **Reimportar as 3 faturas** depois da limpeza, com os parsers corrigidos. | Ricardo |
+| P-3 | **Rodapé do preview:** a linha de pagamento conta em `rowsNew`, então o resumo pode dizer "15 novas" com 14 sendo gravadas. Certo pela invariante, possivelmente enganoso. Perguntei 3 vezes à Lanterna, sem resposta. | Lanterna |
+| P-4 | **Sinal do pagamento diverge entre bancos.** Nubank imprime com `−`, Mercado Pago sem sinal, então a linha sai positiva num e negativa no outro. Não afeta a v1 (chega desmarcada, e RC-03 mantém fora de despesa e receita). Uniformizar antes de qualquer uso do valor. | — |
+| P-5 | **Passada de UI/UX** com skill dedicada, adiada pelo Ricardo. Inclui a dívida mobile do T-112. | adiado |
+| P-6 | **14 achados da auditoria de contradições** ainda por triar. | — |
+
+### O que este gate custou em falso diagnóstico
+
+Três vezes eu medi um alvo em movimento e cheguei a conclusão errada:
+
+1. **"633 testes"** no commit `d04b3ba` e neste arquivo. Eram 619 — contei
+   enquanto um agente editava a árvore.
+2. **"O parser perdeu o número da parcela"** — o campo é `current`, não `number`.
+   Erro do meu script de diagnóstico, não do parser.
+3. **"Dessincronia entre DOM e React no select de cartão"** — quase virou tarefa
+   despachada. O `400` estava certo: um agente desativou o cartão no meio do meu
+   fluxo. Virou a regra `ORCHESTRATION` §4.2b.
+
+Nos três casos o código estava certo e a medição estava errada. **A medição
+precisa de tanto ceticismo quanto o código** — e a árvore precisa estar parada
+antes de contar qualquer coisa.
