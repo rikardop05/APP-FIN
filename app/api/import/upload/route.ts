@@ -126,6 +126,12 @@ export async function POST(request: Request) {
     if (error instanceof InvalidImportUploadError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
+    // A mensagem ao cliente continua genérica (RF-IMP-11: nada da fatura, e
+    // muito menos a senha, em erro que o usuário vê). Mas o erro precisa
+    // existir em algum lugar: um 500 sem rastro deixou o T-116 sem
+    // diagnóstico. Servidor só, no log local.
+    const failure = error instanceof Error ? error : new Error(String(error));
+    console.error('[import/upload]', failure.name, '-', failure.message, failure.stack);
     return NextResponse.json({ error: 'Não foi possível processar o arquivo.' }, { status: 500 });
   }
 }

@@ -4,9 +4,8 @@ import { BottomNav } from '@/components/nav/bottom-nav';
 
 /**
  * Shell das telas autenticadas: nav lateral no desktop, inferior no celular.
- * As 9 rotas de SPEC §7 vivem sob este grupo, exceto `/`, que por enquanto
- * ainda é a landing provisória de `app/page.tsx` (T-001) — o T-115 move o
- * dashboard para `app/(app)/page.tsx` e a substitui.
+ * As 9 rotas de SPEC §7 vivem sob este grupo, `/` inclusive: o T-115 trouxe o
+ * dashboard para `app/(app)/page.tsx` e removeu a landing provisória do T-001.
  */
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (

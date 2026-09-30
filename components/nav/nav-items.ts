@@ -38,10 +38,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
  * Item ativo é o de maior prefixo em comum: cobre sub-rotas como
  * `/orcamento/recorrentes`.
  *
- * O ramo `href === '/'` fica inerte até o T-115: o shell (SidebarNav/BottomNav)
- * não é montado em `/`, que ainda é a landing de `app/page.tsx` (T-001), fora
- * do grupo `(app)`. "Painel" nunca recebe `aria-current="page"` até lá — não é
- * bug, é consequência da posse do T-115 sobre `app/(app)/page.tsx`.
+ * O ramo `href === '/'` exige a igualdade exata porque todo `href` começa com
+ * `/`: com `startsWith`, "Painel" ficaria ativo em todas as rotas.
  */
 export function isNavItemActive(href: string, pathname: string): boolean {
   if (href === '/') return pathname === '/';
