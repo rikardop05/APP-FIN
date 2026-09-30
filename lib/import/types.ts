@@ -61,6 +61,27 @@ export interface ParsedRow {
   fitId?: string | null;
   /** Parcela reconhecida por `detectInstallment` (T-121), quando ha padrao. */
   installment?: { current: number; total: number } | null;
+  /**
+   * `true` quando a linha e o **pagamento da fatura anterior** (RF-CC-04): ela
+   * pertence a CONTA bancaria (`kind = credit_card_payment`), nao ao cartao.
+   * Importada pelo cartao, contaria duas vezes quando o extrato da conta entrar.
+   *
+   * **RATIFICADO pelo Orquestrador em 2026-09-30**, no gate T-116. Campo aditivo
+   * e opcional: `undefined`/`false` = lancamento normal. Reconhecido no parser
+   * (que conhece o layout do banco) e virado em estado no pipeline.
+   *
+   * A prova de que a linha nao pertence a fatura: excluindo-a, as duas faturas
+   * reais fecham no centavo com o total que elas mesmas imprimem (Mercado Pago
+   * 17 linhas = R$ 1.469,01; Nubank 14 linhas = R$ 1.074,82). Incluindo-a, o MP
+   * erra por exatamente o valor do pagamento.
+   *
+   * **Divida conhecida:** os bancos imprimem essa linha com sinais opostos (o
+   * Nubank com `-`, o Mercado Pago sem sinal), entao o valor sai positivo num e
+   * negativo no outro. Nao afeta a v1, porque a linha chega desmarcada e
+   * `credit_card_payment` fica fora de despesa e de receita (RC-03). Uniformizar
+   * antes de qualquer uso do valor.
+   */
+  creditCardPayment?: boolean;
 }
 
 /**

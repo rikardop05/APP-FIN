@@ -50,6 +50,7 @@ import type { PdfTextRow } from '@/lib/import/pdf/rows';
 import { cents, parseBRL, type Cents } from '@/lib/money';
 import {
   PDF_MONEY_TOKEN,
+  isCreditCardPaymentDescription,
   yearForDateWithoutYear,
   type ReferenceDate,
 } from '@/lib/import/pdf/shared';
@@ -356,6 +357,8 @@ export function parseSantanderPdf(
     const occurredOn =
       rowYear === null ? null : buildIsoDate(rowYear, dateMatch.month, dateMatch.day);
     const detected = detectInstallment(dateMatch.description);
+    // Pagamento da fatura anterior (RF-CC-04).
+    const creditCardPayment = isCreditCardPaymentDescription(dateMatch.description);
 
     parsedRows.push({
       occurredOn,
@@ -366,6 +369,7 @@ export function parseSantanderPdf(
         detected === null
           ? null
           : { current: detected.current, total: detected.total },
+      ...(creditCardPayment ? { creditCardPayment: true } : {}),
     });
   }
 

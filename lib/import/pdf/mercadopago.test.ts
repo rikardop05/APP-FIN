@@ -509,4 +509,17 @@ describe('parseMercadoPagoPdf — gate T-116: tracos de menos e virada de ano', 
     expect(result.rows[0]?.occurredOn).toBe('2025-11-24');
     expect(result.rows[0]?.installment).toEqual({ current: 8, total: 12 });
   });
+
+  it('reconhece o pagamento da fatura anterior', () => {
+    const result = parseMercadoPagoPdf([
+      headerRow(),
+      transactionRow(680, {
+        date: '14/07',
+        description: 'Pagamento recebido',
+        value: '\u2212R$ 200,00',
+      }),
+    ]);
+    expect(result.rows[0]?.creditCardPayment).toBe(true);
+    expect(result.rows[0]?.amountCents).toBe(20000);
+  });
 });

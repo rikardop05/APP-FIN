@@ -69,6 +69,7 @@ import type { ParsedRow, ParseDiagnostic, ParseResult } from '@/lib/import/types
 import type { PdfTextRow } from '@/lib/import/pdf/rows';
 import {
   PDF_MONEY_TOKEN,
+  isCreditCardPaymentDescription,
   yearForDateWithoutYear,
   type ReferenceDate,
 } from '@/lib/import/pdf/shared';
@@ -525,6 +526,8 @@ export function parseNubankPdf(
 
     const rawDescription = descriptionFor(row);
     const detected = detectInstallment(rawDescription);
+    // Pagamento da fatura anterior (RF-CC-04): reconhecido na descricao limpa.
+    const creditCardPayment = isCreditCardPaymentDescription(rawDescription);
 
     const parsed: ParsedRow = {
       occurredOn,
@@ -535,6 +538,7 @@ export function parseNubankPdf(
         detected === null
           ? null
           : { current: detected.current, total: detected.total },
+      ...(creditCardPayment ? { creditCardPayment: true } : {}),
     };
     parsedRows.push(parsed);
     previous = parsed;

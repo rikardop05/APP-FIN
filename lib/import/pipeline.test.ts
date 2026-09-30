@@ -397,3 +397,25 @@ describe('finalizeImport — roda sem tocar banco', () => {
     expect(a).toEqual(b);
   });
 });
+
+describe('buildImportPreview — pagamento da fatura anterior (gate T-116)', () => {
+  it('marca a linha como credit_card_payment e a mantem na contagem', () => {
+    const result = preview([
+      parsed({
+        occurredOn: '2026-09-07',
+        rawDescription: 'Pagamento em 07 ago',
+        amountCents: cents(120896),
+        creditCardPayment: true,
+      }),
+      parsed({ occurredOn: '2026-09-10', rawDescription: 'PADARIA ANONIMA', amountCents: cents(-1000) }),
+    ]);
+
+    expect(result.rows[0]?.state).toBe('credit_card_payment');
+    expect(result.rows[1]?.state).toBe('new');
+    // Nao e duplicata: entra em rowsNew e a invariante do §15 segue valendo.
+    expect(result.summary.rowsNew + result.summary.rowsDuplicated).toBe(
+      result.summary.rowsRead,
+    );
+    expect(result.summary.rowsNew).toBe(2);
+  });
+});

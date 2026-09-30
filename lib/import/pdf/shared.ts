@@ -48,6 +48,25 @@ export interface ReferenceDate {
 }
 
 /**
+ * Reconhece a descricao de um **pagamento da fatura anterior** (RF-CC-04).
+ *
+ * Essa linha nao e despesa nem receita do cartao: e um `credit_card_payment`
+ * registrado na CONTA bancaria, e importa-la pelo cartao conta duas vezes quando
+ * o extrato da conta entrar. Medido no Nubank: `Pagamento em 07 ago`.
+ *
+ * Ancorado no **inicio** da descricao, de proposito: usar `pagamento` em
+ * qualquer posicao pescaria um estabelecimento com "pagamento" no nome. O
+ * `shared` centraliza a regra para os tres parsers nao divergirem — a licao do
+ * `moneyToken` em triplicata.
+ */
+const CREDIT_CARD_PAYMENT_PATTERN = /^\s*pagamento\b/i;
+
+/** `true` quando a descricao parece o pagamento da fatura anterior. */
+export function isCreditCardPaymentDescription(description: string): boolean {
+  return CREDIT_CARD_PAYMENT_PATTERN.test(description);
+}
+
+/**
  * Ano de uma data `dd/MM` sem ano, pela data de referencia da fatura.
  *
  * A referencia e a data impressa no proprio documento (vencimento/fatura). Se a

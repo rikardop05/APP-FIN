@@ -424,4 +424,13 @@ describe('parseSantanderPdf — gate T-116: tracos de menos e virada de ano', ()
     ]);
     expect(result.rows[0]?.occurredOn).toBe('2026-08-05');
   });
+
+  it('reconhece o pagamento da fatura anterior', () => {
+    const result = parseSantanderPdf(
+      [transactionRow(700, { date: '22/08', description: 'PAGAMENTO DE FATURA', value: '-100,00' })],
+      { defaultYear: 2026 },
+    );
+    expect(result.rows[0]?.creditCardPayment).toBe(true);
+    expect(result.rows[0]?.amountCents).toBe(10000);
+  });
 });

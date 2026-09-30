@@ -3,7 +3,7 @@
 Mantido pelo orquestrador. Estados: `todo | doing | review | done | blocked`.
 Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATION.md` §9, equipe em `TEAM.md`.
 
-**Última atualização:** 2026-09-30 · 633 testes verdes · HEAD `4e2e6ce`, sincronizado · **T-116 em execução: o gate humano achou 4 defeitos que 591 testes verdes não achavam**
+**Última atualização:** 2026-09-30 · 623 testes verdes · HEAD `d04b3ba`, sincronizado · **T-116 em execução: o gate humano achou 4 defeitos que 591 testes verdes não achavam**
 
 ## Tarefas
 
@@ -182,7 +182,7 @@ defeitos, **nenhum deles visível nos 591 testes verdes**. Medições em
 | G-01 | Toda importação de PDF morria com 500 genérico | webpack do servidor empacotava `pdfjs-dist` sem emitir `pdf.worker.mjs` | nenhum PDF importava | **corrigido** `4ea732f` |
 | G-02 | Crédito virou despesa | `moneyToken` só aceitava `-` U+002D; o Nubank usa `−` U+2212 na linha de transação | pagamento de R$ 1.208,96 entrou como despesa | **corrigido**, verificado na fatura real |
 | G-03 | Fatura inteira na competência errada | `dd/MM` sem ano recebia o ano da fatura; a compra era da parcela 8/12, de 2025 | MP foi para 2026-12 | **corrigido**, verificado na fatura real |
-| G-04 | Pagamento da fatura anterior entra como lançamento | nenhum parser reconhece a linha | dupla contagem quando o extrato da conta entrar (RF-CC-04) | em execução (Peneira) |
+| G-04 | Pagamento da fatura anterior entra como lançamento | nenhum parser reconhece a linha | dupla contagem quando o extrato da conta entrar (RF-CC-04) | **corrigido**, reconciliado contra o total impresso |
 
 Fora da importação, o mesmo gate achou que o `/` servia a landing provisória do
 T-001: `app/page.tsx` e `app/(app)/page.tsx` resolviam os dois para `/`, e o
@@ -209,3 +209,30 @@ fechada: `lib/money` exporta `MINUS_DASH_CODE_POINTS` e o parser deriva dela.
 
 É a mesma raiz do G-02: o `moneyToken` estava duplicado literalmente em três
 layouts, e por isso o defeito nasceu em triplicata.
+
+### A prova do G-04: as duas faturas fecham no centavo
+
+Excluir a linha de pagamento não é preferência de leitura — é o que faz a fatura
+bater com o total que ela mesma imprime:
+
+| Fatura | Linhas sem o pagamento | Total impresso no PDF |
+|---|---|---|
+| Mercado Pago | 17 = **−R$ 1.469,01** | `R$ 1.469,01` |
+| Nubank | 14 = **−R$ 1.074,82** | `R$ 1.074,82` |
+
+Com a linha incluída, o MP dava −R$ 2.416,29 — fora por exatamente os R$ 947,28
+do pagamento. O detector marcou as duas linhas certas e **nenhuma outra**.
+
+Um achado lateral: os dois bancos imprimem o pagamento com sinais opostos. O
+Nubank usa `−` e o Mercado Pago não imprime sinal nenhum, então a linha sai
+`+120896` num e `−94728` no outro. Como ela chega desmarcada e `credit_card_payment`
+fica fora de despesa e de receita (RC-03), o número não entra em conta nenhuma da
+v1. Fica **registrado como dívida**: se algum dia a linha for aproveitada para o
+histórico de pagamento de fatura, o sinal precisa ser uniformizado antes.
+
+### Correção de um número que publiquei errado
+
+O commit `d04b3ba` e a versão anterior deste arquivo diziam **633 testes**. São
+**619**. Contei enquanto a Peneira editava a árvore, ou seja, medi um alvo em
+movimento — a mesma classe das armadilhas de `ORCHESTRATION` §3.1. Contagem de
+teste só vale com a árvore parada, e `git stash -u` é o jeito de garantir isso.

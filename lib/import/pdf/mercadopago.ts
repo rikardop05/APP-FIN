@@ -91,6 +91,7 @@ import type { PdfTextRow } from '@/lib/import/pdf/rows';
 import { cents, parseBRL, type Cents } from '@/lib/money';
 import {
   PDF_MONEY_TOKEN,
+  isCreditCardPaymentDescription,
   yearForDateWithoutYear,
   type ReferenceDate,
 } from '@/lib/import/pdf/shared';
@@ -496,6 +497,9 @@ export function parseMercadoPagoPdf(
       const detected =
         detectInstallment(installmentText) ?? detectInstallment(description);
       const amount = rowAmount(row);
+      // Pagamento da fatura anterior (RF-CC-04), reconhecido na descricao limpa
+      // (antes do prefixo de cartao).
+      const creditCardPayment = isCreditCardPaymentDescription(description);
 
       const parsed: ParsedRow = {
         occurredOn,
@@ -512,6 +516,7 @@ export function parseMercadoPagoPdf(
           detected === null
             ? null
             : { current: detected.current, total: detected.total },
+        ...(creditCardPayment ? { creditCardPayment: true } : {}),
       };
       parsedRows.push(parsed);
       return;

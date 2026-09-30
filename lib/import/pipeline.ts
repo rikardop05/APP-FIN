@@ -70,7 +70,12 @@ export interface ImportPreviewRow {
   dedupeHash: string | null;
   suggestedCategoryId: string | null;
   suggestedMemberId: string | null;
-  state: 'new' | 'duplicate' | 'installment_first' | 'installment_part';
+  state:
+    | 'new'
+    | 'duplicate'
+    | 'installment_first'
+    | 'installment_part'
+    | 'credit_card_payment';
   installment: PreviewInstallment | null;
 }
 
@@ -197,11 +202,15 @@ export function buildImportPreview(
     const duplicate = hash !== null && input.existingHashes.has(hash);
     const state: ImportPreviewRow['state'] = duplicate
       ? 'duplicate'
-      : installment === null
-        ? 'new'
-        : installment.current === 1
-          ? 'installment_first'
-          : 'installment_part';
+      : // Pagamento da fatura anterior (RF-CC-04): chega a confirmacao marcado
+        // para a tela desmarcar por default. Nao e despesa nem receita do cartao.
+        row.creditCardPayment === true
+        ? 'credit_card_payment'
+        : installment === null
+          ? 'new'
+          : installment.current === 1
+            ? 'installment_first'
+            : 'installment_part';
 
     const rule = matchRule(input.rules, description);
 

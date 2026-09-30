@@ -411,4 +411,24 @@ describe('parseNubankPdf — gate T-116: tracos de menos e virada de ano', () =>
     ]);
     expect(result.rows[0]?.occurredOn).toBe('2026-08-22');
   });
+
+  it('reconhece o pagamento da fatura anterior, e nao marca um estorno', () => {
+    const result = parseNubankPdf([
+      header,
+      transactionRow(700, {
+        date: '07 SET',
+        description: 'Pagamento em 07 ago',
+        value: '\u2212R$ 1.208,96',
+      }),
+      transactionRow(680, {
+        date: '08 SET',
+        description: 'ESTORNO DE COMPRA',
+        value: '\u2212R$ 50,00',
+      }),
+    ]);
+
+    expect(result.rows[0]?.creditCardPayment).toBe(true);
+    expect(result.rows[0]?.amountCents).toBe(120896);
+    expect(result.rows[1]?.creditCardPayment).toBeUndefined();
+  });
 });
