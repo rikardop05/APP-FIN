@@ -78,7 +78,11 @@ function flattenCategories(
 function initialDrafts(rows: ImportPreviewRow[]): DraftRow[] {
   return rows.map((row) => ({
     ...row,
-    include: row.state !== 'duplicate',
+    // Linha de pagamento da fatura anterior entra DESMARCADA por padrão
+    // (RF-CC-04): pertence ao extrato da CONTA bancária, não ao cartão.
+    // Importá-la aqui contaria duas vezes quando o extrato da conta entrar.
+    // O usuário só marca se quiser registrar manualmente uma exceção.
+    include: row.state !== 'duplicate' && row.state !== 'credit_card_payment',
     forceDuplicate: false,
     occurredOnText: row.occurredOn ?? '',
     amountText: row.amountCents === null ? '' : formatBRL(row.amountCents),
@@ -157,6 +161,7 @@ function competenceLabel(value: string | null): string {
 
 function rowStatus(row: DraftRow): string {
   if (row.state === 'duplicate') return 'Duplicada';
+  if (row.state === 'credit_card_payment') return 'Pagamento';
   if (row.state === 'installment_first' || row.state === 'installment_part') {
     return 'Parcelada';
   }
@@ -377,20 +382,22 @@ export function ImportConfirmation({
           const competence = calculation.competenceByIndex.get(draft.index) ?? null;
           const invalid = invalidIncluded.some((row) => row.index === draft.index);
           const isDuplicate = draft.state === 'duplicate';
+          const isPayment = draft.state === 'credit_card_payment';
+          const needsAttention = isDuplicate || isPayment;
           return (
             <article
               key={draft.index}
               className={`rounded-lg border p-4 ${
                 draft.lowConfidence
                   ? 'border-amber-400 bg-amber-50/70'
-                  : isDuplicate
+                  : needsAttention
                     ? 'border-dashed border-amber-300 bg-amber-50/30'
                     : 'border-border bg-background'
               }`}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
-                  <Badge variant={isDuplicate ? 'warning' : draft.lowConfidence ? 'warning' : 'neutral'}>
+                  <Badge variant={needsAttention ? 'warning' : draft.lowConfidence ? 'warning' : 'neutral'}>
                     {rowStatus(draft)}
                   </Badge>
                   <span className="text-xs text-muted-foreground">Linha {draft.index + 1}</span>
@@ -403,7 +410,13 @@ export function ImportConfirmation({
                       forceDuplicate: isDuplicate && event.target.checked,
                     })
                   }
-                  label={isDuplicate ? 'Incluir duplicada' : 'Incluir linha'}
+                  label={
+                    isDuplicate
+                      ? 'Incluir duplicada'
+                      : isPayment
+                        ? 'Incluir pagamento'
+                        : 'Incluir linha'
+                  }
                 />
               </div>
 
@@ -411,6 +424,18 @@ export function ImportConfirmation({
                 <div className="mt-3 rounded-md border border-amber-300 bg-amber-100/70 p-3 text-sm text-amber-950">
                   <p className="font-medium">Baixa confiança: confira o texto original</p>
                   <p className="mt-1 break-words">{draft.rawDescription || 'Texto original não reconhecido.'}</p>
+                </div>
+              ) : null}
+
+              {isPayment ? (
+                <div className="mt-3 rounded-md border border-amber-300 bg-amber-100/70 p-3 text-sm text-amber-950">
+                  <p className="font-medium">
+                    Pagamento da fatura anterior — pertence ao extrato da conta, não ao cartão.
+                  </p>
+                  <p className="mt-1">
+                    Incluir aqui conta o valor duas vezes quando o extrato da conta entrar. Marque só
+                    se quiser registrar o pagamento manualmente como exceção.
+                  </p>
                 </div>
               ) : null}
 

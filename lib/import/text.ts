@@ -95,6 +95,7 @@ import type { Competence, IsoDate } from '@/lib/date';
 import { parseBRL } from '@/lib/money';
 import type { Cents } from '@/lib/money';
 import { detectInstallment } from '@/lib/import/installments';
+import { isCreditCardPaymentDescription } from '@/lib/import/pdf/shared';
 import type { ParseDiagnostic, ParseResult, ParsedRow } from '@/lib/import/types';
 
 /** Nivel de confianca do parse de uma linha. Ver as regras em `parsePastedText`. */
@@ -636,6 +637,15 @@ export function parsePastedText(
 
     const installment = detectInstallment(parsed.description);
 
+    // RF-CC-04: a descricao parece o pagamento da fatura anterior. E uma
+    // **observacao de texto**, verdadeira independente da origem do arquivo: em
+    // fatura de cartao a linha nao pertence ali e chega desmarcada na tela de
+    // confirmacao; em extrato de conta ela e um lancamento legitimo — e onde a
+    // RF-CC-04 manda registra-la. Quem decide a CONSEQUENCIA e o pipeline
+    // (`buildImportPreview`), pela origem escolhida; por isso **nao ha gate de
+    // origem aqui** — o parser so reporta o que ve.
+    const creditCardPayment = isCreditCardPaymentDescription(parsed.description);
+
     rows.push({
       // `null` e o ausente honesto: `missing` diz qual campo faltou, e a tela de
       // confirmacao deixa o campo em branco. Nao invento data nem valor, e
@@ -650,6 +660,7 @@ export function parsePastedText(
       confidence,
       sourceLine: line,
       missing,
+      ...(creditCardPayment ? { creditCardPayment: true } : {}),
     });
   }
 

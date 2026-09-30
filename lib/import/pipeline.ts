@@ -200,11 +200,22 @@ export function buildImportPreview(
           });
 
     const duplicate = hash !== null && input.existingHashes.has(hash);
+    // Pagamento da fatura anterior (RF-CC-04): chega a confirmacao marcado para a
+    // tela desmarcar por default, porque num CARTAO ele e um `credit_card_payment`
+    // que pertence a conta, e importa-lo pelo cartao conta duas vezes.
+    //
+    // O gate em `sourceKind` NAO e detalhe: numa CONTA, a mesma linha e um
+    // lancamento LEGITIMO — e exatamente onde a RF-CC-04 manda registra-la.
+    // Sem o gate, escolher a origem "conta" marcaria a linha para exclusao do
+    // unico lugar a que ela pertence (o erro invertido). A decisao e do pipeline
+    // e nao do parser: o parser so REPORTA o que ve (`creditCardPayment` e uma
+    // observacao de texto, verdadeira independente da origem); o que fazer com
+    // ela depende da origem, que so o pipeline conhece.
+    const isCreditCardPayment =
+      input.sourceKind === 'credit_card' && row.creditCardPayment === true;
     const state: ImportPreviewRow['state'] = duplicate
       ? 'duplicate'
-      : // Pagamento da fatura anterior (RF-CC-04): chega a confirmacao marcado
-        // para a tela desmarcar por default. Nao e despesa nem receita do cartao.
-        row.creditCardPayment === true
+      : isCreditCardPayment
         ? 'credit_card_payment'
         : installment === null
           ? 'new'

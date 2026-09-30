@@ -408,6 +408,27 @@ describe('parsePastedText — achados da revisao (Corvo)', () => {
   });
 });
 
+describe('parsePastedText — pagamento da fatura anterior (RF-CC-04)', () => {
+  it('marca a linha de pagamento como observacao de texto', () => {
+    // A marcacao e uma OBSERVACAO ("parece pagamento de fatura"), nao uma
+    // decisao: quem decide a consequencia e o pipeline, pela origem. Aqui o
+    // parser so reporta o que ve.
+    const row = onlyRow('10/09/2026 Pagamento em 07 ago R$ 1.234,56');
+    expect(row.creditCardPayment).toBe(true);
+  });
+
+  it('NAO marca estabelecimento com "pagamento" no meio do nome', () => {
+    // O detector e ancorado no inicio de proposito.
+    const row = onlyRow('10/09/2026 LOJA PAGAMENTO FACIL R$ 50,00');
+    expect(row.creditCardPayment).toBeUndefined();
+  });
+
+  it('NAO marca um estorno legitimo', () => {
+    const row = onlyRow('10/09/2026 Estorno de IOF R$ 25,00');
+    expect(row.creditCardPayment).toBeUndefined();
+  });
+});
+
 describe('parsePastedText — pureza e reentrancia', () => {
   it('nao guarda estado entre chamadas', () => {
     const first = parsePastedText('10/09/2026 LOJA A 50,00');

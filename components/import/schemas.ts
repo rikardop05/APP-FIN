@@ -67,7 +67,7 @@ const previewRowSchema = z.object({
   dedupeHash: z.string().nullable(),
   suggestedCategoryId: nullableUuidSchema,
   suggestedMemberId: nullableUuidSchema,
-  state: z.enum(['new', 'duplicate', 'installment_first', 'installment_part']),
+  state: z.enum(['new', 'duplicate', 'installment_first', 'installment_part', 'credit_card_payment']),
   installment: installmentSchema,
 });
 

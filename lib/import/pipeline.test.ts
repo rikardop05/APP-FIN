@@ -399,14 +399,16 @@ describe('finalizeImport — roda sem tocar banco', () => {
 });
 
 describe('buildImportPreview — pagamento da fatura anterior (gate T-116)', () => {
-  it('marca a linha como credit_card_payment e a mantem na contagem', () => {
+  const pagamento = parsed({
+    occurredOn: '2026-09-07',
+    rawDescription: 'Pagamento em 07 ago',
+    amountCents: cents(120896),
+    creditCardPayment: true,
+  });
+
+  it('no cartao, marca a linha como credit_card_payment e a mantem na contagem', () => {
     const result = preview([
-      parsed({
-        occurredOn: '2026-09-07',
-        rawDescription: 'Pagamento em 07 ago',
-        amountCents: cents(120896),
-        creditCardPayment: true,
-      }),
+      pagamento,
       parsed({ occurredOn: '2026-09-10', rawDescription: 'PADARIA ANONIMA', amountCents: cents(-1000) }),
     ]);
 
@@ -417,5 +419,39 @@ describe('buildImportPreview — pagamento da fatura anterior (gate T-116)', () 
       result.summary.rowsRead,
     );
     expect(result.summary.rowsNew).toBe(2);
+  });
+
+  it('na CONTA, a mesma linha e lancamento normal — nao e desmarcada', () => {
+    // Numa conta, a linha de pagamento e onde a RF-CC-04 manda registra-la:
+    // pre-desmarcar aqui excluiria do unico lugar a que ela pertence.
+    const result = preview(
+      [
+        pagamento,
+        parsed({ occurredOn: '2026-09-10', rawDescription: 'PADARIA ANONIMA', amountCents: cents(-1000) }),
+      ],
+      { sourceKind: 'account' },
+    );
+
+    expect(result.rows[0]?.state).toBe('new');
+    expect(result.summary.rowsNew + result.summary.rowsDuplicated).toBe(
+      result.summary.rowsRead,
+    );
+    expect(result.summary.rowsNew).toBe(2);
+  });
+
+  it('na conta, uma parcelada marcada segue o caminho normal de parcela', () => {
+    const result = preview(
+      [
+        parsed({
+          occurredOn: '2026-09-07',
+          rawDescription: 'Pagamento em 07 ago 03/10',
+          amountCents: cents(120896),
+          creditCardPayment: true,
+        }),
+      ],
+      { sourceKind: 'account' },
+    );
+
+    expect(result.rows[0]?.state).toBe('installment_part');
   });
 });
