@@ -6,6 +6,8 @@ import {
   SANTANDER_X_BANDS,
   parseSantanderPdf,
 } from '@/lib/import/pdf/santander';
+import { buildImportPreview, finalizeImport } from '@/lib/import/pipeline';
+import { cents } from '@/lib/money';
 import {
   buildEncryptedPdf,
   buildPositionedPdf,
@@ -432,5 +434,87 @@ describe('parseSantanderPdf — gate T-116: tracos de menos e virada de ano', ()
     );
     expect(result.rows[0]?.creditCardPayment).toBe(true);
     expect(result.rows[0]?.amountCents).toBe(10000);
+  });
+});
+
+describe('parseSantanderPdf — G-08: a parcela vem da coluna x=168', () => {
+  // Santander fecha antes do dia 11: a compra de 11/10 cai na fatura de novembro.
+  const CARD = { closingDay: 10, dueDay: 20 };
+  const linhaDeParcela = makeRow(700, [
+    { x: 16, y: 700, text: '2' },
+    { x: DATE_X, y: 700, text: '11/10 CARTAO DE TODOS' },
+    { x: AUX_X, y: 700, text: '11/12' },
+    { x: valueX('2,60'), y: 700, text: '2,60' },
+  ]);
+
+  it('le a parcela da coluna auxiliar, nao so da descricao', () => {
+    const result = parseSantanderPdf([linhaDeParcela], { defaultYear: 2025 });
+
+    expect(result.rows[0]?.installment).toEqual({ current: 11, total: 12 });
+    // A coluna de parcela continua fora da descricao.
+    expect(result.rows[0]?.rawDescription).toBe('CARTAO DE TODOS');
+  });
+
+  it('mantem o fallback pela descricao quando a coluna nao traz parcela', () => {
+    const result = parseSantanderPdf(
+      [transactionRow(700, { date: '23/08', description: 'LOJA PARCELA 03/10', value: '250,00' })],
+      { defaultYear: 2026 },
+    );
+    expect(result.rows[0]?.installment).toEqual({ current: 3, total: 10 });
+  });
+
+  it('a parcela da coluna vira plano: UMA projetada em 2026-10, nenhuma anterior', () => {
+    const parse = parseSantanderPdf([linhaDeParcela], { defaultYear: 2025 });
+    const preview = buildImportPreview({
+      parse,
+      sourceId: 'santander-card',
+      sourceKind: 'credit_card',
+      cardCycle: CARD,
+      rules: [],
+      existingHashes: new Set<string>(),
+      today: '2026-09-30',
+      statementCompetence: '2026-09',
+    });
+
+    const first = preview.rows[0];
+    expect(first?.occurredOn).toBe('2025-10-11');
+    expect(first?.competence).toBe('2026-09');
+    expect(first?.installment).toEqual({ current: 11, total: 12 });
+
+    const result = finalizeImport({
+      rows: [
+        {
+          index: 0,
+          include: true,
+          occurredOn: first?.occurredOn ?? '2025-10-11',
+          description: first?.description ?? '',
+          rawDescription: first?.rawDescription ?? '',
+          amountCents: cents(-260),
+          categoryId: null,
+          memberId: null,
+          installment: first?.installment ?? null,
+        },
+      ],
+      sourceId: 'santander-card',
+      sourceKind: 'credit_card',
+      cardCycle: CARD,
+      existingHashes: new Set<string>(),
+      reportedTotalCents: null,
+      statementCompetence: '2026-09',
+    });
+
+    expect(result.installmentPlans).toHaveLength(1);
+    expect(result.installmentPlans[0]).toMatchObject({
+      firstCompetence: '2025-11',
+      installmentsCount: 12,
+    });
+
+    const projected = result.transactions.filter(
+      (transaction) => transaction.installmentNumber === 12,
+    );
+    expect(projected).toHaveLength(1);
+    expect(projected[0]?.competence).toBe('2026-10');
+    // Nenhuma parcela em competencia anterior a da fatura.
+    expect(result.transactions.every((t) => t.competence >= '2026-09')).toBe(true);
   });
 });

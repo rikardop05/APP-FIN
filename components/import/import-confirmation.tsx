@@ -50,6 +50,12 @@ type CategoryOption = {
 
 type Calculation = {
   totalCents: Cents;
+  /**
+   * Quantas linhas vão ser gravadas neste commit. Calculado pelo motor depois do
+   * dedupe e do filtro de `include` — a tela exibe, não calcula. Atualiza a
+   * cada edit; começa com a contagem inicial coerente com `initialDrafts`.
+   */
+  includedRowsCount: number;
   competenceByIndex: Map<number, string | null>;
 };
 
@@ -193,6 +199,11 @@ export function ImportConfirmation({
   const categoryOptions = useMemo(() => flattenCategories(categories), [categories]);
   const [calculation, setCalculation] = useState<Calculation>(() => ({
     totalCents: preview.preview.summary.totalCents,
+    // Inicial coerente com `initialDrafts`: o parser marca 'duplicate' e
+    // 'credit_card_payment' como desmarcadas; tudo o mais entra incluído.
+    includedRowsCount: preview.preview.rows.filter(
+      (row) => row.state !== 'duplicate' && row.state !== 'credit_card_payment',
+    ).length,
     competenceByIndex: new Map(
       preview.preview.rows.map((row) => [row.index, row.competence] as const),
     ),
@@ -235,6 +246,7 @@ export function ImportConfirmation({
       .then((result) => {
         setCalculation({
           totalCents: result.totalCents,
+          includedRowsCount: result.includedRowsCount,
           competenceByIndex: new Map(
             result.competenceByIndex.map((item) => [item.index, item.competence] as const),
           ),
@@ -582,10 +594,15 @@ export function ImportConfirmation({
       </div>
 
       <footer className="sticky bottom-0 mt-2 flex flex-col gap-3 border-t border-border bg-card py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+        <div className="flex flex-col gap-0.5">
           <p className="text-xs text-muted-foreground">Total das linhas incluídas</p>
           <p className="text-lg font-semibold text-foreground">
             <Money value={calculation.totalCents} />
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {calculation.includedRowsCount === 1
+              ? '1 linha será gravada'
+              : `${calculation.includedRowsCount} linhas serão gravadas`}
           </p>
         </div>
         <Button type="button" onClick={() => void commit()} disabled={busy || recalculating || invalidIncluded.length > 0}>

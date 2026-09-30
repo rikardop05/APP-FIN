@@ -3,7 +3,7 @@
 Mantido pelo orquestrador. Estados: `todo | doing | review | done | blocked`.
 Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATION.md` §9, equipe em `TEAM.md`.
 
-**Última atualização:** 2026-09-30 · 628 testes verdes · HEAD `d618c9f`, sincronizado · **T-116 em execução: o gate humano achou 4 defeitos que 591 testes verdes não achavam**
+**Última atualização:** 2026-09-30 · 636 testes verdes · HEAD `0612014`, sincronizado · **T-116 em execução: o gate humano achou 8 defeitos que 591 testes verdes não achavam**
 
 ## Tarefas
 
@@ -266,3 +266,43 @@ Três vezes eu medi um alvo em movimento e cheguei a conclusão errada:
 Nos três casos o código estava certo e a medição estava errada. **A medição
 precisa de tanto ceticismo quanto o código** — e a árvore precisa estar parada
 antes de contar qualquer coisa.
+
+## Triagem da auditoria de contradições (2026-09-30)
+
+Os 21 achados de `.private/auditoria-contradicoes.md` foram percorridos um a um contra o estado
+atual do repositório. **Oito já não existiam** — foram fechados pelo trabalho dos últimos dias sem
+que ninguém marcasse. Os que ainda estavam de pé, e o que ficou decidido:
+
+| # | Achado | Decisão |
+|---|---|---|
+| 5 | `targetPortfolio` com `withdrawalBp = 0` | passa a devolver `null`. O aceite do T-301 já exigia "não divide por zero", mas o tipo não deixava espaço para a resposta |
+| 6 | §16 apontava para `/lib/import/finalize.ts` | arquivo que **nunca existiu**: `finalizeImport` mora em `pipeline.ts`, do T-107. O contrato mandava criar um arquivo sem dono |
+| 7 | `budgetStatus` publicava 3 luzes com 1 limiar | as três faixas escritas no contrato, como o T-203 já as implementou: `warnBp` governa só verde→amarelo, vermelho é 100% fixo |
+| 8 | `accumulationCurve.competenceOffset` sem âncora | `fromCompetence` vira parâmetro obrigatório. Offset sem âncora não significa nada, e a função é pura — não pode ler o relógio |
+| 9 | sete `null` sem condição declarada | tabela dizendo quando cada um ocorre. `null` é "não existe resposta", nunca `NaN`, `Infinity` ou zero de mentira |
+| 11 | "STATUS é o único doc que o orquestrador escreve" | nunca foi verdade. A posse de `docs/` inteira é dele; a regra real é a outra ponta — **nenhum agente escreve em `docs/`** |
+| 12, 13, 14 | posses sobrepostas | ver abaixo |
+
+### As posses que se sobrepunham
+
+Três caminhos estavam na posse **exclusiva de dois agentes ao mesmo tempo** — contradição nos
+próprios termos, e os três já vinham mordendo:
+
+| Caminho | Fica com | Por quê |
+|---|---|---|
+| `lib/db/queries/` | Lanterna | consulta existe para alimentar tela; o schema é da Estaca |
+| `app/(auth)/`, `app/api/auth/` | Estaca | autenticação é infraestrutura, não tela |
+| `lib/import/pipeline.ts`, `installments.ts`, `detect.ts` | Peneira | não eram de **ninguém**, e eu vinha despachando trabalho neles o dia inteiro sem perceber |
+
+A armadilha é posse por prefixo de diretório: `lib/db/` contém `lib/db/queries/`, e `app/` contém
+`app/(auth)/`. Quando um agente possui a pasta e outro possui a subpasta, **os dois têm razão**.
+Toda posse de diretório agora declara o que exclui.
+
+### G-05 a G-08
+
+| # | Defeito | Estado |
+|---|---|---|
+| G-05 | *não era defeito.* O `400 Conta ou cartão inválido` estava certo — um agente desativou o cartão no meio do meu fluxo | virou `ORCHESTRATION` §4.2b |
+| G-06 | competência da **fatura** tirada de uma transação qualquer | **corrigido** `0612014` |
+| G-07 | competência da **linha** derivada da data da compra, não da fatura | **corrigido** `0612014` |
+| G-08 | Santander detectava **zero** parcelas: a coluna em `x=168` foi medida como "data auxiliar" e nunca lida | **corrigido** — 5 planos onde havia 0 |

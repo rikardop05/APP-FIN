@@ -117,6 +117,15 @@ export const uploadResponseSchema = z.object({
 
 export const recalculateResponseSchema = z.object({
   totalCents: centsSchema,
+  /**
+   * Quantas linhas vão ser gravadas neste commit. É a resposta à pergunta que
+   * o usuário tem na hora de clicar em "Confirmar" — "o que vai entrar?" — e
+   * difere do `rowsNew` do resumo (que é "linhas lidas que não são duplicatas"
+   * e conta a linha de pagamento, que chega desmarcada). O motor já sabe o
+   * número depois do dedupe e do filtro de `include`; devolvemos aqui em vez
+   * de a tela adivinhar.
+   */
+  includedRowsCount: z.number().int().nonnegative(),
   competenceByIndex: z.array(
     z.object({
       index: z.number().int(),

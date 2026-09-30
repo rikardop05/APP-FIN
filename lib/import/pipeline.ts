@@ -44,7 +44,7 @@ import { billingPeriodFor, type CardCycleConfig } from '@/lib/finance/billing';
 import { matchRule, type Rule } from '@/lib/finance/categorization';
 import { dedupeHash, normalizeDescription } from '@/lib/finance/dedupe';
 import { detectInstallment } from '@/lib/import/installments';
-import type { ParseDiagnostic, ParseResult } from '@/lib/import/types';
+import type { ParsedRow, ParseDiagnostic, ParseResult } from '@/lib/import/types';
 import { addCents, cents, type Cents } from '@/lib/money';
 
 /** Tipo de origem: cartao de credito ou conta. */
@@ -185,13 +185,24 @@ function dayMonth(occurredOn: IsoDate): { day: number; month: number } {
 /**
  * Separa descricao e parcela, com o desempate contra a data da propria linha.
  * Ver o topo do arquivo.
+ *
+ * A PARCELA pode ter vindo de uma **coluna propria** — Santander `x=168`,
+ * Mercado Pago `x≈395` — e nesse caso o parser ja a isolou em
+ * `ParsedRow.installment`; ela manda sobre o que a descricao sugere. A limpeza do
+ * sufixo da descricao continua vindo do detector, porque o Nubank embute a
+ * parcela no proprio texto.
  */
-function resolveInstallment(
-  rawDescription: string,
-  occurredOn: IsoDate | null,
-): { description: string; installment: PreviewInstallment | null } {
-  const detected = detectInstallment(rawDescription);
-  if (detected === null) return { description: rawDescription, installment: null };
+function resolveInstallment(row: ParsedRow): {
+  description: string;
+  installment: PreviewInstallment | null;
+} {
+  const { rawDescription, occurredOn } = row;
+  const fromDescription = detectInstallment(rawDescription);
+  const description =
+    fromDescription === null ? rawDescription : fromDescription.cleanDescription;
+
+  const detected = row.installment ?? fromDescription;
+  if (detected === null) return { description, installment: null };
 
   if (occurredOn !== null) {
     const { day, month } = dayMonth(occurredOn);
@@ -202,7 +213,7 @@ function resolveInstallment(
   }
 
   return {
-    description: detected.cleanDescription,
+    description,
     installment: { current: detected.current, total: detected.total },
   };
 }
@@ -227,10 +238,7 @@ export function buildImportPreview(
   input: BuildImportPreviewInput,
 ): ImportPreview {
   const rows: ImportPreviewRow[] = input.parse.rows.map((row, index) => {
-    const { description, installment } = resolveInstallment(
-      row.rawDescription,
-      row.occurredOn,
-    );
+    const { description, installment } = resolveInstallment(row);
 
     const occurredOn = row.occurredOn;
     const amountCents = row.amountCents;

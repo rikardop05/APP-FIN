@@ -88,9 +88,15 @@ export const SANTANDER_LAYOUT = {
   measuredFrom: 'IMPORT-SOURCES.md Â§8 (fatura real de 2026-09)',
 
   /**
-   * MEDIDO (Â§8): a celula fundida `dd/MM + descricao` fica em `x=33`. O marcador
-   * solto de `x=16-17` fica de fora (`dateMinX=25`) e a data auxiliar de `x=168`
-   * fica na faixa `aux`, tambem fora da descricao.
+   * MEDIDO (§8; `aux` RECLASSIFICADA no gate T-116): a celula fundida
+   * `dd/MM + descricao` fica em `x=33`; o marcador solto de `x=16-17` fica de
+   * fora (`dateMinX=25`).
+   *
+   * A faixa `aux` (`x=168`) **nao e uma data auxiliar** — e a **coluna de
+   * PARCELA** (`11/12`). A medicao de 2026-09-16 a classificou como data por
+   * engano; a linha real da secao "Parcelamentos" e
+   * `x33:"11/10 <descricao>" x168:"11/12" x214:"2,60"`. Ler a parcela so da
+   * descricao deixava esta coluna morta e a fatura sem plano nenhum (G-08).
    */
   columns: {
     date: { minX: 25, maxX: 160 },
@@ -229,6 +235,14 @@ function amountFrom(row: PdfTextRow): Cents | null {
 }
 
 /**
+ * Texto da coluna de PARCELA (`x=168`), que a medicao inicial chamou de "data
+ * auxiliar". Ver a nota da faixa `aux` na constante do layout.
+ */
+function installmentFor(row: PdfTextRow): string {
+  return joinCells(cellsIn(row, SANTANDER_LAYOUT.columns.aux));
+}
+
+/**
  * Data de referencia do documento (Â§8.2): a primeira data completa `dd/MM/aaaa`
  * fora da area de lancamentos (`x > launchMaxX`). `null` quando o quadro-resumo
  * nao a traz. E a fonte da virada de ano.
@@ -356,7 +370,14 @@ export function parseSantanderPdf(
     });
     const occurredOn =
       rowYear === null ? null : buildIsoDate(rowYear, dateMatch.month, dateMatch.day);
-    const detected = detectInstallment(dateMatch.description);
+    // Parcela: a COLUNA (`x=168`) primeiro, a descricao depois — mesma ordem do
+    // Mercado Pago. Nem toda linha parcelada do Santander esta na secao
+    // "Parcelamentos", entao a descricao continua como fallback. O detector do
+    // T-121 filtra o que a coluna possa trazer que nao seja parcela (`25/12`,
+    // com dia > mes, e recusado).
+    const detected =
+      detectInstallment(installmentFor(row)) ??
+      detectInstallment(dateMatch.description);
     // Pagamento da fatura anterior (RF-CC-04).
     const creditCardPayment = isCreditCardPaymentDescription(dateMatch.description);
 

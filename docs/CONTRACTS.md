@@ -317,6 +317,23 @@ dias de distância, para mais ou para menos.
 
 ## 10. Orçamento — `/lib/finance/budget.ts`
 
+> **As três faixas, fixadas em 2026-09-30 na triagem da auditoria.** O contrato publicava
+> `light: 'green' | 'yellow' | 'red'` e recebia só `warnBp`, sem dizer de onde saía o limite do
+> vermelho — quem implementasse tinha de inferir os 10000 bp do aceite do T-203. A regra, como o
+> T-203 a implementou:
+
+> | Faixa | Condição |
+> |---|---|
+> | verde | `usageBp < warnBp` |
+> | amarelo | `warnBp <= usageBp <= 10000` |
+> | vermelho | `usageBp > 10000` |
+
+> `warnBp` governa **apenas** a transição verde→amarelo; o limite do vermelho é 100% (10000 bp)
+> fixo. `warnBp` é validado entre 0 e 10000: acima disso a faixa amarela sumiria e um gasto de 100%
+> apareceria verde. Com `plannedCents = 0` o `usageBp` é `null` e a luz é vermelha se houve gasto,
+> verde se não houve. A cor usa o **mesmo** `usageBp` arredondado que a tela mostra, para não
+> existir linha com 80,00% pintada de verde.
+
 ```ts
 function budgetStatus(input: {
   budgets: { categoryId: string; plannedCents: Cents }[]
@@ -364,11 +381,18 @@ function projectCashflow(input: CashflowInput): {
 
 > Todas as fórmulas trabalham em **valores reais**. Detalhamento matemático em SPEC §5.6.
 
+> **`targetPortfolio` com `withdrawalBp <= 0` devolve `null`** — fixado em 2026-09-30, na triagem
+> da auditoria de contradições. A fórmula divide por `w`; o aceite do T-301 já exigia "não divide
+> por zero", mas a assinatura devolvia `Cents` e não deixava espaço para a resposta. Com taxa de
+> retirada zero o patrimônio alvo é infinito — não existe número que sirva —, e a convenção do
+> próprio §12 para "não há resposta" já é `null`, nunca `NaN` nem `Infinity` (é o que
+> `monthsToTarget` faz para meta inalcançável). A tela mostra a ausência; não desenha infinito.
+
 ```ts
 interface ScenarioParams { label: 'conservative' | 'moderate' | 'optimistic'; realReturnBp: BasisPoints; withdrawalBp: BasisPoints }
 
-/** (R * 12) / w */
-function targetPortfolio(desiredMonthlyIncome: Cents, withdrawalBp: BasisPoints): Cents
+/** (R * 12) / w. `null` quando `w <= 0` — ver a nota abaixo. */
+function targetPortfolio(desiredMonthlyIncome: Cents, withdrawalBp: BasisPoints): Cents | null
 
 /** (1 + r)^(1/12) - 1 — jamais r/12 */
 function monthlyRate(annualBp: BasisPoints): number
@@ -385,9 +409,16 @@ function requiredContribution(target: Cents, p0: Cents, annualBp: BasisPoints, m
 /** FV * w / 12 */
 function projectedMonthlyIncome(portfolio: Cents, withdrawalBp: BasisPoints): Cents
 
+/**
+ * `fromCompetence` e a ANCORA, e e obrigatoria: a funcao e pura e nao le relogio
+ * (CONVENTIONS §4). `competenceOffset` e a distancia em meses a partir dela — offset 0 e a propria
+ * `fromCompetence`. Sem a ancora o numero nao significa nada, e era o que o contrato publicava.
+ * Fixado em 2026-09-30, na triagem da auditoria.
+ */
 function accumulationCurve(input: {
   p0: Cents; monthlyContribution: Cents; annualBp: BasisPoints; months: number; withdrawalBp: BasisPoints
-}): { month: number; competenceOffset: number; portfolioCents: Cents; passiveIncomeCents: Cents }[]
+  fromCompetence: Competence
+}): { month: number; competenceOffset: number; competence: Competence; portfolioCents: Cents; passiveIncomeCents: Cents }[]
 
 /** A tabela que a tela exibe: uma linha por cenário. */
 function scenarioTable(input: {
@@ -396,6 +427,7 @@ function scenarioTable(input: {
   currentMonthlyContribution: Cents
   scenarios: ScenarioParams[]
   horizonsYears: number[]        // default [5, 10, 15, 20]
+  fromCompetence: Competence     // mesma ancora de `accumulationCurve`; obrigatoria
 }): {
   label: ScenarioParams['label']
   targetPortfolioCents: Cents
@@ -411,6 +443,25 @@ function contributionFeasibility(input: {
   averageMonthlySurplusCents: Cents
 }): { gapCents: Cents; feasible: boolean; surplusUsageBp: BasisPoints | null }
 ```
+
+> **Quando cada `null` de §12 e §13 acontece** — fixado em 2026-09-30, na triagem da auditoria.
+> Contrato puro que devolve `null` sem declarar a condição obriga cada implementador a inventar a
+> sua, e duas invenções diferentes produzem números diferentes para a mesma família.
+
+> | Campo | `null` significa |
+> |---|---|
+> | `targetPortfolio` | `withdrawalBp <= 0`: sem taxa de retirada não existe patrimônio alvo finito |
+> | `monthsToTarget` | meta inalcançável: com esse aporte e esse retorno a curva nunca cruza o alvo |
+> | `monthsWithCurrentContribution` | o mesmo, para o aporte que a família faz hoje |
+> | `surplusUsageBp` | `averageMonthlySurplusCents <= 0`: não há sobra, e a fração de uma sobra inexistente não é 0% nem 100% |
+> | `monthsRemaining` | `targetDate === null`: a meta não tem prazo, então não há meses a contar |
+> | `requiredMonthlyCents` | o mesmo: sem prazo não há aporte mensal exigido |
+> | `onTrack` | o mesmo: sem prazo não há como estar adiantado ou atrasado |
+
+> Em nenhum caso vale `NaN`, `Infinity`, `0` de mentira ou um número grande no lugar do infinito.
+> `null` é **"não existe resposta"**, e a tela mostra a ausência em vez de desenhar um valor que
+> ninguém pode alcançar. É a mesma regra que o aceite do T-301 já exigia para `monthsToTarget`,
+> agora valendo para os sete campos.
 
 ## 13. Metas — `/lib/finance/goals.ts`
 
@@ -782,7 +833,13 @@ function buildImportPreview(input: {
 }
 ```
 
-## 16. Confirmação e commit — `/lib/import/finalize.ts`
+## 16. Confirmação e commit — `/lib/import/pipeline.ts`
+
+> **Renomeado em 2026-09-30**, na triagem da auditoria. Esta seção dizia
+> `/lib/import/finalize.ts`, arquivo que nunca existiu: o T-107 recebeu a posse de
+> `lib/import/pipeline.ts` e é lá que `finalizeImport` mora. O contrato apontava para um
+> caminho sem dono, e quem fosse implementar §16 ao pé da letra criaria um arquivo que
+> nenhuma tarefa possui — colisão de posse garantida.
 
 > A tela de confirmação (RF-IMP-02) devolve **linhas editadas pelo usuário**. É isso que vira lançamento, não o que o parser leu. Competência e hash são recalculados aqui (RF-IMP-09), em função pura e testada.
 

@@ -47,24 +47,39 @@ export type ImportPreparation = {
   previousBatches: ImportBatchHistoryItem[];
 };
 
-export type CommitImportInput = {
+/**
+ * Forma discriminada por `sourceKind` — a mesma técnica do
+ * `commitBodySchema` em `app/api/import/schemas.ts`. O tipo carrega a regra:
+ * cartão traz `statementCompetence: Competence` (sem `null`), conta traz
+ * `statementCompetence: null`. O `as Competence` e a guarda de runtime
+ * somem porque o TypeScript estreita sozinho.
+ */
+type BaseCommitImportFields = {
   fileName: string;
   fileHash: string;
   bankKey: string | null;
   format: ImportFormat;
-  sourceKind: SourceKind;
   sourceId: string;
   confirmedRows: ConfirmedRow[];
   reportedTotalCents: Cents | null;
   allowReimport: boolean;
-  /**
-   * Competência DECLARADA da fatura (do mesmo campo `defaultCompetence` que o
-   * upload usa). Obrigatória quando `sourceKind === 'credit_card'` (validado pelo
-   * `commitBodySchema`); `null` quando a origem é conta. Não vem do motor — vem
-   * da escolha do usuário na tela.
-   */
-  statementCompetence: Competence | null;
 };
+
+export type CommitImportInput =
+  | (BaseCommitImportFields & {
+      sourceKind: 'credit_card';
+      /**
+       * Competência DECLARADA da fatura (mesmo campo `defaultCompetence` que o
+       * upload usa). Obrigatória quando a origem é cartão (validado pelo
+       * `commitBodySchema`); vem da escolha do usuário na tela.
+       */
+      statementCompetence: Competence;
+    })
+  | (BaseCommitImportFields & {
+      sourceKind: 'account';
+      /** Em conta não há fatura; o campo não se aplica. */
+      statementCompetence: null;
+    });
 
 export type CommitImportResult = FinalizeResult & {
   batchId: string;
@@ -289,12 +304,11 @@ export async function commitImport(
     throw new Error('O failpoint de teste não pode ser usado em produção.');
   }
   return db.transaction(async (tx) => {
-    // Quando a origem é cartão, a fatura precisa de competência declarada. O
-    // schema garante, mas em produção (sem Zod no caminho) uma chamada
-    // direta sem o campo não deve chegar aqui em silêncio — falha alto.
-    if (input.sourceKind === 'credit_card' && input.statementCompetence === null) {
-      throw new Error('Competência da fatura ausente. Informe em "Competência padrão".');
-    }
+    // A guarda de runtime que existia aqui
+    // (`if (sourceKind === 'credit_card' && statementCompetence === null) throw`)
+    // era redundante com o tipo: a uniao discriminada por `sourceKind` em
+    // `CommitImportInput` garante em tempo de compilacao que o campo so e
+    // `null` quando a origem e conta. O schema do commit valida o mesmo.
     const source = await sourceContextInTransaction(tx, householdId, input.sourceKind, input.sourceId);
     const previous = await tx
       .select({ id: importBatches.id, status: importBatches.status })
@@ -345,17 +359,16 @@ export async function commitImport(
     if (batch === undefined) throw new Error('Não foi possível criar o lote de importação.');
     if (options.failAfter === 'batch') throw new Error('Falha de teste após o lote.');
 
-    const statementId = source.creditCardId === null
+    const statementId = input.sourceKind === 'account' || source.creditCardId === null
       ? null
       : await findOrCreateStatement(
           tx,
           householdId,
           source,
           result,
-          // Narrowed em runtime pelo `if` que jogou lá em cima quando a origem é
-          // cartão sem competência. Em conta `findOrCreateStatement` retorna
-          // `null` no primeiro `if` e nunca chega a usar a competência.
-          input.statementCompetence as Competence,
+          // Narrowed pela uniao discriminada: sourceKind === 'credit_card' garante
+          // `statementCompetence: Competence` em tempo de tipo.
+          input.statementCompetence,
         );
     if (statementId !== null) {
       await tx

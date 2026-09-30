@@ -12,13 +12,30 @@ Estado em **2026-09-16**. Atualizar quando a equipe mudar.
 
 | Codinome | Programa · modelo | Role | Posse exclusiva |
 |---|---|---|---|
-| **Claude Code** (eu) | Claude Code · Opus 5 | `Orquestrador` | `docs/`, a ratificação de `lib/import/types.ts`, **e os commits** |
-| **Estaca** | OpenCode · `deepseek-v4.1-flash` | `Infra e Schema APPFIN` | `lib/db/`, `drizzle/`, `scripts/seed.ts`, `lib/auth/`, `app/(auth)/`, `app/api/auth/`, `middleware.ts` |
+| **Claude Code** (eu) | Claude Code · Opus 5 | `Orquestrador` | `docs/` inteira, a ratificação de `lib/import/types.ts`, **e os commits** |
+| **Estaca** | OpenCode · `deepseek-v4.1-flash` | `Infra e Schema APPFIN` | `lib/db/` **menos `lib/db/queries/`**, `drizzle/`, `scripts/seed.ts`, `lib/auth/`, `app/(auth)/`, `app/api/auth/`, `middleware.ts` |
 | **Esquadro** | OpenCode · `deepseek-v4.1-flash` | `Motor Financeiro APPFIN` | `lib/money/`, `lib/date/`, `lib/finance/` |
-| **Peneira** | OpenCode · `deepseek-v4.1-flash` | `Importacao APPFIN` | `lib/import/pdf/**` |
+| **Peneira** | OpenCode · `deepseek-v4.1-flash` | `Importacao APPFIN` | `lib/import/pdf/**`, `lib/import/pipeline.ts`, `lib/import/installments.ts`, `lib/import/detect.ts` |
 | **Funil** | OpenCode · `deepseek-v4.1-flash` | `Importacao Texto APPFIN` | `lib/import/text.ts` **e mais nada** |
-| **Lanterna** | OpenCode · `minimax-m3` | `Telas APPFIN` | `app/`, `components/`, `lib/db/queries/` |
+| **Lanterna** | OpenCode · `minimax-m3` | `Telas APPFIN` | `app/` **menos `app/(auth)/` e `app/api/auth/`**, `components/`, `lib/db/queries/` |
 | **Corvo** | OpenCode · `deepseek-v4.1-flash` | `Revisor APPFIN` | **nenhuma** — read-only |
+
+### As posses que se sobrepunham, resolvidas em 2026-09-30
+
+A triagem da auditoria achou três pares em que o **mesmo caminho estava na posse exclusiva de dois
+agentes** — o que é uma contradição nos próprios termos. Os três já tinham mordido na prática:
+
+| Caminho | Estava com | Fica com | Por quê |
+|---|---|---|---|
+| `lib/db/queries/` | Estaca (via `lib/db/`) e Lanterna | **Lanterna** | consulta existe para alimentar tela; o schema é que é da Estaca |
+| `app/(auth)/`, `app/api/auth/` | Lanterna (via `app/`) e Estaca | **Estaca** | autenticação é infraestrutura, não tela |
+| `lib/import/pipeline.ts` e demais raízes de `lib/import/` | ninguém | **Peneira** | ela já os vinha editando o dia inteiro a meu pedido, sem posse escrita |
+
+O caso de `lib/import/` era o pior dos três: `pipeline.ts`, `installments.ts` e `detect.ts` não
+estavam na posse de **ninguém**, e eu vinha despachando trabalho neles sem perceber. Posse por
+prefixo de diretório é a armadilha: `lib/db/` contém `lib/db/queries/`, e `app/` contém
+`app/(auth)/`. Quando um agente possui uma pasta e outro possui uma subpasta dela, os dois têm razão
+em achar que o arquivo é seu. **Toda posse de diretório agora declara o que exclui.**
 
 Topologia: todos ligados a mim; os cinco implementadores ligados também ao Corvo.
 

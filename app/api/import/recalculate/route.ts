@@ -66,6 +66,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       totalCents: includedResult.totals.includedCents,
+      includedRowsCount: includedResult.transactions.length,
       competenceByIndex,
     });
   } catch (error) {

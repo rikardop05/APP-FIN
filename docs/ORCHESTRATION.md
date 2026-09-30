@@ -299,4 +299,13 @@ Regras que acompanham a atribuição:
 
 ## 10. Estado do projeto
 
-O orquestrador mantém `docs/STATUS.md` com uma linha por tarefa: `ID · estado (todo | doing | review | done | blocked) · agente · data · nota`. É o único arquivo de docs que ele escreve livremente, e a primeira coisa que lê ao retomar uma sessão.
+O orquestrador mantém `docs/STATUS.md` com uma linha por tarefa: `ID · estado (todo | doing |
+review | done | blocked) · agente · data · nota`. É a primeira coisa que ele lê ao retomar uma
+sessão.
+
+**Corrigido em 2026-09-30, na triagem da auditoria.** Esta seção dizia que o `STATUS.md` era "o
+único arquivo de docs que ele escreve livremente", e isso nunca foi verdade: o orquestrador
+escreve `CONTRACTS.md`, `IMPORT-SOURCES.md`, `ORCHESTRATION.md` e `TEAM.md` também — a posse de
+`docs/` inteira é dele, e é assim que os contratos são ratificados. A regra real é a outra ponta:
+**nenhum agente escreve em `docs/`**. Quem precisa mudar um contrato propõe, e o orquestrador
+ratifica. Era a frase que estava errada, não a prática.

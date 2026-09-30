@@ -16,14 +16,40 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Dados de confirmação inválidos.' }, { status: 400 });
     }
-    const result = await commitImport(householdId, {
-      ...parsed.data,
-      confirmedRows: parsed.data.confirmedRows,
-      // O schema chama o campo `defaultCompetence` (mesmo nome do upload, de onde
-      // o usuário escolheu); o motor quer `statementCompetence`. Conta: o campo
-      // é opcional, vira `null`. Cartão: o schema validou que veio preenchido.
-      statementCompetence: parsed.data.defaultCompetence ?? null,
-    });
+    // O schema chama o campo `defaultCompetence` (mesmo nome do upload, de onde
+    // o usuário escolheu); o motor quer `statementCompetence`. A uniao
+    // discriminada por `sourceKind` estreita o tipo: cartão traz a string
+    // (obrigatória), conta traz `null`. Não dá para espalhar `...parsed.data`
+    // aqui — o spread alarga a uniao de volta para o tipo largo, perdendo o
+    // narrowing. Branches explícitos preservam o tipo.
+    const input = parsed.data;
+    const commitInput =
+      input.sourceKind === 'account'
+        ? {
+            fileName: input.fileName,
+            fileHash: input.fileHash,
+            bankKey: input.bankKey,
+            format: input.format,
+            sourceId: input.sourceId,
+            confirmedRows: input.confirmedRows,
+            reportedTotalCents: input.reportedTotalCents,
+            allowReimport: input.allowReimport,
+            sourceKind: 'account' as const,
+            statementCompetence: null,
+          }
+        : {
+            fileName: input.fileName,
+            fileHash: input.fileHash,
+            bankKey: input.bankKey,
+            format: input.format,
+            sourceId: input.sourceId,
+            confirmedRows: input.confirmedRows,
+            reportedTotalCents: input.reportedTotalCents,
+            allowReimport: input.allowReimport,
+            sourceKind: 'credit_card' as const,
+            statementCompetence: input.defaultCompetence,
+          };
+    const result = await commitImport(householdId, commitInput);
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     if (error instanceof SessionMissingError) {
