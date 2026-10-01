@@ -55,7 +55,7 @@ Nunca misturar. Nunca traduzir um identificador já existente no schema.
 **Regra dura:** nada em `/lib/finance` e `/lib/import` importa `/lib/db`, `next/*`, `fs`, `fetch` ou lê `process.env`. São funções que recebem dados e devolvem dados. Um agente que precise quebrar isso está resolvendo o problema no lugar errado — deve parar e reportar, não adaptar.
 
 **Corolário sobre enums, fixado em 2026-09-30.** A regra dura obriga as camadas puras a
-**redigitar** os enums do banco como união literal — `/lib/finance/kpis.ts` faz isso com
+**redigitar** os enums do banco como união literal — `/lib/finance/enum-mirrors.ts` faz isso com
 `TransactionKind` e `CategoryNature`, e não há alternativa: o import está barrado. Essa cópia é
 necessária e vive guardada por `tests/enums-espelho.test.ts`, que quebra se os dois lados
 divergirem (o teste mora em `tests/` porque precisa importar os dois, coisa que um teste dentro de

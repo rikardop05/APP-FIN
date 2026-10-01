@@ -3,7 +3,7 @@
 Mantido pelo orquestrador. Estados: `todo | doing | review | done | blocked`.
 Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATION.md` §9, equipe em `TEAM.md`.
 
-**Última atualização:** 2026-09-30 · 703 testes verdes · HEAD `3ebbd8e`, sincronizado · **equipe de volta, 6 agentes em 6 frentes**
+**Última atualização:** 2026-09-30 · 712 testes verdes · HEAD `f2c9f02`, sincronizado · **7 agentes em 7 frentes** (Trena entrou, Claude Code, no T-207)
 
 ## Tarefas
 
@@ -404,3 +404,34 @@ frágil que uma base descartável, e está registrado como tal.
 | Funil | `app/api/budgets/**` — a API do T-205 |
 | Peneira | as linhas de `R$ 0,00`, e a pergunta maior: o dedupe funde duas linhas idênticas do **mesmo lote**? |
 | Corvo | revisão adversarial de `7fca5d0..HEAD` |
+
+## A terceira vez que um gate verde escondeu uma tela quebrada
+
+`f2c9f02`. O Ricardo abriu a confirmação do Mercado Pago e viu **−R$ 2.416,29 com 17 linhas**,
+dois números que não podem ser verdade juntos: 17 linhas somam −R$ 1.469,01.
+
+A tela não mandava `statementCompetence` no corpo do recálculo, e o schema — mexido horas antes,
+na fiação do G-06/G-07 — passou a exigi-lo. Todo recálculo voltava `400`, e o total caía para uma
+soma de reserva que ignora quais linhas estão marcadas.
+
+| # | O que passou verde | O que estava quebrado |
+|---|---|---|
+| T-004 | 405 testes | o login não funcionava de ponta a ponta |
+| G-01 | 591 testes | nenhum PDF importava: o worker do pdfjs não era emitido |
+| este | 703 testes | o corpo da requisição não batia com o schema da rota |
+
+**Sempre a mesma forma: duas pontas de um contrato que nenhuma ferramenta compara.** O `tsc` não
+confere `JSON.stringify` contra Zod; o teste unitário não abre o navegador. Os 9 testes de
+fronteira que entraram com o conserto montam o corpo exatamente como a tela monta e o validam
+contra o schema real — é barato, e devia existir para toda rota que a tela chama.
+
+### E uma correção que eu recusei
+
+O primeiro conserto afrouxava o schema para `.nullable().optional()`, justificado como "defesa em
+profundidade: um caller que esquecer cai no comportamento natural". É o oposto. Com o campo
+obrigatório, quem esquece recebe `400` — barulhento, um minuto de conserto, e foi assim que achamos
+este bug. Com ele opcional, o pipeline cai em `competenceFor(occurredOn)`, que é **literalmente o
+G-07 corrigido horas antes**: a parcela 11/12 voltaria para 2025-11 em silêncio, com um número
+plausível e errado na tela da família.
+
+**Falta de informação obrigatória tem de falhar alto.**
