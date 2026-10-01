@@ -68,3 +68,6 @@ desktop.ini
 # Skills de fornecedor geradas por CLI (o `neon skills` escreve aqui e em .claude/).
 # Sao 272 KB de documentacao de terceiro, nao codigo do projeto.
 .agents/
+
+# Notas de agente: relatos longos que o terminal trunca. Descartavel.
+/.notas/
