@@ -26,18 +26,25 @@ import {
   members,
   recurringExpenses,
 } from '@/lib/db/schema';
+import {
+  RecurringReferenceError,
+  type IncomeInput,
+  type IncomePatch,
+  type RecurringExpenseInput,
+  type RecurringExpensePatch,
+  assertIncomeShape,
+  assertRecurrenceShape,
+} from '@/lib/db/queries/recurring-shape';
 import { cents, type Cents } from '@/lib/money';
 
 // ---------------------------------------------------------------------------
-// Erros tipados — fronteira explícita em vez de "não encontrado" genérico.
+// Erro tipado — re-exportado para a borda da rota usar
+// `error.name === 'RecurringReferenceError'`. A definição vive em
+// `recurring-shape.ts` (módulo SEM import de `@/lib/db`, para teste de regra
+// pura sem precisar de banco).
 // ---------------------------------------------------------------------------
 
-export class RecurringReferenceError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'RecurringReferenceError';
-  }
-}
+export { RecurringReferenceError };
 
 // ---------------------------------------------------------------------------
 // Tipos públicos — formato da tela, não da tabela.
@@ -61,22 +68,6 @@ export type RecurringExpenseListItem = {
   active: boolean;
 };
 
-export type RecurringExpenseInput = {
-  description: string;
-  expectedCents: Cents;
-  categoryId: string;
-  dueDay: number;
-  frequency: Frequency;
-  accountId: string | null;
-  creditCardId: string | null;
-  startsOn: string;
-  endsOn: string | null;
-  annualAdjustmentBp: number | null;
-};
-
-/** Patch é igual ao input — substituição por completo dos campos mutáveis. */
-export type RecurringExpensePatch = RecurringExpenseInput;
-
 export type IncomeListItem = {
   id: string;
   description: string;
@@ -91,20 +82,6 @@ export type IncomeListItem = {
   endsOn: string | null;
   active: boolean;
 };
-
-export type IncomeInput = {
-  description: string;
-  kind: IncomeListItem['kind'];
-  expectedCents: Cents;
-  memberId: string;
-  receiveDay: number;
-  frequency: Frequency;
-  oneOffCompetence: string | null;
-  startsOn: string | null;
-  endsOn: string | null;
-};
-
-export type IncomePatch = IncomeInput;
 
 // ---------------------------------------------------------------------------
 // Helpers internos — borda do schema, repetidos nos dois CRUDs.
@@ -167,17 +144,6 @@ async function assertCardBelongs(
     .limit(1);
   if (row === undefined) {
     throw new RecurringReferenceError('Cartão não encontrado ou inativo.');
-  }
-}
-
-/** Garante coerência entre `frequency` e `endsOn` / `startsOn`. */
-function assertRecurrenceShape(
-  frequency: Frequency,
-  startsOn: string,
-  endsOn: string | null,
-): void {
-  if (endsOn !== null && endsOn < startsOn) {
-    throw new RecurringReferenceError('Data final não pode ser anterior à data inicial.');
   }
 }
 
@@ -373,41 +339,6 @@ export async function getIncome(
 ): Promise<IncomeListItem | null> {
   const items = await listIncomes(householdId);
   return items.find((item) => item.id === id) ?? null;
-}
-
-/**
- * Coerência `frequency` × `oneOffCompetence` × `startsOn`:
- * - `one_off`: `oneOffCompetence` é **obrigatório** (a coluna tem CHECK no schema,
- *   mas o Zod da rota reforça a regra antes da query para a mensagem ficar em
- *   pt-BR). `startsOn` pode ser `null` (a competência é o que vale, ver
- *   CONTRACTS §8 / `expandOneOff`).
- * - Demais frequências: `oneOffCompetence` deve ser `null` (o motor ignora) e
- *   `startsOn` deve estar preenchido (sem `startsOn` não há cadência para
- *   projetar).
- */
-const COMPETENCE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
-
-function assertIncomeShape(input: IncomeInput): void {
-  if (input.frequency === 'one_off') {
-    if (input.oneOffCompetence === null) {
-      throw new RecurringReferenceError('Receita eventual exige uma competência fixa.');
-    }
-    if (!COMPETENCE_PATTERN.test(input.oneOffCompetence)) {
-      throw new RecurringReferenceError('Competência inválida.');
-    }
-    return;
-  }
-  if (input.oneOffCompetence !== null) {
-    throw new RecurringReferenceError(
-      'Competência fixa só se aplica a receitas eventuais.',
-    );
-  }
-  if (input.startsOn === null) {
-    throw new RecurringReferenceError('Informe a data de início da receita.');
-  }
-  if (input.endsOn !== null && input.endsOn < input.startsOn) {
-    throw new RecurringReferenceError('Data final não pode ser anterior à data inicial.');
-  }
 }
 
 export async function createIncome(

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Frequency, IncomeKind } from '@/lib/db';
+import { frequency, incomeKind, type Frequency, type IncomeKind } from '@/lib/db/enums';
 
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const nullableIsoDateSchema = isoDateSchema.nullable();
@@ -19,15 +19,7 @@ const uuidSchema = z.string().uuid();
  * ou `Number(...)`.
  */
 
-const frequencyValues = [
-  'monthly',
-  'bimonthly',
-  'quarterly',
-  'semiannual',
-  'annual',
-  'one_off',
-] as const satisfies readonly Frequency[];
-
+const frequencyValues = frequency.enumValues;
 const frequencyLabels: Record<Frequency, string> = {
   monthly: 'Mensal',
   bimonthly: 'Bimestral',
@@ -39,13 +31,7 @@ const frequencyLabels: Record<Frequency, string> = {
 
 const frequencySelectSchema = z.enum(frequencyValues);
 
-const incomeKindValues = [
-  'salary',
-  'pro_labore',
-  'variable',
-  'rent',
-  'other',
-] as const satisfies readonly IncomeKind[];
+const incomeKindValues = incomeKind.enumValues;
 
 const incomeKindLabels: Record<IncomeKind, string> = {
   salary: 'Salário',
