@@ -304,3 +304,50 @@ describe('suggestBudgetFromHistory', () => {
     ).toThrow(RangeError);
   });
 });
+
+describe('suggestBudgetFromHistory — opts.anchor (a janela ancora no que o chamador diz)', () => {
+  it('SEM anchor, repetir o mes anterior repete o de DOIS meses atras quando o anterior esteve vazio (o defeito)', () => {
+    // Orcamento de outubro; setembro (o mes anterior) nao teve gasto; agosto teve 90.000.
+    const result = suggestBudgetFromHistory([hist('2026-08', 'a', -90000)], { months: 1 });
+    // Comportamento antigo, preservado como default: ancora na propria historia.
+    expect(result).toEqual([{ categoryId: 'a', suggestedCents: 90000 }]);
+  });
+
+  it('COM anchor no mes anterior vazio, "repetir o mes anterior" nao sugere nada', () => {
+    const result = suggestBudgetFromHistory([hist('2026-08', 'a', -90000)], {
+      months: 1,
+      anchor: '2026-09',
+    });
+    expect(result).toEqual([]);
+  });
+
+  it('com anchor, a media de 3 meses divide por 3 mesmo com o mes mais recente vazio', () => {
+    // Janela jul..set. Gasto so em julho: 90.000 / 3 = 30.000, e nao 90.000 / 1.
+    const result = suggestBudgetFromHistory([hist('2026-07', 'a', -90000)], {
+      months: 3,
+      anchor: '2026-09',
+    });
+    expect(result).toEqual([{ categoryId: 'a', suggestedCents: 30000 }]);
+  });
+
+  it('ignora lancamento posterior ao anchor (o mes que esta sendo orcado nao entra)', () => {
+    const result = suggestBudgetFromHistory(
+      [hist('2026-09', 'a', -50000), hist('2026-10', 'a', -999999)],
+      { months: 1, anchor: '2026-09' },
+    );
+    expect(result).toEqual([{ categoryId: 'a', suggestedCents: 50000 }]);
+  });
+
+  it('anchor igual a maior competencia do historico da o mesmo resultado do default', () => {
+    const history = [hist('2026-08', 'a', -30000), hist('2026-09', 'a', -60000)];
+    expect(suggestBudgetFromHistory(history, { months: 2, anchor: '2026-09' })).toEqual(
+      suggestBudgetFromHistory(history, { months: 2 }),
+    );
+  });
+
+  it('anchor invalido lanca (sem fallback)', () => {
+    expect(() =>
+      suggestBudgetFromHistory([hist('2026-09', 'a', -100)], { months: 1, anchor: '2026-13' }),
+    ).toThrow();
+  });
+});

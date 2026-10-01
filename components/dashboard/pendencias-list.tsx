@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { AlertCircle, AlertTriangle, CheckCircle2, Inbox } from 'lucide-react';
 
 import { EmptyState, Money } from '@/components/ui-kit';
-import type { Cents } from '@/lib/money';
+import { formatDateBR } from '@/lib/date';
+import { basisPoints, type BasisPoints, type Cents } from '@/lib/money';
 
 export type UncategorizedItem = {
   id: string;
@@ -19,10 +20,37 @@ export type DivergentStatementItem = {
   differenceCents: Cents;
 };
 
+/**
+ * Mesma forma de `OverBudgetItem` (`lib/db/queries/budgets.ts`, T-205), para a
+ * página passar o retorno de `listOverBudget` sem adaptar. "Estourado" é o
+ * `light === 'red'` de `budgetStatus`, decidido LÁ: este componente só exibe a
+ * lista e NUNCA refaz a comparação gasto × planejado — refazer divergiria do
+ * semáforo da tela de orçamento.
+ */
+export type OverBudgetListItem = {
+  categoryId: string;
+  categoryName: string;
+  plannedCents: Cents;
+  spentCents: Cents;
+  /** `null` só quando `plannedCents = 0`. */
+  usageBp: BasisPoints | null;
+};
+
+export type OverdueRecurringListItem = {
+  id: string;
+  description: string;
+  occurredOn: string;
+  amountCents: Cents;
+};
+
 type PendenciasListProps = {
   uncategorizedCount: number;
   uncategorizedItems: UncategorizedItem[];
   divergentStatements: DivergentStatementItem[];
+  /** Orçamentos estourados no mês (T-205). Omitido = a página ainda não carrega. */
+  overBudget?: OverBudgetListItem[];
+  /** Despesas recorrentes previstas, já vencidas e não realizadas. */
+  overdueRecurring?: { count: number; items: OverdueRecurringListItem[] };
 };
 
 /**
@@ -44,10 +72,14 @@ export function PendenciasList({
   uncategorizedCount,
   uncategorizedItems,
   divergentStatements,
+  overBudget = [],
+  overdueRecurring = { count: 0, items: [] },
 }: PendenciasListProps) {
   const hasUncategorized = uncategorizedCount > 0;
   const hasDivergent = divergentStatements.length > 0;
-  const isEmpty = !hasUncategorized && !hasDivergent;
+  const hasOverBudget = overBudget.length > 0;
+  const hasOverdueRecurring = overdueRecurring.count > 0;
+  const isEmpty = !hasUncategorized && !hasDivergent && !hasOverBudget && !hasOverdueRecurring;
 
   if (isEmpty) {
     return (
@@ -61,7 +93,7 @@ export function PendenciasList({
             Nada pendente neste mês
           </h2>
           <p className="text-sm text-muted-foreground">
-            Nenhuma categoria em aberto e nenhuma fatura divergente.
+            Nenhuma categoria em aberto, fatura divergente, orçamento estourado ou despesa fixa em atraso.
           </p>
         </div>
         <EmptyState
@@ -172,7 +204,93 @@ export function PendenciasList({
             </ul>
           </article>
         ) : null}
+        {hasOverBudget ? (
+          <article aria-labelledby="dashboard-pendencias-budget-heading" className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <h3 id="dashboard-pendencias-budget-heading" className="text-sm font-semibold text-foreground">
+                Orçamentos estourados
+              </h3>
+              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+                {overBudget.length} {overBudget.length === 1 ? 'categoria' : 'categorias'}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Categorias em vermelho na tela de Orçamento. Conta só o que já foi realizado, por isso os valores podem
+              diferir dos cards acima, que somam também o previsto.
+            </p>
+            <ul className="flex flex-col gap-1.5">
+              {overBudget.map((item) => (
+                <li
+                  key={item.categoryId}
+                  className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2"
+                >
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm font-medium text-foreground">{item.categoryName}</span>
+                    <span className="text-xs text-muted-foreground">
+                      <Money value={item.spentCents} sign="never" className="text-muted-foreground" /> de{' '}
+                      <Money value={item.plannedCents} sign="never" className="text-muted-foreground" /> planejados
+                    </span>
+                  </div>
+                  <span className="shrink-0 text-sm font-semibold tabular text-red-700">
+                    {item.usageBp === null ? 'sem valor planejado' : formatUsage(item.usageBp)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <Link
+              href="/orcamento"
+              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              Abrir o orçamento →
+            </Link>
+          </article>
+        ) : null}
+
+        {hasOverdueRecurring ? (
+          <article aria-labelledby="dashboard-pendencias-recurring-heading" className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <h3 id="dashboard-pendencias-recurring-heading" className="text-sm font-semibold text-foreground">
+                Despesas fixas previstas e não realizadas
+              </h3>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+                {overdueRecurring.count} {overdueRecurring.count === 1 ? 'item' : 'itens'}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Previsões cuja data já passou. Ainda não conferimos isso sozinhos com o que você importou: se já pagou e
+              importou, a linha continua aqui.
+            </p>
+            <ul className="flex flex-col gap-1.5">
+              {overdueRecurring.items.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2"
+                >
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm font-medium text-foreground">{item.description}</span>
+                    <span className="text-xs text-muted-foreground">previsto para {formatDateBR(item.occurredOn)}</span>
+                  </div>
+                  <Money value={item.amountCents} sign="never" className="shrink-0 text-sm font-medium tabular" />
+                </li>
+              ))}
+            </ul>
+            {overdueRecurring.count > overdueRecurring.items.length ? (
+              <Link
+                href="/lancamentos"
+                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              >
+                Ver mais {overdueRecurring.count - overdueRecurring.items.length} em Lançamentos →
+              </Link>
+            ) : null}
+          </article>
+        ) : null}
       </div>
     </section>
   );
+}
+
+/** `basisPoints` em percentual pt-BR (apresentação; a decisão de "estourado" não é daqui). */
+function formatUsage(value: BasisPoints): string {
+  const bp = basisPoints(value);
+  return `${Math.floor(bp / 100)},${String(bp % 100).padStart(2, '0')}%`;
 }

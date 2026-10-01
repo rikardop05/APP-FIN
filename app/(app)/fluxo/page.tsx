@@ -4,14 +4,10 @@ import { todayInSaoPaulo } from '@/app/_lib/today';
 import { FluxoScreen } from '@/components/cashflow/fluxo-screen';
 import { EmptyState, PageHeader } from '@/components/ui-kit';
 import { requireSession } from '@/lib/auth/session';
-import { getCashflowData } from '@/lib/db/queries/cashflow';
-import { projectCashflow } from '@/lib/finance/cashflow';
 
-import { toCashflowInput } from './_lib/to-cashflow-input';
+import { loadProjectedCashflow } from './_lib/load-cashflow';
 
 export const dynamic = 'force-dynamic';
-
-const WINDOW_MONTHS = 12;
 
 /**
  * Tela de fluxo de caixa (T-207). SÓ LEITURA: lê o banco, monta a entrada do
@@ -26,10 +22,9 @@ export default async function FluxoPage() {
   const { householdId } = await requireSession();
   const today = todayInSaoPaulo();
 
-  const data = await getCashflowData(householdId, today, WINDOW_MONTHS);
-  const base = toCashflowInput(data);
-  // Roda no servidor primeiro: sinal errado lança aqui, nunca vira gráfico torto.
-  const projection = projectCashflow(base.input);
+  // Mesmo caminho do painel (`loadProjectedCashflow`): é o que garante o mesmo saldo nas duas telas.
+  const base = await loadProjectedCashflow(householdId, today);
+  const projection = base.projection;
 
   const hasAnything =
     base.input.openingBalanceCents !== 0 ||

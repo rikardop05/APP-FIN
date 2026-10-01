@@ -160,9 +160,14 @@ function averageCents(total: Cents, months: number): Cents {
  * ultimos 3 meses"; `months: 1` e o "repetir o mes anterior").
  *
  * Semantica fixada com o Orquestrador (o contrato nao a define):
- * - a janela sao os `months` meses ATE a maior competencia do historico,
- *   inclusive. A ancora e a propria historia, sem `today`: quem chama recorta o
- *   que quer considerar;
+ * - a janela sao os `months` meses ATE a ancora, inclusive. Por padrao a ancora
+ *   e a maior competencia do proprio historico, sem `today`: quem chama recorta
+ *   o que quer considerar. **Isso falha em silencio quando o mes mais recente
+ *   esteve vazio:** "repetir o mes anterior" repetiria o de DOIS meses atras, com
+ *   um numero plausivel (a mesma forma do G-07). Quem orca um mes especifico
+ *   passa `opts.anchor` (o mes anterior ao orcado): a janela deixa de depender
+ *   do que o historico contem, mes vazio conta como zero, e lancamento
+ *   posterior a ancora e ignorado;
  * - mes sem lancamento conta como ZERO (divide por `months`). Gastar em 1 de 3
  *   meses sugere 1/3 daquele valor, nao o valor cheio;
  * - so sai categoria com pelo menos um lancamento na janela; categoria cujo
@@ -173,11 +178,11 @@ function averageCents(total: Cents, months: number): Cents {
  */
 export function suggestBudgetFromHistory(
   history: { competence: Competence; categoryId: string; amountCents: Cents }[],
-  opts: { months: number },
+  opts: { months: number; anchor?: Competence },
 ): { categoryId: string; suggestedCents: Cents }[] {
   if (history.length === 0) return [];
   const months = assertMonths(opts.months);
-  const anchor = latestCompetence(history);
+  const anchor = opts.anchor ?? latestCompetence(history);
 
   const totals = new Map<string, Cents>();
   for (const entry of history) {

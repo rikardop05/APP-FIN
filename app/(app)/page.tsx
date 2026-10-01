@@ -7,6 +7,7 @@ import { cents, type Cents } from '@/lib/money';
 import { DashboardScreen } from '@/components/dashboard/dashboard-screen';
 import { type DivergentStatementItem, type UncategorizedItem } from '@/components/dashboard/pendencias-list';
 import { requireSession } from '@/lib/auth/session';
+import { listOverBudget, type OverBudgetItem } from '@/lib/db/queries/budgets';
 import { getDashboardData, listUncategorizedTransactionItems } from '@/lib/db/queries/dashboard';
 import { topUpPlanned } from '@/lib/db/queries/recurring-planned-write';
 import { getSettings } from '@/lib/db/queries/settings';
@@ -47,6 +48,17 @@ export default async function DashboardPage() {
     getDashboardData(householdId, today, settings.commitmentMonths),
     listUncategorizedTransactionItems(householdId, today),
   ]);
+
+  // Orcamentos estourados no mes (T-205): "estourado" e o `light === 'red'` de
+  // `budgetStatus`, decidido la. Se a consulta falhar, o painel segue SEM essa
+  // linha (e o erro vai para o log): `overBudget` omitido = pagina ainda nao
+  // carrega, e um orcamento quebrado nao pode derrubar o painel inteiro.
+  let overBudget: OverBudgetItem[] | undefined;
+  try {
+    overBudget = await listOverBudget(householdId, competence);
+  } catch (error) {
+    console.error('[dashboard] orcamentos estourados indisponiveis:', error);
+  }
 
   const kpis = monthlyKpis({
     competence,
@@ -127,6 +139,7 @@ export default async function DashboardPage() {
         uncategorizedCount: dashboard.uncategorizedCount,
         uncategorizedItems: pendenciaItems,
         divergentStatements: divergentItems,
+        ...(overBudget === undefined ? {} : { overBudget }),
       }}
     />
   );

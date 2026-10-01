@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { todayInSaoPaulo } from '@/app/_lib/today';
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
 import {
   deactivateRecurringExpense,
@@ -31,19 +32,24 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
     }
     const body = parsed.data;
-    await updateRecurringExpense(householdId, id, {
-      description: body.description,
-      expectedCents: cents(body.expectedCents),
-      categoryId: body.categoryId,
-      dueDay: body.dueDay,
-      frequency: body.frequency,
-      accountId: body.accountId,
-      creditCardId: body.creditCardId,
-      startsOn: body.startsOn,
-      endsOn: body.endsOn,
-      annualAdjustmentBp:
-        body.annualAdjustmentBp === null ? null : basisPoints(body.annualAdjustmentBp),
-    });
+    await updateRecurringExpense(
+      householdId,
+      id,
+      {
+        description: body.description,
+        expectedCents: cents(body.expectedCents),
+        categoryId: body.categoryId,
+        dueDay: body.dueDay,
+        frequency: body.frequency,
+        accountId: body.accountId,
+        creditCardId: body.creditCardId,
+        startsOn: body.startsOn,
+        endsOn: body.endsOn,
+        annualAdjustmentBp:
+          body.annualAdjustmentBp === null ? null : basisPoints(body.annualAdjustmentBp),
+      },
+      todayInSaoPaulo(),
+    );
     return NextResponse.json({ id });
   } catch (error) {
     if (error instanceof SessionMissingError) {
@@ -64,7 +70,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const id = await readId(context);
     if (id === null) return NextResponse.json({ error: 'ID inválido.' }, { status: 400 });
     const { householdId } = await requireSession();
-    await deactivateRecurringExpense(householdId, id);
+    await deactivateRecurringExpense(householdId, id, todayInSaoPaulo());
     return NextResponse.json({ id });
   } catch (error) {
     if (error instanceof SessionMissingError) {

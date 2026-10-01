@@ -259,37 +259,302 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
       }
     });
 
-    it('editar ou desativar regra com previsão gravada é recusado (nada fica com o valor antigo em silêncio)', async () => {
-      const m = await modules();
-      const { householdId, categoryId, accountId } = await seedHousehold(m, {
-        withSettings: true,
-        projectionMonths: 3,
-      });
-      try {
+    describe('edição: preserva o vencido, apaga e regenera o futuro (replan)', () => {
+      const TODAY = '2026-10-15';
+
+      /** Cria a despesa (mensal, dia 5, 6 meses: out/26..mar/27) e devolve ids e leitor. */
+      async function setup(m: Modules, projectionMonths = 6) {
+        const seed = await seedHousehold(m, { withSettings: true, projectionMonths });
         const id = await m.recurring.createRecurringExpense(
-          householdId,
-          { ...baseExpense(categoryId), accountId, creditCardId: null },
-          '2026-10-15',
+          seed.householdId,
+          { ...baseExpense(seed.categoryId), accountId: seed.accountId, creditCardId: null },
+          TODAY,
         );
-        await expect(
-          m.recurring.updateRecurringExpense(householdId, id, {
-            ...baseExpense(categoryId),
-            expectedCents: cents(-22000),
-            accountId,
-            creditCardId: null,
-          }),
-        ).rejects.toThrow(/previsão gravada/);
-        await expect(m.recurring.deactivateRecurringExpense(householdId, id)).rejects.toThrow(
-          /previsão gravada/,
-        );
-        const [rule] = await m.db
-          .select({ expectedCents: m.schema.recurringExpenses.expectedCents, active: m.schema.recurringExpenses.active })
-          .from(m.schema.recurringExpenses)
-          .where(eq(m.schema.recurringExpenses.id, id));
-        expect(rule).toEqual({ expectedCents: -18000, active: true });
-      } finally {
-        await cleanup(m, householdId);
+        const rows = async () =>
+          (
+            await m.db
+              .select()
+              .from(m.schema.transactions)
+              .where(eq(m.schema.transactions.recurringExpenseId, id))
+          ).sort((a, b) => a.competence.localeCompare(b.competence));
+        const patch = (overrides: Record<string, unknown> = {}) => ({
+          ...baseExpense(seed.categoryId),
+          accountId: seed.accountId,
+          creditCardId: null,
+          ...overrides,
+        });
+        return { ...seed, id, rows, patch };
       }
+
+      it('180 -> 220: o futuro sai em 220, a vencida de outubro FICA em 180 (e continua a mesma linha)', async () => {
+        const m = await modules();
+        const s = await setup(m);
+        try {
+          const before = await s.rows();
+          expect(before).toHaveLength(6);
+          expect(before.every((row) => row.amountCents === -18000)).toBe(true);
+          const outId = before[0]?.id;
+
+          await m.recurring.updateRecurringExpense(
+            s.householdId,
+            s.id,
+            s.patch({ expectedCents: cents(-22000) }) as never,
+            TODAY,
+          );
+
+          const after = await s.rows();
+          expect(after.map((row) => [row.competence, row.amountCents])).toEqual([
+            ['2026-10', -18000], // 05/10 < hoje: vencida, preservada com o valor com que aconteceu
+            ['2026-11', -22000],
+            ['2026-12', -22000],
+            ['2027-01', -22000],
+            ['2027-02', -22000],
+            ['2027-03', -22000],
+          ]);
+          expect(after[0]?.id).toBe(outId);
+          expect(after.every((row) => row.status === 'planned')).toBe(true);
+        } finally {
+          await cleanup(m, s.householdId);
+        }
+      });
+
+      it('P3: dueDay 5 -> 20 com a vencida de 05/out pendente: a de 20/out NÃO entra, novembro já sai no dia 20', async () => {
+        const m = await modules();
+        const s = await setup(m);
+        try {
+          await m.recurring.updateRecurringExpense(
+            s.householdId,
+            s.id,
+            s.patch({ dueDay: 20, expectedCents: cents(-22000) }) as never,
+            TODAY,
+          );
+          const after = await s.rows();
+          const october = after.filter((row) => row.competence === '2026-10');
+          // Uma expectativa só por mês: duas dobrariam o gasto previsto.
+          expect(october).toHaveLength(1);
+          expect(october[0]).toMatchObject({ occurredOn: '2026-10-05', amountCents: -18000 });
+          const november = after.find((row) => row.competence === '2026-11');
+          expect(november).toMatchObject({ occurredOn: '2026-11-20', amountCents: -22000 });
+          expect(after).toHaveLength(6);
+        } finally {
+          await cleanup(m, s.householdId);
+        }
+      });
+
+      it('competência já ocupada por uma POSTED da mesma origem: o replan não gera a planned ao lado (contaria o gasto duas vezes)', async () => {
+        const m = await modules();
+        const s = await setup(m);
+        try {
+          const before = await s.rows();
+          const november = before.find((row) => row.competence === '2026-11');
+          if (november === undefined) throw new Error('Sem linha de novembro.');
+          // O realizado de novembro, já lançado, com a mesma origem. O índice parcial
+          // só cobre `planned`: nada no banco impede uma planned ao lado dele.
+          const { id: _id, ...rest } = november;
+          void _id;
+          await m.db.insert(m.schema.transactions).values({
+            ...rest,
+            status: 'posted',
+            rawDescription: 'CEMIG',
+            dedupeHash: null,
+          });
+
+          await m.recurring.updateRecurringExpense(
+            s.householdId,
+            s.id,
+            s.patch({ expectedCents: cents(-22000) }) as never,
+            TODAY,
+          );
+
+          const after = await s.rows();
+          const inNovember = after.filter((row) => row.competence === '2026-11');
+          // Só a posted: a planned antiga foi apagada (futura, não conciliada) e a
+          // nova NÃO foi gerada, porque a competência já tem ocorrência.
+          expect(inNovember.map((row) => row.status)).toEqual(['posted']);
+          expect(inNovember[0]?.amountCents).toBe(-18000);
+          // As outras competências futuras seguem no valor novo.
+          expect(after.find((row) => row.competence === '2026-12')?.amountCents).toBe(-22000);
+        } finally {
+          await cleanup(m, s.householdId);
+        }
+      });
+
+      it('mensal -> trimestral: o futuro do ritmo antigo some, só o novo fica; a vencida sobrevive', async () => {
+        const m = await modules();
+        const s = await setup(m);
+        try {
+          await m.recurring.updateRecurringExpense(
+            s.householdId,
+            s.id,
+            s.patch({ frequency: 'quarterly' }) as never,
+            TODAY,
+          );
+          // Âncora em out/26: out, jan, abr. Out é a vencida; jan cai na janela; abr não.
+          const after = await s.rows();
+          expect(after.map((row) => row.competence)).toEqual(['2026-10', '2027-01']);
+        } finally {
+          await cleanup(m, s.householdId);
+        }
+      });
+
+      it('desativar: apaga o futuro, preserva a vencida (a pendência do painel) e não gera nada', async () => {
+        const m = await modules();
+        const s = await setup(m);
+        try {
+          await m.recurring.deactivateRecurringExpense(s.householdId, s.id, TODAY);
+          const after = await s.rows();
+          expect(after.map((row) => row.competence)).toEqual(['2026-10']);
+          const [rule] = await m.db
+            .select({ active: m.schema.recurringExpenses.active })
+            .from(m.schema.recurringExpenses)
+            .where(eq(m.schema.recurringExpenses.id, s.id));
+          expect(rule?.active).toBe(false);
+          // O top-up ignora regra inativa: nada reaparece.
+          await m.write.topUpPlanned(s.householdId, TODAY);
+          expect(await s.rows()).toHaveLength(1);
+        } finally {
+          await cleanup(m, s.householdId);
+        }
+      });
+
+      it('editar regra INATIVA atualiza a regra mas não gera previsão nova', async () => {
+        const m = await modules();
+        const s = await setup(m);
+        try {
+          await m.recurring.deactivateRecurringExpense(s.householdId, s.id, TODAY);
+          await m.recurring.updateRecurringExpense(
+            s.householdId,
+            s.id,
+            s.patch({ expectedCents: cents(-30000) }) as never,
+            TODAY,
+          );
+          expect(await s.rows()).toHaveLength(1);
+        } finally {
+          await cleanup(m, s.householdId);
+        }
+      });
+
+      it('atomicidade: falha DEPOIS de apagar desfaz tudo (regra volta ao valor antigo, linhas voltam)', async () => {
+        const m = await modules();
+        const s = await setup(m);
+        try {
+          const [card] = await m.db
+            .insert(m.schema.creditCards)
+            .values({ householdId: s.householdId, name: 'Cartão teste', closingDay: 28, dueDay: 5 })
+            .returning({ id: m.schema.creditCards.id });
+          if (card === undefined) throw new Error('Cartão não foi criado.');
+          const before = (await s.rows()).map((row) => [row.id, row.amountCents]);
+
+          // Dia 31 em cartão que fecha dia 28 junta duas cobranças na mesma fatura:
+          // o construtor lança DEPOIS de o replan ter apagado as futuras.
+          await expect(
+            m.recurring.updateRecurringExpense(
+              s.householdId,
+              s.id,
+              s.patch({
+                dueDay: 31,
+                expectedCents: cents(-99900),
+                accountId: null,
+                creditCardId: card.id,
+                startsOn: '2026-10-01',
+              }) as never,
+              TODAY,
+            ),
+          ).rejects.toThrow(/mesma fatura|competência/);
+
+          const [rule] = await m.db
+            .select({
+              expectedCents: m.schema.recurringExpenses.expectedCents,
+              dueDay: m.schema.recurringExpenses.dueDay,
+              accountId: m.schema.recurringExpenses.accountId,
+            })
+            .from(m.schema.recurringExpenses)
+            .where(eq(m.schema.recurringExpenses.id, s.id));
+          expect(rule).toEqual({ expectedCents: -18000, dueDay: 5, accountId: s.accountId });
+          expect((await s.rows()).map((row) => [row.id, row.amountCents])).toEqual(before);
+        } finally {
+          await cleanup(m, s.householdId);
+        }
+      });
+
+      it('topUpPlanned logo depois da edição não desfaz nada (nem recria o ritmo antigo)', async () => {
+        const m = await modules();
+        const s = await setup(m);
+        try {
+          await m.recurring.updateRecurringExpense(
+            s.householdId,
+            s.id,
+            s.patch({ expectedCents: cents(-22000), frequency: 'quarterly' }) as never,
+            TODAY,
+          );
+          const after = (await s.rows()).map((row) => [row.competence, row.amountCents]);
+          await m.write.topUpPlanned(s.householdId, TODAY);
+          await m.write.topUpPlanned(s.householdId, TODAY);
+          expect((await s.rows()).map((row) => [row.competence, row.amountCents])).toEqual(after);
+        } finally {
+          await cleanup(m, s.householdId);
+        }
+      });
+
+      it('receita: 5.000 -> 5.500 regenera o futuro, preserva a vencida; desativar apaga o futuro', async (ctx) => {
+        const m = await modules();
+        const column = await m.db.execute(
+          sql`select 1 from information_schema.columns where table_name = 'incomes' and column_name = 'account_id'`,
+        );
+        if (column.length === 0) ctx.skip();
+        const seed = await seedHousehold(m, { withSettings: true, projectionMonths: 4 });
+        try {
+          const [member] = await m.db
+            .insert(m.schema.members)
+            .values({
+              householdId: seed.householdId,
+              name: 'Membro teste',
+              email: 'membro.replan@example.invalid',
+              color: '#000000',
+            })
+            .returning({ id: m.schema.members.id });
+          if (member === undefined) throw new Error('Membro não foi criado.');
+          const income = {
+            description: 'Salário',
+            kind: 'salary' as const,
+            expectedCents: cents(500000),
+            memberId: member.id,
+            accountId: seed.accountId,
+            receiveDay: 5,
+            frequency: 'monthly' as const,
+            oneOffCompetence: null,
+            startsOn: '2026-10-01',
+            endsOn: null,
+          };
+          const id = await m.recurring.createIncome(seed.householdId, income, TODAY);
+          const rows = async () =>
+            (
+              await m.db
+                .select()
+                .from(m.schema.transactions)
+                .where(eq(m.schema.transactions.incomeId, id))
+            ).sort((a, b) => a.competence.localeCompare(b.competence));
+          expect(await rows()).toHaveLength(4);
+
+          await m.recurring.updateIncome(
+            seed.householdId,
+            id,
+            { ...income, expectedCents: cents(550000) },
+            TODAY,
+          );
+          expect((await rows()).map((row) => [row.competence, row.amountCents])).toEqual([
+            ['2026-10', 500000],
+            ['2026-11', 550000],
+            ['2026-12', 550000],
+            ['2027-01', 550000],
+          ]);
+
+          await m.recurring.deactivateIncome(seed.householdId, id, TODAY);
+          expect((await rows()).map((row) => row.competence)).toEqual(['2026-10']);
+        } finally {
+          await cleanup(m, seed.householdId);
+        }
+      });
     });
 
     it('receita cai na conta escolhida (exige a migration 0003 aplicada)', async (ctx) => {

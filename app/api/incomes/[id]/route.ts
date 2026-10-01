@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { todayInSaoPaulo } from '@/app/_lib/today';
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
 import {
   deactivateIncome,
@@ -31,18 +32,23 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
     }
     const body = parsed.data;
-    await updateIncome(householdId, id, {
-      description: body.description,
-      kind: body.kind,
-      expectedCents: cents(body.expectedCents),
-      memberId: body.memberId,
-      accountId: body.accountId,
-      receiveDay: body.receiveDay,
-      frequency: body.frequency,
-      oneOffCompetence: body.oneOffCompetence,
-      startsOn: body.startsOn,
-      endsOn: body.endsOn,
-    });
+    await updateIncome(
+      householdId,
+      id,
+      {
+        description: body.description,
+        kind: body.kind,
+        expectedCents: cents(body.expectedCents),
+        memberId: body.memberId,
+        accountId: body.accountId,
+        receiveDay: body.receiveDay,
+        frequency: body.frequency,
+        oneOffCompetence: body.oneOffCompetence,
+        startsOn: body.startsOn,
+        endsOn: body.endsOn,
+      },
+      todayInSaoPaulo(),
+    );
     return NextResponse.json({ id });
   } catch (error) {
     if (error instanceof SessionMissingError) {
@@ -63,7 +69,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const id = await readId(context);
     if (id === null) return NextResponse.json({ error: 'ID inválido.' }, { status: 400 });
     const { householdId } = await requireSession();
-    await deactivateIncome(householdId, id);
+    await deactivateIncome(householdId, id, todayInSaoPaulo());
     return NextResponse.json({ id });
   } catch (error) {
     if (error instanceof SessionMissingError) {

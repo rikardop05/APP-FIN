@@ -1,0 +1,505 @@
+'use client';
+
+import { ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
+import { useEffect, useState } from 'react';
+
+import { addCompetence, toCompetence } from '@/lib/date';
+import { cents, parseBRL } from '@/lib/money';
+
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Input,
+  Money,
+  PageHeader,
+} from '@/components/ui-kit';
+import { formatBasisPoints } from '@/components/ui-kit/format-bp';
+
+import { buildSaveBody, type BudgetFieldValues } from './save-body';
+import { competenceLabel, LIGHT_VIEW, toFieldText } from './labels';
+import {
+  apiErrorSchema,
+  budgetMonthResponseSchema,
+  suggestionResponseSchema,
+  type BudgetCategoryView,
+  type BudgetMonthResponse,
+  type BudgetRowView,
+} from './schemas';
+
+type Message = { kind: 'info' | 'success' | 'error'; text: string };
+
+/**
+ * Orçamento por categoria — T-205.
+ *
+ * A tela NÃO calcula: semáforo, uso, restante e sugestão vêm do servidor
+ * (`budgetStatus` e `suggestBudgetFromHistory`, CONTRACTS §10). Aqui só se
+ * formata, agrupa e ouve o usuário.
+ *
+ * "Repetir mês anterior" e "Média de 3 meses" são SUGESTÃO: preenchem o
+ * formulário e mais nada. Quem grava é a pessoa, ao clicar em Salvar.
+ *
+ * O semáforo e o realizado são do valor SALVO. Enquanto o campo diverge do
+ * salvo, a linha avisa em vez de mostrar uma cor que não corresponde ao que
+ * está digitado.
+ */
+export function BudgetScreen({ today }: { today: string }) {
+  const [period, setPeriod] = useState(() => toCompetence(today));
+  const [data, setData] = useState<BudgetMonthResponse | null>(null);
+  const [fields, setFields] = useState<BudgetFieldValues>({});
+  const [baseline, setBaseline] = useState<BudgetFieldValues>({});
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [message, setMessage] = useState<Message | null>(null);
+  const [invalid, setInvalid] = useState<ReadonlySet<string>>(new Set());
+  const [reloadKey, setReloadKey] = useState(0);
+
+  function applyMonth(month: BudgetMonthResponse) {
+    const initial: BudgetFieldValues = {};
+    const byId = new Map(month.rows.map((row) => [row.categoryId, row] as const));
+    for (const category of month.categories) {
+      const row = byId.get(category.id);
+      initial[category.id] = row === undefined ? '' : toFieldText(row.plannedCents);
+    }
+    setData(month);
+    setFields(initial);
+    setBaseline(initial);
+    setInvalid(new Set());
+  }
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setLoadError(null);
+    setMessage(null);
+    void fetch(`/api/budgets?period=${period}`, { signal: controller.signal })
+      .then(async (response) => {
+        const body: unknown = await response.json().catch(() => null);
+        if (!response.ok) {
+          const parsedError = apiErrorSchema.safeParse(body);
+          throw new Error(
+            parsedError.success ? parsedError.data.error : 'Não foi possível carregar o orçamento.',
+          );
+        }
+        return budgetMonthResponseSchema.parse(body);
+      })
+      .then((month) => applyMonth(month))
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setLoadError(cause instanceof Error ? cause.message : 'Não foi possível carregar o orçamento.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [period, reloadKey]);
+
+  const dirty = JSON.stringify(fields) !== JSON.stringify(baseline);
+
+  function setField(categoryId: string, text: string) {
+    setFields((current) => ({ ...current, [categoryId]: text }));
+    setInvalid((current) => {
+      if (!current.has(categoryId)) return current;
+      const next = new Set(current);
+      next.delete(categoryId);
+      return next;
+    });
+    setMessage(null);
+  }
+
+  async function suggest(mode: 'previous' | 'avg3') {
+    if (data === null) return;
+    setSuggesting(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/budgets/suggestion?period=${period}&mode=${mode}`);
+      const body: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const parsedError = apiErrorSchema.safeParse(body);
+        throw new Error(
+          parsedError.success ? parsedError.data.error : 'Não foi possível calcular a sugestão.',
+        );
+      }
+      const result = suggestionResponseSchema.parse(body);
+      const known = new Set(data.categories.map((category) => category.id));
+      const applicable = result.suggestions.filter((item) => known.has(item.categoryId));
+      const source = mode === 'previous' ? 'mês anterior' : 'média dos últimos 3 meses';
+      if (applicable.length === 0) {
+        setMessage({
+          kind: 'info',
+          text:
+            mode === 'previous'
+              ? `Não há gastos efetivados em ${competenceLabel(addCompetence(period, -1))} para sugerir.`
+              : 'Não há gastos efetivados nos 3 meses anteriores para sugerir.',
+        });
+        return;
+      }
+      setFields((current) => {
+        const next = { ...current };
+        for (const item of applicable) next[item.categoryId] = toFieldText(item.suggestedCents);
+        return next;
+      });
+      setInvalid(new Set());
+      setMessage({
+        kind: 'info',
+        text: `${String(applicable.length)} ${applicable.length === 1 ? 'categoria preenchida' : 'categorias preenchidas'} com o ${source}. Revise e salve: nada foi gravado ainda.`,
+      });
+    } catch (cause) {
+      setMessage({
+        kind: 'error',
+        text: cause instanceof Error ? cause.message : 'Não foi possível calcular a sugestão.',
+      });
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  async function save() {
+    if (data === null) return;
+    const built = buildSaveBody(period, fields);
+    if (!built.ok) {
+      setInvalid(new Set(built.invalidCategoryIds));
+      const names = data.categories
+        .filter((category) => built.invalidCategoryIds.includes(category.id))
+        .map((category) => category.name);
+      setMessage({
+        kind: 'error',
+        text: `Valor inválido em: ${names.join(', ')}. Use números como 1.200,50; deixe em branco para não ter orçamento.`,
+      });
+      return;
+    }
+    setSaving(true);
+    setMessage(null);
+    try {
+      const response = await fetch('/api/budgets', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(built.body),
+      });
+      const body: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const parsedError = apiErrorSchema.safeParse(body);
+        throw new Error(
+          parsedError.success ? parsedError.data.error : 'Não foi possível salvar o orçamento.',
+        );
+      }
+      applyMonth(budgetMonthResponseSchema.parse(body));
+      setMessage({ kind: 'success', text: `Orçamento de ${competenceLabel(period)} salvo.` });
+    } catch (cause) {
+      setMessage({
+        kind: 'error',
+        text: cause instanceof Error ? cause.message : 'Não foi possível salvar o orçamento.',
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const busy = loading || saving || suggesting;
+
+  const monthNav = (
+    <div className="flex items-center gap-1" role="group" aria-label="Mês do orçamento">
+      <Button
+        variant="outline"
+        size="sm"
+        aria-label="Mês anterior"
+        disabled={busy || dirty}
+        onClick={() => setPeriod((current) => addCompetence(current, -1))}
+      >
+        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+      </Button>
+      <span className="min-w-36 text-center text-sm font-medium capitalize" aria-live="polite">
+        {competenceLabel(period)}
+      </span>
+      <Button
+        variant="outline"
+        size="sm"
+        aria-label="Próximo mês"
+        disabled={busy || dirty}
+        onClick={() => setPeriod((current) => addCompetence(current, 1))}
+      >
+        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+      </Button>
+    </div>
+  );
+
+  return (
+    <>
+      <PageHeader
+        title="Orçamento"
+        description="Quanto cada categoria pode gastar no mês, comparado com o que já foi gasto."
+        actions={monthNav}
+      />
+
+      <div className="mt-4 flex flex-col gap-4">
+        {loadError !== null ? (
+          <div
+            role="alert"
+            className="flex flex-col gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900"
+          >
+            <span>{loadError}</span>
+            <div>
+              <Button variant="outline" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+                Tentar de novo
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {loading && data === null && loadError === null ? (
+          <p className="text-sm text-muted-foreground" role="status">
+            Carregando o orçamento…
+          </p>
+        ) : null}
+
+        {data !== null && data.categories.length === 0 ? (
+          <EmptyState
+            icon={Wallet}
+            title="Nenhuma subcategoria de despesa"
+            description="O orçamento é por subcategoria. Cadastre categorias de despesa em Configurações para definir limites."
+            action={{ label: 'Abrir configurações', href: '/config' }}
+          />
+        ) : null}
+
+        {data !== null && data.categories.length > 0 ? (
+          <>
+            <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" size="sm" disabled={busy} onClick={() => void suggest('previous')}>
+                  Repetir mês anterior
+                </Button>
+                <Button variant="outline" size="sm" disabled={busy} onClick={() => void suggest('avg3')}>
+                  Média de 3 meses
+                </Button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {dirty ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => {
+                      setFields(baseline);
+                      setInvalid(new Set());
+                      setMessage(null);
+                    }}
+                  >
+                    Descartar alterações
+                  </Button>
+                ) : null}
+                <Button disabled={busy || !dirty} onClick={() => void save()}>
+                  {saving ? 'Salvando…' : 'Salvar orçamento'}
+                </Button>
+              </div>
+            </div>
+
+            {message !== null ? (
+              <p
+                role={message.kind === 'error' ? 'alert' : 'status'}
+                className={
+                  message.kind === 'error'
+                    ? 'rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900'
+                    : message.kind === 'success'
+                      ? 'rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900'
+                      : 'rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground'
+                }
+              >
+                {message.text}
+              </p>
+            ) : null}
+
+            {dirty && message === null ? (
+              <p className="text-xs text-muted-foreground" role="status">
+                Alterações não salvas. Para mudar de mês, salve ou descarte.
+              </p>
+            ) : null}
+
+            <p className="text-xs text-muted-foreground">
+              <strong className="font-medium text-foreground">Realizado</strong> é o que já foi
+              lançado no mês e é o que decide a cor.{' '}
+              <strong className="font-medium text-foreground">Previsto a realizar</strong> são
+              despesas esperadas que ainda não foram lançadas: aparecem ao lado, mas não entram na
+              cor. A cor muda para amarelo a partir de {formatBasisPoints(data.warnBp)} e para
+              vermelho acima de 100,00%.
+            </p>
+
+            <BudgetGroups
+              data={data}
+              fields={fields}
+              invalid={invalid}
+              disabled={busy}
+              onChange={setField}
+            />
+          </>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+function BudgetGroups({
+  data,
+  fields,
+  invalid,
+  disabled,
+  onChange,
+}: {
+  data: BudgetMonthResponse;
+  fields: BudgetFieldValues;
+  invalid: ReadonlySet<string>;
+  disabled: boolean;
+  onChange: (categoryId: string, text: string) => void;
+}) {
+  const rowById = new Map(data.rows.map((row) => [row.categoryId, row] as const));
+  const groups: { rootId: string; rootName: string; items: BudgetCategoryView[] }[] = [];
+  for (const category of data.categories) {
+    const last = groups[groups.length - 1];
+    if (last !== undefined && last.rootId === category.rootId) last.items.push(category);
+    else groups.push({ rootId: category.rootId, rootName: category.rootName, items: [category] });
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {groups.map((group) => (
+        <section key={group.rootId} aria-labelledby={`grupo-${group.rootId}`} className="flex flex-col gap-2">
+          <h2 id={`grupo-${group.rootId}`} className="text-sm font-semibold text-foreground">
+            {group.rootName}
+          </h2>
+          <ul className="flex flex-col gap-2">
+            {group.items.map((category) => (
+              <li key={category.id}>
+                <CategoryRow
+                  category={category}
+                  row={rowById.get(category.id)}
+                  text={fields[category.id] ?? ''}
+                  invalid={invalid.has(category.id)}
+                  disabled={disabled}
+                  onChange={(text) => onChange(category.id, text)}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function CategoryRow({
+  category,
+  row,
+  text,
+  invalid,
+  disabled,
+  onChange,
+}: {
+  category: BudgetCategoryView;
+  row: BudgetRowView | undefined;
+  text: string;
+  invalid: boolean;
+  disabled: boolean;
+  onChange: (text: string) => void;
+}) {
+  // O semáforo é do valor SALVO: se o campo diverge, a cor não corresponde ao digitado.
+  const typed = text.trim() === '' ? null : parseBRL(text);
+  const stale = row !== undefined && typed !== row.plannedCents;
+  const view = row === undefined || stale ? null : LIGHT_VIEW[row.light];
+  const inputId = `orcamento-${category.id}`;
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 sm:grid sm:grid-cols-[minmax(0,1fr)_11rem_minmax(0,1.6fr)] sm:items-start sm:gap-4">
+      <div className="flex items-start justify-between gap-2 sm:flex-col sm:justify-start">
+        <label htmlFor={inputId} className="text-sm font-medium text-foreground">
+          {category.name}
+        </label>
+        {view !== null && row !== undefined ? (
+          <Badge variant={view.badge}>
+            {row.light === 'red' && row.usageBp === null ? 'Estourou (orçamento zero)' : view.label}
+          </Badge>
+        ) : null}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <div className="relative">
+          <span
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
+            aria-hidden="true"
+          >
+            R$
+          </span>
+          <Input
+            id={inputId}
+            value={text}
+            inputMode="decimal"
+            placeholder="Sem orçamento"
+            aria-label={`Orçamento de ${category.name}`}
+            aria-invalid={invalid}
+            disabled={disabled}
+            className={`pl-9 text-right tabular ${invalid ? 'border-red-500' : ''}`}
+            onChange={(event) => onChange(event.target.value)}
+          />
+        </div>
+        {invalid ? (
+          <span className="text-xs text-red-700" role="alert">
+            Valor inválido.
+          </span>
+        ) : null}
+      </div>
+
+      <div className="text-sm">
+        {row === undefined ? (
+          <p className="text-muted-foreground">
+            {typed === null ? 'Sem orçamento definido.' : 'Salve para ver o realizado desta categoria.'}
+          </p>
+        ) : stale ? (
+          <p className="text-muted-foreground">
+            Valor alterado: salve para atualizar o realizado e a cor.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <p className="flex flex-wrap items-baseline gap-x-2">
+              <span className="text-muted-foreground">Realizado</span>
+              <Money value={row.spentCents} sign="never" className="font-medium text-foreground" />
+              <span className="text-muted-foreground">de</span>
+              <Money value={row.plannedCents} sign="never" />
+              {row.usageBp !== null ? (
+                <span className="tabular font-medium text-foreground">
+                  · {formatBasisPoints(row.usageBp)}
+                </span>
+              ) : null}
+            </p>
+            {row.usageBp !== null ? (
+              <div
+                className="h-1.5 overflow-hidden rounded-full bg-secondary"
+                role="img"
+                aria-label={`Uso do orçamento: ${formatBasisPoints(row.usageBp)}`}
+              >
+                <div
+                  className={`h-full ${LIGHT_VIEW[row.light].bar}`}
+                  style={{ width: `${String(Math.min(100, Math.max(0, row.usageBp / 100)))}%` }}
+                />
+              </div>
+            ) : null}
+            <p className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
+              <span>{row.remainingCents < 0 ? 'Passou' : 'Restam'}</span>
+              <Money
+                value={row.remainingCents < 0 ? cents(-row.remainingCents) : row.remainingCents}
+                sign="never"
+                className="text-foreground"
+              />
+              {row.upcomingCents > 0 ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>Previsto a realizar</span>
+                  <Money value={row.upcomingCents} sign="never" className="text-foreground" />
+                </>
+              ) : null}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -25,12 +25,16 @@ type SpendingByCategoryProps = {
  * - `variationBp` é `(spent - média) / média`, `null` quando a média é zero.
  *
  * Esta tela só desenha barras horizontais, ordena por gasto desc e exibe
- * a variação com sinal. Nenhum cálculo aqui: ordenação é feita pelo motor,
- * a largura da barra é a magnitude relativa dentro do conjunto já
+ * a variação com sinal. Nenhum cálculo aqui: a ordenação (gasto desc) é
+ * feita neste componente — o motor devolve na ordem de `categories` —, a largura da barra é a magnitude relativa dentro do conjunto já
  * fornecido — não é decisão financeira, é decisão de apresentação
  * (CONVENTIONS §2).
  */
-export function SpendingByCategory({ items, competence }: SpendingByCategoryProps) {
+export function SpendingByCategory({ items: unsortedItems, competence }: SpendingByCategoryProps) {
+  // A SPEC §5.8 pede barras ORDENADAS. O motor devolve na ordem de `categories` e
+  // deixa a ordenação a quem desenha (`spendingByCategory`, docblock); ordenar é
+  // apresentação. `sort` em cópia: o array de entrada não é do componente.
+  const items = [...unsortedItems].sort((a, b) => b.spentCents - a.spentCents);
   const competenciaCurta = `${competence.slice(5)}/${competence.slice(0, 4)}`;
 
   if (items.length === 0) {

@@ -1,10 +1,22 @@
 import { BarChart3 } from 'lucide-react';
 
+import type { Competence } from '@/lib/date';
+import type { CashflowProjection } from '@/lib/finance/cashflow';
 import type { BasisPoints, Cents } from '@/lib/money';
 
+import { CommitmentChart } from './commitment-chart';
 import { CommitmentSummary } from './commitment-summary';
+import { IncomeExpenseChart } from './income-expense-chart';
+import type { IncomeExpenseMonth } from './income-expense-series';
 import { KpisRow } from './kpis-row';
-import { PendenciasList, type DivergentStatementItem, type UncategorizedItem } from './pendencias-list';
+import {
+  PendenciasList,
+  type DivergentStatementItem,
+  type OverBudgetListItem,
+  type OverdueRecurringListItem,
+  type UncategorizedItem,
+} from './pendencias-list';
+import { ProjectedBalance } from './projected-balance';
 import { SpendingByCategory } from './spending-by-category';
 
 type DashboardScreenProps = {
@@ -32,11 +44,19 @@ type DashboardScreenProps = {
     totalCents: Cents;
     lastCommittedCompetence: string | null;
     windowEnd: string;
+    /** `futureCommitment().byCompetence` — alimenta o gráfico 4. Omitido = sem gráfico. */
+    byCompetence?: { competence: Competence; totalCents: Cents }[];
   };
+  /** Gráfico 1: últimos 12 meses, de `buildIncomeExpenseSeries`. Omitido = sem gráfico. */
+  incomeExpense?: IncomeExpenseMonth[];
+  /** Gráfico 3: a MESMA projeção de `/fluxo` (`loadProjectedCashflow`). Omitido = sem gráfico. */
+  projected?: { projection: CashflowProjection; warnings: string[] };
   pendencias: {
     uncategorizedCount: number;
     uncategorizedItems: UncategorizedItem[];
     divergentStatements: DivergentStatementItem[];
+    overBudget?: OverBudgetListItem[];
+    overdueRecurring?: { count: number; items: OverdueRecurringListItem[] };
   };
 };
 
@@ -58,8 +78,11 @@ type DashboardScreenProps = {
  * 1. KPIs do mês (8 cartões nesta FASE 1 — Receita, Despesa, Sobra/Déficit,
  *    Taxa de poupança, Essenciais, Aportes, Parcelas a vencer, Não
  *    categorizados);
- * 2. Gastos por categoria (barras horizontais com variação vs média);
- * 3. Comprometimento resumido + fila de pendências.
+ * 2. Os quatro gráficos da SPEC §5.8 desta fase (T-208): receita × despesa,
+ *    gastos por categoria, saldo projetado e comprometimento em cartão. O saldo
+ *    projetado é o MESMO de `/fluxo`, vindo de `loadProjectedCashflow`;
+ * 3. Resumo de comprometimento + fila de pendências (não categorizados, faturas
+ *    divergentes, orçamentos estourados, despesas fixas não realizadas).
  */
 export function DashboardScreen({
   competence,
@@ -67,6 +90,8 @@ export function DashboardScreen({
   kpis,
   spending,
   commitment,
+  incomeExpense,
+  projected,
   pendencias,
 }: DashboardScreenProps) {
   return (
@@ -95,21 +120,33 @@ export function DashboardScreen({
         uncategorizedCount={kpis.uncategorizedCount}
       />
 
+      {/* Linha 2 (SPEC §5.8): os quatro gráficos desta fase. O 5 (renda passiva) é Fase 3. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {incomeExpense ? (
+          <IncomeExpenseChart months={incomeExpense} currentCompetence={competence} />
+        ) : null}
         <SpendingByCategory items={spending} competence={competence} />
-        <CommitmentSummary
-          competence={competence}
-          commitmentMonths={commitmentMonths}
-          totalCents={commitment.totalCents}
-          lastCommittedCompetence={commitment.lastCommittedCompetence}
-          windowEnd={commitment.windowEnd}
-        />
+        {projected ? (
+          <ProjectedBalance projection={projected.projection} warnings={projected.warnings} />
+        ) : null}
+        <div className="flex flex-col gap-6">
+          {commitment.byCompetence ? <CommitmentChart entries={commitment.byCompetence} /> : null}
+          <CommitmentSummary
+            competence={competence}
+            commitmentMonths={commitmentMonths}
+            totalCents={commitment.totalCents}
+            lastCommittedCompetence={commitment.lastCommittedCompetence}
+            windowEnd={commitment.windowEnd}
+          />
+        </div>
       </div>
 
       <PendenciasList
         uncategorizedCount={pendencias.uncategorizedCount}
         uncategorizedItems={pendencias.uncategorizedItems}
         divergentStatements={pendencias.divergentStatements}
+        overBudget={pendencias.overBudget}
+        overdueRecurring={pendencias.overdueRecurring}
       />
     </div>
   );

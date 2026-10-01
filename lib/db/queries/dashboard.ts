@@ -450,3 +450,94 @@ export async function listStatementIdsForCompetence(
     );
   return rows.map((row) => row.id);
 }
+
+export type IncomeExpenseRow = {
+  competence: Competence;
+  amountCents: Cents;
+  kind: TransactionKind;
+  status: TransactionStatus;
+};
+
+/**
+ * Linhas para o gráfico "receita × despesa" (T-208): as últimas `months`
+ * competências, ATÉ a corrente (inclusive). Devolve linhas, não totais: quem
+ * soma é `monthlyKpis`, uma vez por mês, para a barra do mês corrente bater com o
+ * card "Receita/Despesa do mês" por construção (mesma regra de piso e estorno).
+ *
+ * `posted` e `planned` entram juntos, como nos KPIs ("o custo do mês inteiro").
+ */
+export async function listIncomeExpenseRows(
+  householdId: string,
+  today: IsoDate,
+  months: number,
+): Promise<IncomeExpenseRow[]> {
+  const competence = toCompetence(today);
+  const from = addCompetence(competence, -(months - 1));
+  const rows = await db
+    .select({
+      competence: transactions.competence,
+      amountCents: transactions.amountCents,
+      kind: transactions.kind,
+      status: transactions.status,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.householdId, householdId),
+        gte(transactions.competence, from),
+        lte(transactions.competence, competence),
+      ),
+    );
+  return rows.map((row) => ({ ...row, amountCents: safeCents(row.amountCents) }));
+}
+
+export type OverdueRecurringItem = {
+  id: string;
+  description: string;
+  occurredOn: string;
+  amountCents: Cents;
+};
+
+/**
+ * Despesas recorrentes previstas e NÃO realizadas (SPEC §5.8, linha 3): linha
+ * `planned`, de origem `recurring_expense_id`, com `occurred_on` ANTERIOR a hoje.
+ * O corte é a DATA, não o mês, e `occurred_on = hoje` NÃO é vencida — a mesma
+ * fronteira de `replanRecurrence`, que apaga e regenera a de hoje.
+ *
+ * "Não conciliada" ainda não tem marcador no schema (RF-ORC-03 não grava o par),
+ * então hoje toda `planned` vencida conta. Enquanto isso, uma previsão paga e
+ * importada como `posted` continua aqui: falso positivo conhecido, que a tela
+ * declara em vez de esconder.
+ *
+ * Devolve o total e só os `limit` mais antigos — a lista não cresce sem teto.
+ */
+export async function listOverdueRecurring(
+  householdId: string,
+  today: IsoDate,
+  limit: number,
+): Promise<{ count: number; items: OverdueRecurringItem[] }> {
+  const where = and(
+    eq(transactions.householdId, householdId),
+    eq(transactions.status, 'planned'),
+    isNotNull(transactions.recurringExpenseId),
+    sql`${transactions.occurredOn} < ${today}::date`,
+  );
+  const [countRows, itemRows] = await Promise.all([
+    db.select({ count: sql<number>`COUNT(*)::int` }).from(transactions).where(where),
+    db
+      .select({
+        id: transactions.id,
+        description: transactions.description,
+        occurredOn: transactions.occurredOn,
+        amountCents: transactions.amountCents,
+      })
+      .from(transactions)
+      .where(where)
+      .orderBy(asc(transactions.occurredOn))
+      .limit(limit),
+  ]);
+  return {
+    count: countRows[0]?.count ?? 0,
+    items: itemRows.map((row) => ({ ...row, amountCents: safeCents(row.amountCents) })),
+  };
+}

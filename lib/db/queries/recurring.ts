@@ -39,9 +39,12 @@ import {
   assertRecurrenceShape,
 } from '@/lib/db/queries/recurring-shape';
 import {
-  assertNoPlannedRows,
+  lockHousehold,
   planNewExpense,
   planNewIncome,
+  readCardCycle,
+  replanExpense,
+  replanIncome,
 } from '@/lib/db/queries/recurring-planned-write';
 import { cents, type Cents } from '@/lib/money';
 
@@ -282,6 +285,7 @@ export async function updateRecurringExpense(
   householdId: string,
   id: string,
   patch: RecurringExpensePatch,
+  today: string,
 ): Promise<void> {
   // Ownership: precisa existir E ser da família.
   const current = await getRecurringExpense(householdId, id);
@@ -293,43 +297,81 @@ export async function updateRecurringExpense(
   await assertLeafCategory(householdId, patch.categoryId);
   if (patch.accountId !== null) await assertAccountBelongs(householdId, patch.accountId);
   if (patch.creditCardId !== null) await assertCardBelongs(householdId, patch.creditCardId);
-  // A previsão gravada não é regenerada por este caminho: recusa em vez de
-  // deixar linhas com o valor antigo (ver `assertNoPlannedRows`).
-  await assertNoPlannedRows(householdId, { expenseId: id });
-  await db
-    .update(recurringExpenses)
-    .set({
-      description: patch.description.trim(),
-      expectedCents: patch.expectedCents,
-      categoryId: patch.categoryId,
-      dueDay: patch.dueDay,
-      frequency: patch.frequency,
-      accountId: patch.accountId,
-      creditCardId: patch.creditCardId,
-      startsOn: patch.startsOn,
-      endsOn: patch.endsOn,
-      annualAdjustmentBp: patch.annualAdjustmentBp,
-    })
-    .where(and(eq(recurringExpenses.id, id), eq(recurringExpenses.householdId, householdId)));
+  const description = patch.description.trim();
+  // Regra e previsão mudam JUNTAS, na mesma transação. A previsão é regenerada
+  // por `replanExpense` (preserva o conciliado e o vencido, apaga e regenera o
+  // futuro) e NUNCA por `DO NOTHING`: com ele, mudar a conta de luz de 180 para
+  // 220 deixaria as linhas antigas, e o painel mostraria 180 para sempre, sem
+  // erro e sem aviso. Regra inativa não gera previsão nova.
+  await db.transaction(async (tx) => {
+    await lockHousehold(tx, householdId);
+    const updated = await tx
+      .update(recurringExpenses)
+      .set({
+        description,
+        expectedCents: patch.expectedCents,
+        categoryId: patch.categoryId,
+        dueDay: patch.dueDay,
+        frequency: patch.frequency,
+        accountId: patch.accountId,
+        creditCardId: patch.creditCardId,
+        startsOn: patch.startsOn,
+        endsOn: patch.endsOn,
+        annualAdjustmentBp: patch.annualAdjustmentBp,
+      })
+      .where(and(eq(recurringExpenses.id, id), eq(recurringExpenses.householdId, householdId)))
+      .returning({ id: recurringExpenses.id });
+    if (updated.length === 0) {
+      throw new RecurringReferenceError('Despesa fixa não encontrada.');
+    }
+    const cycle =
+      patch.creditCardId === null ? null : await readCardCycle(tx, householdId, patch.creditCardId);
+    await replanExpense(
+      tx,
+      householdId,
+      id,
+      current.active
+        ? {
+            id,
+            description,
+            expectedCents: patch.expectedCents,
+            categoryId: patch.categoryId,
+            dueDay: patch.dueDay,
+            frequency: patch.frequency,
+            accountId: patch.accountId,
+            creditCardId: patch.creditCardId,
+            startsOn: patch.startsOn,
+            endsOn: patch.endsOn,
+            annualAdjustmentBp: patch.annualAdjustmentBp,
+          }
+        : null,
+      cycle,
+      today,
+    );
+  });
 }
 
 export async function deactivateRecurringExpense(
   householdId: string,
   id: string,
+  today: string,
 ): Promise<void> {
-  // Soft delete — `active = false`. Mantém histórico e vínculos com
-  // ocorrências já projetadas (CONTRACTS §8 não exige cascata). Com previsão
-  // gravada, recusa: as linhas `planned` ficariam contando uma despesa que a
-  // família parou de esperar (ver `assertNoPlannedRows`).
-  await assertNoPlannedRows(householdId, { expenseId: id });
-  const result = await db
-    .update(recurringExpenses)
-    .set({ active: false })
-    .where(and(eq(recurringExpenses.id, id), eq(recurringExpenses.householdId, householdId)))
-    .returning({ id: recurringExpenses.id });
-  if (result.length === 0) {
-    throw new RecurringReferenceError('Despesa fixa não encontrada.');
-  }
+  // Soft delete — `active = false`. Desativar é "a partir de hoje não há mais":
+  // o mesmo replan da edição, sem regra nova. Apaga as `planned` futuras não
+  // conciliadas; preserva as vencidas (são a pendência "prevista e não
+  // realizada" do painel) e as conciliadas.
+  await db.transaction(async (tx) => {
+    await lockHousehold(tx, householdId);
+    const result = await tx
+      .update(recurringExpenses)
+      .set({ active: false })
+      .where(and(eq(recurringExpenses.id, id), eq(recurringExpenses.householdId, householdId)))
+      .returning({ id: recurringExpenses.id });
+    if (result.length === 0) {
+      throw new RecurringReferenceError('Despesa fixa não encontrada.');
+    }
+    await replanExpense(tx, householdId, id, null, null, today);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -448,6 +490,7 @@ export async function updateIncome(
   householdId: string,
   id: string,
   patch: IncomePatch,
+  today: string,
 ): Promise<void> {
   const current = await getIncome(householdId, id);
   if (current === null) {
@@ -456,36 +499,67 @@ export async function updateIncome(
   assertIncomeShape(patch);
   await assertMemberBelongs(householdId, patch.memberId);
   await assertAccountBelongs(householdId, patch.accountId);
-  // Previsão gravada não é regenerada aqui: recusa (ver `assertNoPlannedRows`).
-  await assertNoPlannedRows(householdId, { incomeId: id });
-  await db
-    .update(incomes)
-    .set({
-      description: patch.description.trim(),
-      kind: patch.kind,
-      expectedCents: patch.expectedCents,
-      memberId: patch.memberId,
-      accountId: patch.accountId,
-      receiveDay: patch.receiveDay,
-      frequency: patch.frequency,
-      oneOffCompetence: patch.oneOffCompetence,
-      startsOn: patch.startsOn,
-      endsOn: patch.endsOn,
-    })
-    .where(and(eq(incomes.id, id), eq(incomes.householdId, householdId)));
+  const description = patch.description.trim();
+  // Mesma regra de `updateRecurringExpense`: regra e previsão juntas, replan e
+  // nunca `DO NOTHING`.
+  await db.transaction(async (tx) => {
+    await lockHousehold(tx, householdId);
+    const updated = await tx
+      .update(incomes)
+      .set({
+        description,
+        kind: patch.kind,
+        expectedCents: patch.expectedCents,
+        memberId: patch.memberId,
+        accountId: patch.accountId,
+        receiveDay: patch.receiveDay,
+        frequency: patch.frequency,
+        oneOffCompetence: patch.oneOffCompetence,
+        startsOn: patch.startsOn,
+        endsOn: patch.endsOn,
+      })
+      .where(and(eq(incomes.id, id), eq(incomes.householdId, householdId)))
+      .returning({ id: incomes.id });
+    if (updated.length === 0) throw new RecurringReferenceError('Receita não encontrada.');
+    await replanIncome(
+      tx,
+      householdId,
+      id,
+      current.active
+        ? {
+            id,
+            description,
+            expectedCents: patch.expectedCents,
+            memberId: patch.memberId,
+            accountId: patch.accountId,
+            receiveDay: patch.receiveDay,
+            frequency: patch.frequency,
+            oneOffCompetence: patch.oneOffCompetence,
+            startsOn: patch.startsOn,
+            endsOn: patch.endsOn,
+          }
+        : null,
+      today,
+    );
+  });
 }
 
 export async function deactivateIncome(
   householdId: string,
   id: string,
+  today: string,
 ): Promise<void> {
-  await assertNoPlannedRows(householdId, { incomeId: id });
-  const result = await db
-    .update(incomes)
-    .set({ active: false })
-    .where(and(eq(incomes.id, id), eq(incomes.householdId, householdId)))
-    .returning({ id: incomes.id });
-  if (result.length === 0) {
-    throw new RecurringReferenceError('Receita não encontrada.');
-  }
+  // Mesma regra de `deactivateRecurringExpense`: replan sem regra nova.
+  await db.transaction(async (tx) => {
+    await lockHousehold(tx, householdId);
+    const result = await tx
+      .update(incomes)
+      .set({ active: false })
+      .where(and(eq(incomes.id, id), eq(incomes.householdId, householdId)))
+      .returning({ id: incomes.id });
+    if (result.length === 0) {
+      throw new RecurringReferenceError('Receita não encontrada.');
+    }
+    await replanIncome(tx, householdId, id, null, today);
+  });
 }
