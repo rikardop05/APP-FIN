@@ -7,7 +7,9 @@
  * receita, etc.) e devolve os dados para a tela em formato consumível.
  *
  * Regra de ouro: nada aqui faz conta de calendário. As ocorrências previstas
- * são calculadas pela tela via `expandRecurrence`, não pelo banco.
+ * são calculadas por `expandRecurrence` (lib/finance) e GRAVADAS como linhas
+ * `planned` de `transactions` na mesma transação da regra
+ * (`recurring-planned-write.ts`); a tela lê o que existe.
  *
  * Fronteira de household (CONVENTIONS §7): toda `where` carrega
  * `eq(..., householdId)`. Validação de `memberId`, `categoryId`, `accountId`
@@ -32,9 +34,15 @@ import {
   type IncomePatch,
   type RecurringExpenseInput,
   type RecurringExpensePatch,
+  assertExpenseDestination,
   assertIncomeShape,
   assertRecurrenceShape,
 } from '@/lib/db/queries/recurring-shape';
+import {
+  assertNoPlannedRows,
+  planNewExpense,
+  planNewIncome,
+} from '@/lib/db/queries/recurring-planned-write';
 import { cents, type Cents } from '@/lib/money';
 
 // ---------------------------------------------------------------------------
@@ -75,6 +83,8 @@ export type IncomeListItem = {
   expectedCents: Cents;
   memberId: string;
   memberName: string;
+  accountId: string;
+  accountName: string;
   receiveDay: number;
   frequency: Frequency;
   oneOffCompetence: string | null;
@@ -208,36 +218,64 @@ export async function getRecurringExpense(
   return items.find((item) => item.id === id) ?? null;
 }
 
+/**
+ * Cria a despesa fixa E grava a previsão (`planned`) dos próximos
+ * `projection_months`, na MESMA transação: ou entram a regra e as linhas, ou
+ * nada. Uma falha na geração desfaz a regra — nada de despesa criada sem
+ * previsão com 201 voltando.
+ *
+ * `today` é parâmetro (esta camada não lê o relógio).
+ */
 export async function createRecurringExpense(
   householdId: string,
   input: RecurringExpenseInput,
+  today: string,
 ): Promise<string> {
   assertRecurrenceShape(input.frequency, input.startsOn, input.endsOn);
+  assertExpenseDestination(input.accountId, input.creditCardId);
   await assertLeafCategory(householdId, input.categoryId);
   if (input.accountId !== null) await assertAccountBelongs(householdId, input.accountId);
   if (input.creditCardId !== null) await assertCardBelongs(householdId, input.creditCardId);
-  if (input.accountId !== null && input.creditCardId !== null) {
-    throw new RecurringReferenceError('Informe uma conta OU um cartão, não os dois.');
-  }
-  const [row] = await db
-    .insert(recurringExpenses)
-    .values({
+  const description = input.description.trim();
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(recurringExpenses)
+      .values({
+        householdId,
+        description,
+        expectedCents: input.expectedCents,
+        categoryId: input.categoryId,
+        dueDay: input.dueDay,
+        frequency: input.frequency,
+        accountId: input.accountId,
+        creditCardId: input.creditCardId,
+        startsOn: input.startsOn,
+        endsOn: input.endsOn,
+        annualAdjustmentBp: input.annualAdjustmentBp,
+        active: true,
+      })
+      .returning({ id: recurringExpenses.id });
+    if (row === undefined) throw new Error('Não foi possível criar a despesa fixa.');
+    await planNewExpense(
+      tx,
       householdId,
-      description: input.description.trim(),
-      expectedCents: input.expectedCents,
-      categoryId: input.categoryId,
-      dueDay: input.dueDay,
-      frequency: input.frequency,
-      accountId: input.accountId,
-      creditCardId: input.creditCardId,
-      startsOn: input.startsOn,
-      endsOn: input.endsOn,
-      annualAdjustmentBp: input.annualAdjustmentBp,
-      active: true,
-    })
-    .returning({ id: recurringExpenses.id });
-  if (row === undefined) throw new Error('Não foi possível criar a despesa fixa.');
-  return row.id;
+      {
+        id: row.id,
+        description,
+        expectedCents: input.expectedCents,
+        categoryId: input.categoryId,
+        dueDay: input.dueDay,
+        frequency: input.frequency,
+        accountId: input.accountId,
+        creditCardId: input.creditCardId,
+        startsOn: input.startsOn,
+        endsOn: input.endsOn,
+        annualAdjustmentBp: input.annualAdjustmentBp,
+      },
+      today,
+    );
+    return row.id;
+  });
 }
 
 export async function updateRecurringExpense(
@@ -251,12 +289,13 @@ export async function updateRecurringExpense(
     throw new RecurringReferenceError('Despesa fixa não encontrada.');
   }
   assertRecurrenceShape(patch.frequency, patch.startsOn, patch.endsOn);
+  assertExpenseDestination(patch.accountId, patch.creditCardId);
   await assertLeafCategory(householdId, patch.categoryId);
   if (patch.accountId !== null) await assertAccountBelongs(householdId, patch.accountId);
   if (patch.creditCardId !== null) await assertCardBelongs(householdId, patch.creditCardId);
-  if (patch.accountId !== null && patch.creditCardId !== null) {
-    throw new RecurringReferenceError('Informe uma conta OU um cartão, não os dois.');
-  }
+  // A previsão gravada não é regenerada por este caminho: recusa em vez de
+  // deixar linhas com o valor antigo (ver `assertNoPlannedRows`).
+  await assertNoPlannedRows(householdId, { expenseId: id });
   await db
     .update(recurringExpenses)
     .set({
@@ -279,7 +318,10 @@ export async function deactivateRecurringExpense(
   id: string,
 ): Promise<void> {
   // Soft delete — `active = false`. Mantém histórico e vínculos com
-  // ocorrências já projetadas (CONTRACTS §8 não exige cascata).
+  // ocorrências já projetadas (CONTRACTS §8 não exige cascata). Com previsão
+  // gravada, recusa: as linhas `planned` ficariam contando uma despesa que a
+  // família parou de esperar (ver `assertNoPlannedRows`).
+  await assertNoPlannedRows(householdId, { expenseId: id });
   const result = await db
     .update(recurringExpenses)
     .set({ active: false })
@@ -303,6 +345,8 @@ export async function listIncomes(householdId: string): Promise<IncomeListItem[]
       expectedCents: incomes.expectedCents,
       memberId: incomes.memberId,
       memberName: members.name,
+      accountId: incomes.accountId,
+      accountName: accounts.name,
       receiveDay: incomes.receiveDay,
       frequency: incomes.frequency,
       oneOffCompetence: incomes.oneOffCompetence,
@@ -312,11 +356,15 @@ export async function listIncomes(householdId: string): Promise<IncomeListItem[]
     })
     .from(incomes)
     .leftJoin(members, eq(members.id, incomes.memberId))
+    .leftJoin(accounts, eq(accounts.id, incomes.accountId))
     .where(eq(incomes.householdId, householdId))
     .orderBy(asc(incomes.description));
 
   return rows
-    .filter((row): row is typeof row & { memberName: string } => row.memberName !== null)
+    .filter(
+      (row): row is typeof row & { memberName: string; accountName: string } =>
+        row.memberName !== null && row.accountName !== null,
+    )
     .map((row) => ({
       id: row.id,
       description: row.description,
@@ -324,6 +372,8 @@ export async function listIncomes(householdId: string): Promise<IncomeListItem[]
       expectedCents: cents(row.expectedCents),
       memberId: row.memberId,
       memberName: row.memberName,
+      accountId: row.accountId,
+      accountName: row.accountName,
       receiveDay: row.receiveDay,
       frequency: row.frequency,
       oneOffCompetence: row.oneOffCompetence,
@@ -341,30 +391,57 @@ export async function getIncome(
   return items.find((item) => item.id === id) ?? null;
 }
 
+/**
+ * Cria a receita E grava a previsão (`planned`), na MESMA transação — mesma
+ * regra de `createRecurringExpense`. `today` é parâmetro.
+ */
 export async function createIncome(
   householdId: string,
   input: IncomeInput,
+  today: string,
 ): Promise<string> {
   assertIncomeShape(input);
   await assertMemberBelongs(householdId, input.memberId);
-  const [row] = await db
-    .insert(incomes)
-    .values({
+  await assertAccountBelongs(householdId, input.accountId);
+  const description = input.description.trim();
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(incomes)
+      .values({
+        householdId,
+        description,
+        kind: input.kind,
+        expectedCents: input.expectedCents,
+        memberId: input.memberId,
+        accountId: input.accountId,
+        receiveDay: input.receiveDay,
+        frequency: input.frequency,
+        oneOffCompetence: input.oneOffCompetence,
+        startsOn: input.startsOn,
+        endsOn: input.endsOn,
+        active: true,
+      })
+      .returning({ id: incomes.id });
+    if (row === undefined) throw new Error('Não foi possível criar a receita.');
+    await planNewIncome(
+      tx,
       householdId,
-      description: input.description.trim(),
-      kind: input.kind,
-      expectedCents: input.expectedCents,
-      memberId: input.memberId,
-      receiveDay: input.receiveDay,
-      frequency: input.frequency,
-      oneOffCompetence: input.oneOffCompetence,
-      startsOn: input.startsOn,
-      endsOn: input.endsOn,
-      active: true,
-    })
-    .returning({ id: incomes.id });
-  if (row === undefined) throw new Error('Não foi possível criar a receita.');
-  return row.id;
+      {
+        id: row.id,
+        description,
+        expectedCents: input.expectedCents,
+        memberId: input.memberId,
+        accountId: input.accountId,
+        receiveDay: input.receiveDay,
+        frequency: input.frequency,
+        oneOffCompetence: input.oneOffCompetence,
+        startsOn: input.startsOn,
+        endsOn: input.endsOn,
+      },
+      today,
+    );
+    return row.id;
+  });
 }
 
 export async function updateIncome(
@@ -378,6 +455,9 @@ export async function updateIncome(
   }
   assertIncomeShape(patch);
   await assertMemberBelongs(householdId, patch.memberId);
+  await assertAccountBelongs(householdId, patch.accountId);
+  // Previsão gravada não é regenerada aqui: recusa (ver `assertNoPlannedRows`).
+  await assertNoPlannedRows(householdId, { incomeId: id });
   await db
     .update(incomes)
     .set({
@@ -385,6 +465,7 @@ export async function updateIncome(
       kind: patch.kind,
       expectedCents: patch.expectedCents,
       memberId: patch.memberId,
+      accountId: patch.accountId,
       receiveDay: patch.receiveDay,
       frequency: patch.frequency,
       oneOffCompetence: patch.oneOffCompetence,
@@ -398,6 +479,7 @@ export async function deactivateIncome(
   householdId: string,
   id: string,
 ): Promise<void> {
+  await assertNoPlannedRows(householdId, { incomeId: id });
   const result = await db
     .update(incomes)
     .set({ active: false })

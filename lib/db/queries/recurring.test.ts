@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RecurringReferenceError,
   assertIncomeShape,
+  assertExpenseDestination,
   assertRecurrenceShape,
   type IncomeInput,
 } from '@/lib/db/queries/recurring-shape';
@@ -29,6 +30,7 @@ function incomeInput(overrides: Partial<IncomeInput> = {}): IncomeInput {
     kind: 'salary' satisfies IncomeKind,
     expectedCents: cents(500000) satisfies Cents,
     memberId: '00000000-0000-0000-0000-000000000001',
+    accountId: '00000000-0000-0000-0000-000000000002',
     receiveDay: 5,
     frequency: 'monthly' satisfies Frequency,
     oneOffCompetence: null,
@@ -173,5 +175,24 @@ describe('assertRecurrenceShape — coerência endsOn × startsOn (despesa)', ()
         assertRecurrenceShape(frequency, '2026-09-10', '2026-09-09'),
       ).toThrowError(RecurringReferenceError);
     }
+  });
+});
+
+describe('assertExpenseDestination', () => {
+  const ACCOUNT = '00000000-0000-0000-0000-000000000002';
+  const CARD = '00000000-0000-0000-0000-000000000003';
+
+  it('aceita exatamente um destino', () => {
+    expect(() => assertExpenseDestination(ACCOUNT, null)).not.toThrow();
+    expect(() => assertExpenseDestination(null, CARD)).not.toThrow();
+  });
+
+  it('recusa nenhum destino, com mensagem legível (não violação de constraint)', () => {
+    expect(() => assertExpenseDestination(null, null)).toThrow(RecurringReferenceError);
+    expect(() => assertExpenseDestination(null, null)).toThrow(/conta ou o cartão/);
+  });
+
+  it('recusa os dois destinos', () => {
+    expect(() => assertExpenseDestination(ACCOUNT, CARD)).toThrow(RecurringReferenceError);
   });
 });

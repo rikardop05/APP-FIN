@@ -36,6 +36,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       kind: body.kind,
       expectedCents: cents(body.expectedCents),
       memberId: body.memberId,
+      accountId: body.accountId,
       receiveDay: body.receiveDay,
       frequency: body.frequency,
       oneOffCompetence: body.oneOffCompetence,

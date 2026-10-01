@@ -69,6 +69,13 @@ export const RecurringExpenseFormSchema = z
         path: ['accountId'],
       });
     }
+    if (value.accountId === null && value.creditCardId === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Informe a conta ou o cartão de onde a despesa sai.',
+        path: ['accountId'],
+      });
+    }
     if (value.endsOn !== null && value.endsOn < value.startsOn) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -84,6 +91,7 @@ export const IncomeFormSchema = z
     amountInput: z.string().trim().min(1, 'Informe um valor.').max(40),
     kind: incomeKindSelectSchema,
     memberId: uuidSchema,
+    accountId: uuidSchema,
     receiveDay: z.string().regex(/^\d{1,2}$/, 'Dia de 1 a 31.'),
     frequency: frequencySelectSchema,
     oneOffCompetence: nullableCompetenceSchema,

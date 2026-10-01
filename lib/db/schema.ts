@@ -282,7 +282,15 @@ export const recurringExpenses = pgTable('recurring_expenses', {
   /** Reajuste anual, aplicado no aniversario de `starts_on`. */
   annualAdjustmentBp: integer('annual_adjustment_bp'),
   active: boolean('active').notNull().default(true),
-});
+}, (t) => [
+  // Toda despesa fixa debita de EXATAMENTE um destino. A previsao gravada vira
+  // linha de `transactions`, que tem o mesmo CHECK; sem este, a despesa seria
+  // criavel e a gravacao da previsao falharia depois, com erro de constraint.
+  check(
+    'recurring_expenses_account_xor_credit_card',
+    sql`(${t.accountId} is not null) <> (${t.creditCardId} is not null)`,
+  ),
+]);
 
 // ---------------------------------------------------------------------------
 // incomes
@@ -298,6 +306,14 @@ export const incomes = pgTable(
     memberId: uuid('member_id')
       .notNull()
       .references(() => members.id),
+    /**
+     * Conta onde a receita cai. Obrigatoria: a previsao vira linha de
+     * `transactions`, que exige conta ou cartao, e receita sem conta nao entra
+     * em saldo nem em fluxo de caixa.
+     */
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id),
     description: text('description').notNull(),
     kind: incomeKind('kind').notNull(),
     /** Positivo. */

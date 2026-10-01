@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { todayInSaoPaulo } from '@/app/_lib/today';
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
 import { listAccounts, listCards } from '@/lib/db/queries/cards';
 import { listCategories } from '@/lib/db/queries/categories';
@@ -56,22 +57,26 @@ export async function POST(request: Request) {
       );
     }
     const body = parsed.data;
-    const id = await createRecurringExpense(householdId, {
-      description: body.description,
-      // Banco guarda saida como negativo; Zod aceita o que a tela mandar e
-      // a tela ja inverte o sinal. Sem normalizacao adicional — a borda
-      // converte via Money.
-      expectedCents: cents(body.expectedCents),
-      categoryId: body.categoryId,
-      dueDay: body.dueDay,
-      frequency: body.frequency,
-      accountId: body.accountId,
-      creditCardId: body.creditCardId,
-      startsOn: body.startsOn,
-      endsOn: body.endsOn,
-      annualAdjustmentBp:
-        body.annualAdjustmentBp === null ? null : basisPoints(body.annualAdjustmentBp),
-    });
+    const id = await createRecurringExpense(
+      householdId,
+      {
+        description: body.description,
+        // Banco guarda saida como negativo; Zod aceita o que a tela mandar e
+        // a tela ja inverte o sinal. Sem normalizacao adicional — a borda
+        // converte via Money.
+        expectedCents: cents(body.expectedCents),
+        categoryId: body.categoryId,
+        dueDay: body.dueDay,
+        frequency: body.frequency,
+        accountId: body.accountId,
+        creditCardId: body.creditCardId,
+        startsOn: body.startsOn,
+        endsOn: body.endsOn,
+        annualAdjustmentBp:
+          body.annualAdjustmentBp === null ? null : basisPoints(body.annualAdjustmentBp),
+      },
+      todayInSaoPaulo(),
+    );
     return NextResponse.json({ id }, { status: 201 });
   } catch (error) {
     if (error instanceof SessionMissingError) {

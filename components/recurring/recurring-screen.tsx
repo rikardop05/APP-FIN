@@ -47,6 +47,8 @@ type IncomeItem = {
   expectedCents: Cents;
   memberId: string;
   memberName: string;
+  accountId: string;
+  accountName: string;
   receiveDay: number;
   frequency: Frequency;
   oneOffCompetence: string | null;
@@ -63,6 +65,7 @@ type RecurringOptions = {
 
 type IncomeOptions = {
   members: { id: string; name: string }[];
+  accounts: { id: string; name: string }[];
 };
 
 type RecurringScreenProps = {
@@ -308,7 +311,7 @@ function ExpenseDialog({
   return (
     <DialogShell
       title={initial ? 'Editar despesa fixa' : 'Nova despesa fixa'}
-      description="Vencimento no `dueDay` a partir de `startsOn`. Janela de 12 meses no preview abaixo."
+      description={`Vencimento no \`dueDay\` a partir de \`startsOn\`. Janela de ${String(previewMonths)} meses no preview abaixo.`}
       busy={busy}
       error={error}
       onClose={onClose}
@@ -384,7 +387,7 @@ function ExpenseDialog({
           </Select>
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-xs text-muted-foreground">Conta (opcional)</span>
+          <span className="text-xs text-muted-foreground">Conta</span>
           <Select
             value={values.accountId ?? ''}
             onChange={(event) => {
@@ -392,7 +395,7 @@ function ExpenseDialog({
               update('creditCardId', null);
             }}
           >
-            <option value="">Selecionar depois</option>
+            <option value="">—</option>
             {options.accounts.map((account) => (
               <option key={account.id} value={account.id}>
                 {account.name}
@@ -401,7 +404,7 @@ function ExpenseDialog({
           </Select>
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-xs text-muted-foreground">Cartão (opcional)</span>
+          <span className="text-xs text-muted-foreground">Cartão</span>
           <Select
             value={values.creditCardId ?? ''}
             onChange={(event) => {
@@ -409,14 +412,22 @@ function ExpenseDialog({
               update('accountId', null);
             }}
           >
-            <option value="">Selecionar depois</option>
+            <option value="">—</option>
             {options.cards.map((card) => (
               <option key={card.id} value={card.id}>
                 {card.name}
               </option>
             ))}
           </Select>
+          <span className="text-xs text-muted-foreground">
+            Escolha a conta OU o cartão de onde a despesa sai.
+          </span>
         </label>
+        {options.accounts.length === 0 && options.cards.length === 0 ? (
+          <p className="rounded-md border border-border bg-muted px-3 py-2 text-sm sm:col-span-2">
+            Não há conta nem cartão ativo. Cadastre uma conta antes de criar uma despesa fixa.
+          </p>
+        ) : null}
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-muted-foreground">Data inicial</span>
           <Input
@@ -510,6 +521,7 @@ function IncomeDialog({
       amountInput: '',
       kind: 'salary',
       memberId: options.members[0]?.id ?? '',
+      accountId: options.accounts[0]?.id ?? '',
       receiveDay: '5',
       frequency: 'monthly',
       oneOffCompetence: null,
@@ -607,6 +619,30 @@ function IncomeDialog({
             )}
           </Select>
         </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-xs text-muted-foreground">Conta onde cai</span>
+          <Select
+            value={values.accountId}
+            onChange={(event) => update('accountId', event.target.value)}
+            required
+          >
+            {options.accounts.length === 0 ? (
+              <option value="">Sem conta ativa</option>
+            ) : (
+              options.accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name}
+                </option>
+              ))
+            )}
+          </Select>
+        </label>
+        {options.accounts.length === 0 ? (
+          <p className="rounded-md border border-border bg-muted px-3 py-2 text-sm sm:col-span-2">
+            Não há conta ativa. Cadastre uma conta antes de criar uma receita: ela precisa cair
+            em algum lugar para entrar no saldo e no fluxo de caixa.
+          </p>
+        ) : null}
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-muted-foreground">Dia de recebimento</span>
           <Input
@@ -835,6 +871,7 @@ export function RecurringScreen({
         expectedCents,
         kind: values.kind,
         memberId: values.memberId,
+        accountId: values.accountId,
         receiveDay: Number(values.receiveDay),
         frequency: values.frequency,
         oneOffCompetence: values.oneOffCompetence,
@@ -859,7 +896,9 @@ export function RecurringScreen({
         return;
       }
       const saved = (await response.json()) as { id: string };
-      setIncomeList((current) => upsertIncome(current, saved.id, values, expectedCents));
+      setIncomeList((current) =>
+        upsertIncome(current, saved.id, values, expectedCents, incomeOptions.accounts),
+      );
       setEditingIncome(null);
       setCreatingIncome(false);
       setDeleted(null);
@@ -1182,6 +1221,7 @@ function incomeToFormInput(income: IncomeItem): IncomeFormInput {
     amountInput: formatBRLForInput(income.expectedCents),
     kind: income.kind,
     memberId: income.memberId,
+    accountId: income.accountId,
     receiveDay: String(income.receiveDay),
     frequency: income.frequency,
     oneOffCompetence: income.oneOffCompetence,
@@ -1247,6 +1287,7 @@ function upsertIncome(
   id: string,
   values: IncomeFormInput,
   expectedCents: Cents,
+  accounts: IncomeOptions['accounts'],
 ): IncomeItem[] {
   const member = current
     .map((item) => item)
@@ -1259,6 +1300,8 @@ function upsertIncome(
     expectedCents,
     memberId: values.memberId,
     memberName: member?.memberName ?? '',
+    accountId: values.accountId,
+    accountName: accounts.find((account) => account.id === values.accountId)?.name ?? '',
     receiveDay: Number(values.receiveDay),
     frequency: values.frequency,
     oneOffCompetence: values.oneOffCompetence,

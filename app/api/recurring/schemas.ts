@@ -31,7 +31,9 @@ const frequencySchema = z.enum([
  *   11/12 voltando para 2025-11 em silêncio): falta de info deve falhar alto,
  *   não cair em fallback. O CHECK no banco é da Estaca; até lá, esta é a
  *   única linha de defesa e ela precisa ser alta.
- * - `accountId` XOR `creditCardId`: nunca os dois.
+ * - `accountId` XOR `creditCardId`: exatamente um. Nenhum dos dois falha aqui,
+ *   na fronteira — a previsão gravada vira linha de `transactions`, que tem o
+ *   mesmo CHECK, e o erro apareceria dois passos depois, vazando constraint.
  * - `annualAdjustmentBp` em basis points (default zero = sem reajuste).
  */
 export const recurringExpenseBodySchema = z
@@ -59,6 +61,13 @@ export const recurringExpenseBodySchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Informe uma conta OU um cartão, não os dois.',
+        path: ['accountId'],
+      });
+    }
+    if (value.accountId === null && value.creditCardId === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Informe a conta ou o cartão de onde a despesa sai.',
         path: ['accountId'],
       });
     }

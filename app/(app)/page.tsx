@@ -1,3 +1,4 @@
+import { todayInSaoPaulo } from '@/app/_lib/today';
 import { addCompetence, toCompetence } from '@/lib/date';
 import { futureCommitment } from '@/lib/finance/commitment';
 import { divergentStatements, monthlyKpis, spendingByCategory } from '@/lib/finance/kpis';
@@ -7,20 +8,10 @@ import { DashboardScreen } from '@/components/dashboard/dashboard-screen';
 import { type DivergentStatementItem, type UncategorizedItem } from '@/components/dashboard/pendencias-list';
 import { requireSession } from '@/lib/auth/session';
 import { getDashboardData, listUncategorizedTransactionItems } from '@/lib/db/queries/dashboard';
+import { topUpPlanned } from '@/lib/db/queries/recurring-planned-write';
 import { getSettings } from '@/lib/db/queries/settings';
 
 export const dynamic = 'force-dynamic';
-
-function todayInSaoPaulo(): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    day: '2-digit',
-    month: '2-digit',
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric',
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
 
 /**
  * Página `/` do APPFIN — dashboard da Fase 1 (T-115).
@@ -47,6 +38,9 @@ export default async function DashboardPage() {
   const today = todayInSaoPaulo();
   const competence = toCompetence(today);
 
+  // Completa a previsao de recorrencia ate o horizonte antes de ler o painel.
+  // Nunca lanca: falha aqui nao pode virar 500 no dashboard.
+  await topUpPlanned(householdId, today);
   const settings = await getSettings(householdId);
 
   const [dashboard, uncategorizedItems] = await Promise.all([

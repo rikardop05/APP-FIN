@@ -34,6 +34,9 @@ export const incomeBodySchema = z
     kind: z.enum(['salary', 'pro_labore', 'variable', 'rent', 'other']),
     expectedCents: centsSchema.refine((value) => value > 0, 'Valor deve ser positivo.'),
     memberId: z.string().uuid(),
+    // Obrigatória: receita que não cai em conta nenhuma não entra em saldo nem
+    // em fluxo de caixa, e a previsão gravada exige conta (CHECK de transactions).
+    accountId: z.string().uuid('Informe a conta onde a receita cai.'),
     receiveDay: z
       .number()
       .int()

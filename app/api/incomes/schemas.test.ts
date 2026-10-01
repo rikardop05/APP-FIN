@@ -14,6 +14,7 @@ const validRecurringIncome = {
   kind: 'salary' as const,
   expectedCents: 500000,
   memberId: '11111111-1111-4111-8111-111111111111',
+  accountId: '22222222-2222-4222-8222-222222222222',
   receiveDay: 5,
   frequency: 'monthly' as const,
   oneOffCompetence: null,
@@ -26,12 +27,31 @@ const validOneOffIncome = {
   kind: 'salary' as const,
   expectedCents: 500000,
   memberId: '11111111-1111-4111-8111-111111111111',
+  accountId: '22222222-2222-4222-8222-222222222222',
   receiveDay: 5,
   frequency: 'one_off' as const,
   oneOffCompetence: '2026-12',
   startsOn: null,
   endsOn: null,
 };
+
+describe('incomeBodySchema — conta obrigatória', () => {
+  it('rejeita receita sem accountId (a previsão precisa cair em uma conta)', () => {
+    const { accountId: _omit, ...withoutAccount } = validRecurringIncome;
+    void _omit;
+    const result = incomeBodySchema.safeParse(withoutAccount);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejeita accountId nulo e accountId que não é uuid', () => {
+    expect(incomeBodySchema.safeParse({ ...validRecurringIncome, accountId: null }).success).toBe(
+      false,
+    );
+    expect(incomeBodySchema.safeParse({ ...validRecurringIncome, accountId: 'abc' }).success).toBe(
+      false,
+    );
+  });
+});
 
 describe('incomeBodySchema — caso válido', () => {
   it('aceita recorrência mensal com startsOn e sem competência fixa', () => {

@@ -108,13 +108,20 @@ describe('recurringExpenseBodySchema — accountId XOR creditCardId', () => {
     expect(result.success).toBe(false);
   });
 
-  it('aceita sem conta e sem cartão (vai pra conta depois, via categoria)', () => {
+  it('rejeita sem conta e sem cartão (exatamente um destino, decisão 2 de 2026-09-30)', () => {
+    // Antes aceitava: o CHECK de `transactions` (conta XOR cartão) faria a
+    // gravação da previsão falhar dois passos depois, vazando constraint.
     const result = recurringExpenseBodySchema.safeParse({
       ...validExpense,
       accountId: null,
       creditCardId: null,
     });
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe(
+        'Informe a conta ou o cartão de onde a despesa sai.',
+      );
+    }
   });
 });
 

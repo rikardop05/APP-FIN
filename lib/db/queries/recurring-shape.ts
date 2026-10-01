@@ -36,6 +36,8 @@ export type IncomeInput = {
   kind: IncomeKind;
   expectedCents: Cents;
   memberId: string;
+  /** Conta onde a receita cai. Obrigatória (a previsão vira linha de transactions). */
+  accountId: string;
   receiveDay: number;
   frequency: Frequency;
   oneOffCompetence: string | null;
@@ -103,6 +105,24 @@ export function assertIncomeShape(input: IncomeInput): void {
   }
   if (input.endsOn !== null && input.endsOn < input.startsOn) {
     throw new RecurringReferenceError('Data final não pode ser anterior à data inicial.');
+  }
+}
+
+/**
+ * Despesa fixa debita de EXATAMENTE um destino: conta OU cartão. Os dois nulos
+ * e os dois preenchidos são recusados aqui, na fronteira, com mensagem legível;
+ * o CHECK `recurring_expenses_account_xor_credit_card` sobrevive a bug de
+ * aplicação, mas o erro dele vaza como violação de constraint.
+ */
+export function assertExpenseDestination(
+  accountId: string | null,
+  creditCardId: string | null,
+): void {
+  if (accountId === null && creditCardId === null) {
+    throw new RecurringReferenceError('Informe a conta ou o cartão de onde a despesa sai.');
+  }
+  if (accountId !== null && creditCardId !== null) {
+    throw new RecurringReferenceError('Informe uma conta OU um cartão, não os dois.');
   }
 }
 

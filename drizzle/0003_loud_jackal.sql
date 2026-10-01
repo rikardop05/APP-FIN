@@ -1,0 +1,3 @@
+ALTER TABLE "incomes" ADD COLUMN "account_id" uuid NOT NULL;--> statement-breakpoint
+ALTER TABLE "incomes" ADD CONSTRAINT "incomes_account_id_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "recurring_expenses" ADD CONSTRAINT "recurring_expenses_account_xor_credit_card" CHECK (("recurring_expenses"."account_id" is not null) <> ("recurring_expenses"."credit_card_id" is not null));

@@ -1,8 +1,10 @@
+import { todayInSaoPaulo } from '@/app/_lib/today';
 import { RecurringScreen } from '@/components/recurring/recurring-screen';
 import { PageHeader } from '@/components/ui-kit';
 import { requireSession } from '@/lib/auth/session';
 import { listAccounts, listCards, listMembers } from '@/lib/db/queries/cards';
 import { listCategories } from '@/lib/db/queries/categories';
+import { topUpPlanned } from '@/lib/db/queries/recurring-planned-write';
 import {
   listIncomes,
   listRecurringExpenses,
@@ -20,22 +22,14 @@ import { getSettings } from '@/lib/db/queries/settings';
  * `lib/db/queries/recurring.ts` — esta página só consome.
  */
 
-function todayInSaoPaulo(): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    day: '2-digit',
-    month: '2-digit',
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric',
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
 export const dynamic = 'force-dynamic';
 
 export default async function RecorrentesPage() {
   const { householdId } = await requireSession();
   const today = todayInSaoPaulo();
+  // Completa a previsão que falta ate o horizonte. Nunca lança: se falhar, a
+  // tela segue com o que existe (o erro vai para o log do servidor).
+  await topUpPlanned(householdId, today);
 
   const [expenses, incomes, categories, accounts, cards, members, settings] =
     await Promise.all([
@@ -68,6 +62,9 @@ export default async function RecorrentesPage() {
         }}
         incomeOptions={{
           members,
+          accounts: accounts
+            .filter((account) => account.active)
+            .map((account) => ({ id: account.id, name: account.name })),
         }}
       />
     </>

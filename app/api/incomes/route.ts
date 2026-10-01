@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
-import { listMembers } from '@/lib/db/queries/cards';
+import { todayInSaoPaulo } from '@/app/_lib/today';
+import { listAccounts, listMembers } from '@/lib/db/queries/cards';
 import {
   createIncome,
   listIncomes,
@@ -17,13 +18,14 @@ import { incomeBodySchema } from './schemas';
 export async function GET() {
   try {
     const { householdId } = await requireSession();
-    const [incomes, members] = await Promise.all([
+    const [incomes, members, accounts] = await Promise.all([
       listIncomes(householdId),
       listMembers(householdId),
+      listAccounts(householdId),
     ]);
     return NextResponse.json({
       incomes,
-      options: { members },
+      options: { members, accounts: accounts.filter((account) => account.active) },
     });
   } catch (error) {
     if (error instanceof SessionMissingError) {
@@ -48,17 +50,22 @@ export async function POST(request: Request) {
       );
     }
     const body = parsed.data;
-    const id = await createIncome(householdId, {
-      description: body.description,
-      kind: body.kind,
-      expectedCents: cents(body.expectedCents),
-      memberId: body.memberId,
-      receiveDay: body.receiveDay,
-      frequency: body.frequency,
-      oneOffCompetence: body.oneOffCompetence,
-      startsOn: body.startsOn,
-      endsOn: body.endsOn,
-    });
+    const id = await createIncome(
+      householdId,
+      {
+        description: body.description,
+        kind: body.kind,
+        expectedCents: cents(body.expectedCents),
+        memberId: body.memberId,
+        accountId: body.accountId,
+        receiveDay: body.receiveDay,
+        frequency: body.frequency,
+        oneOffCompetence: body.oneOffCompetence,
+        startsOn: body.startsOn,
+        endsOn: body.endsOn,
+      },
+      todayInSaoPaulo(),
+    );
     return NextResponse.json({ id }, { status: 201 });
   } catch (error) {
     if (error instanceof SessionMissingError) {
