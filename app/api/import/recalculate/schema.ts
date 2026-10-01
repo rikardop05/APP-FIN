@@ -44,6 +44,13 @@ export const recalculateBodySchema = z.object({
   /**
    * Competência declarada da fatura. Quando a origem é cartão, é obrigatória
    * — mesma regra que no commit. Em conta é ignorada.
+   *
+   * **OBRIGATÓRIA** (chave sempre presente, valor pode ser `null` em conta):
+   * falta de informação obrigatória tem de falhar alto (400 barulhento),
+   * não silenciar em fallback — um fallback aqui é literalmente o G-07, a
+   * parcela 11/12 voltando para 2025-11 em vez de 2026-09. Caller que esquece
+   * conserta em um minuto quando vê 400; meses depois com o número errado no
+   * painel da família é o bug que matamos hoje de manhã.
    */
   statementCompetence: competenceSchema.nullable(),
 });

@@ -228,6 +228,12 @@ export function ImportConfirmation({
         sourceId,
         cardCycle: preview.cardCycle,
         rows: confirmedRows,
+        // `statementCompetence` é a fonte da verdade para a competência de cada
+        // linha quando a origem é cartão (RF-IMP-09). Para conta, vale `null`:
+        // não há fatura e o motor não usa esse campo. O `recalculateBodySchema`
+        // aceita os dois — é `.nullable().optional()`, o que evita o 400 que
+        // pegou o Ricardo em produção quando o campo vinha ausente.
+        statementCompetence: sourceKind === 'credit_card' ? defaultCompetence : null,
       }),
       signal: controller.signal,
     })
@@ -263,7 +269,7 @@ export function ImportConfirmation({
       .finally(() => setRecalculating(false));
 
     return () => controller.abort();
-  }, [drafts, preview.cardCycle, sourceId, sourceKind]);
+  }, [drafts, preview.cardCycle, sourceId, sourceKind, defaultCompetence]);
 
   function updateDraft(index: number, update: Partial<DraftRow>) {
     setDrafts((current) =>
