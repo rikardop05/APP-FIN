@@ -3,7 +3,7 @@
 Mantido pelo orquestrador. Estados: `todo | doing | review | done | blocked`.
 Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATION.md` §9, equipe em `TEAM.md`.
 
-**Última atualização:** 2026-09-30 · 656 testes verdes · HEAD `b162ec8`, sincronizado · **equipe parada: a assinatura OpenCode Go ficou sem saldo e os 6 agentes morreram**
+**Última atualização:** 2026-09-30 · 703 testes verdes · HEAD `3ebbd8e`, sincronizado · **equipe de volta, 6 agentes em 6 frentes**
 
 ## Tarefas
 
@@ -373,3 +373,34 @@ o futuro. É trabalho, não impedimento — e é trabalho que já tem desenho pr
 
 **Se o Ricardo decidir derivar**, o `DATA-MODEL` muda e o `RF-ORC-03` precisa de outro mecanismo.
 Essa é a parte que torna a escolha dele e não minha.
+
+## Decisões do Ricardo em 2026-09-30, fim do dia
+
+| # | Decisão | Consequência |
+|---|---|---|
+| 1 | **Previsão de recorrência vira linha `planned`** | segue o precedente de `import.ts:409`; destrava T-205, T-207 e T-208 |
+| 2 | **Sem base de teste secundária** — um banco só, corrigindo o que aparecer | os testes de integração continuam apontando para a casa; household próprio + limpeza no fim viram **obrigatórios** em todo teste que toque banco |
+| 3 | Seguir a ação recomendada no T-116 | reverter os lotes e reimportar com os parsers corrigidos |
+
+### Sobre a decisão 2, e por que ela não é descuido
+
+Os quatro testes de integração de `import.test.ts` carregam `.env.local` **sozinhos** (linhas 5-11)
+e rodam contra o Neon da casa **desde o T-108** — não desde hoje, como eu cheguei a afirmar. O
+argumento deles é correto: *"uma transação falsa prova que o callback foi chamado, não que o
+PostgreSQL reverteu linhas já inseridas"*. Eles criam household próprio e apagam no fim; o banco foi
+conferido e não há resíduo.
+
+Com um banco só, a proteção deixa de ser infraestrutura e passa a ser **disciplina verificável**:
+todo teste que toque banco cria o próprio household e o apaga, e a revisão confere isso. É mais
+frágil que uma base descartável, e está registrado como tal.
+
+### Seis frentes abertas
+
+| Agente | Frente |
+|---|---|
+| Esquadro | o simétrico de `replanInstallments` para recorrência — 3 decisões de contrato pendentes comigo |
+| Estaca | auditoria de schema: índice para o volume de `planned`, a ligação que o RF-ORC-03 exige, e o que impede duplicata |
+| Lanterna | gravar as ocorrências previstas (plano antes de implementar) |
+| Funil | `app/api/budgets/**` — a API do T-205 |
+| Peneira | as linhas de `R$ 0,00`, e a pergunta maior: o dedupe funde duas linhas idênticas do **mesmo lote**? |
+| Corvo | revisão adversarial de `7fca5d0..HEAD` |

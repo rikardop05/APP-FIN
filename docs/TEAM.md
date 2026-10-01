@@ -16,9 +16,23 @@ Estado em **2026-09-16**. Atualizar quando a equipe mudar.
 | **Estaca** | OpenCode · `deepseek-v4.1-flash` | `Infra e Schema APPFIN` | `lib/db/` **menos `lib/db/queries/`**, `drizzle/`, `scripts/seed.ts`, `lib/auth/`, `app/(auth)/`, `app/api/auth/`, `middleware.ts` |
 | **Esquadro** | OpenCode · `deepseek-v4.1-flash` | `Motor Financeiro APPFIN` | `lib/money/`, `lib/date/`, `lib/finance/` |
 | **Peneira** | OpenCode · `deepseek-v4.1-flash` | `Importacao APPFIN` | `lib/import/pdf/**`, `lib/import/pipeline.ts`, `lib/import/installments.ts`, `lib/import/detect.ts` |
-| **Funil** | OpenCode · `deepseek-v4.1-flash` | `Importacao Texto APPFIN` | `lib/import/text.ts` **e mais nada** |
-| **Lanterna** | OpenCode · `minimax-m3` | `Telas APPFIN` | `app/` **menos `app/(auth)/` e `app/api/auth/`**, `components/`, `lib/db/queries/` |
+| **Funil** | OpenCode · `deepseek-v4.1-flash` | `Importacao Texto APPFIN` | `lib/import/text.ts` e `app/api/budgets/**` |
+| **Lanterna** | OpenCode · `minimax-m3` | `Telas APPFIN` | `app/` **menos `app/(auth)/`, `app/api/auth/` e `app/api/budgets/`**, `components/`, `lib/db/queries/` |
 | **Corvo** | OpenCode · `deepseek-v4.1-flash` | `Revisor APPFIN` | **nenhuma** — read-only |
+
+### A API do orçamento saiu da Lanterna (2026-09-30)
+
+`app/api/budgets/**` passa para o **Funil**. Não é correção de contradição — é correção de
+**gargalo**: tudo que restava da Fase 2 (T-205, T-207, T-208) era tela, e a Lanterna estava sozinha
+com as três, enquanto o Funil tinha `lib/import/text.ts` e nada mais a fazer depois da Fase 1.
+
+O corte é por camada, não por tarefa: no T-205 o Funil faz as rotas e os schemas, a Lanterna faz a
+tela. Metades disjuntas do mesmo trabalho, sem arquivo compartilhado.
+
+Vale registrar o critério, porque vai acontecer de novo: **quando um agente acumula o caminho
+crítico inteiro, a divisão por camada (API × tela) abre paralelismo sem criar colisão** — ao
+contrário da divisão por tarefa, que costuma deixar dois agentes no mesmo arquivo.
+
 
 ### As posses que se sobrepunham, resolvidas em 2026-09-30
 
