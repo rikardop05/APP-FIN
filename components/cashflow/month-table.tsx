@@ -1,5 +1,5 @@
 import { Money } from '@/components/ui-kit';
-import type { MonthComposition } from '@/app/(app)/fluxo/_lib/to-cashflow-input';
+import type { MonthComposition } from '@/app/_lib/to-cashflow-input';
 import type { Competence } from '@/lib/date';
 import type { CashflowMonth } from '@/lib/finance/cashflow';
 import { cents, type Cents } from '@/lib/money';

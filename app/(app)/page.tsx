@@ -1,3 +1,4 @@
+import { loadProjectedCashflow } from '@/app/_lib/load-cashflow';
 import { todayInSaoPaulo } from '@/app/_lib/today';
 import { addCompetence, toCompetence } from '@/lib/date';
 import { futureCommitment } from '@/lib/finance/commitment';
@@ -5,14 +6,26 @@ import { divergentStatements, monthlyKpis, spendingByCategory } from '@/lib/fina
 import { cents, type Cents } from '@/lib/money';
 
 import { DashboardScreen } from '@/components/dashboard/dashboard-screen';
+import { buildIncomeExpenseSeries } from '@/components/dashboard/income-expense-series';
+import type { ProjectedState } from '@/components/dashboard/projected-balance';
 import { type DivergentStatementItem, type UncategorizedItem } from '@/components/dashboard/pendencias-list';
 import { requireSession } from '@/lib/auth/session';
 import { listOverBudget, type OverBudgetItem } from '@/lib/db/queries/budgets';
-import { getDashboardData, listUncategorizedTransactionItems } from '@/lib/db/queries/dashboard';
+import {
+  getDashboardData,
+  listIncomeExpenseRows,
+  listOverdueRecurring,
+  listUncategorizedTransactionItems,
+} from '@/lib/db/queries/dashboard';
 import { topUpPlanned } from '@/lib/db/queries/recurring-planned-write';
 import { getSettings } from '@/lib/db/queries/settings';
 
 export const dynamic = 'force-dynamic';
+
+/** Gráfico 1 (SPEC §5.8): últimos 12 meses. */
+const INCOME_EXPENSE_MONTHS = 12;
+/** Quantas despesas fixas não realizadas listar (a contagem total vai junto). */
+const OVERDUE_RECURRING_LIMIT = 10;
 
 /**
  * Página `/` do APPFIN — dashboard da Fase 1 (T-115).
@@ -44,16 +57,35 @@ export default async function DashboardPage() {
   await topUpPlanned(householdId, today);
   const settings = await getSettings(householdId);
 
-  const [dashboard, uncategorizedItems] = await Promise.all([
+  const [dashboard, uncategorizedItems, incomeExpenseRows, overdueRecurring] = await Promise.all([
     getDashboardData(householdId, today, settings.commitmentMonths),
     listUncategorizedTransactionItems(householdId, today),
+    listIncomeExpenseRows(householdId, today, INCOME_EXPENSE_MONTHS),
+    listOverdueRecurring(householdId, today, OVERDUE_RECURRING_LIMIT),
   ]);
 
+  // Saldo projetado (gráfico 3): o MESMO caminho de `/fluxo` (`loadProjectedCashflow`),
+  // para as duas telas mostrarem o mesmo saldo. Falha NÃO some: vira `unavailable`,
+  // que a tela escreve, e o erro vai para o log. Casa sem nada para projetar vira
+  // `empty` (mesmo critério do `/fluxo`), em vez de uma curva reta em zero.
+  let projected: ProjectedState;
+  try {
+    const loaded = await loadProjectedCashflow(householdId, today);
+    projected = loaded.hasProjectableData
+      ? { kind: 'ok', projection: loaded.projection, warnings: loaded.warnings }
+      : { kind: 'empty' };
+  } catch (error) {
+    console.error('[dashboard] saldo projetado indisponivel:', error);
+    projected = { kind: 'unavailable' };
+  }
+
   // Orcamentos estourados no mes (T-205): "estourado" e o `light === 'red'` de
-  // `budgetStatus`, decidido la. Se a consulta falhar, o painel segue SEM essa
-  // linha (e o erro vai para o log): `overBudget` omitido = pagina ainda nao
+  // `budgetStatus`, decidido la. Se a consulta falhar, o painel segue com um aviso
+  // no lugar da lista (e o erro vai para o log):
   // carrega, e um orcamento quebrado nao pode derrubar o painel inteiro.
-  let overBudget: OverBudgetItem[] | undefined;
+  // `null` = nao deu para conferir; a lista de pendencias escreve isso (nunca
+  // "nada pendente").
+  let overBudget: OverBudgetItem[] | null = null;
   try {
     overBudget = await listOverBudget(householdId, competence);
   } catch (error) {
@@ -107,6 +139,8 @@ export default async function DashboardPage() {
   }));
 
   const windowEnd = addCompetence(competence, settings.commitmentMonths - 1);
+  // Gráfico 1: cada mes passa por `monthlyKpis`, o motor do card do mes.
+  const incomeExpense = buildIncomeExpenseSeries(incomeExpenseRows, competence, INCOME_EXPENSE_MONTHS);
 
   return (
     <DashboardScreen
@@ -134,12 +168,19 @@ export default async function DashboardPage() {
         totalCents: commitment.totalCents as Cents,
         lastCommittedCompetence: commitment.lastCommittedCompetence,
         windowEnd,
+        byCompetence: commitment.byCompetence.map((entry) => ({
+          competence: entry.competence,
+          totalCents: entry.totalCents,
+        })),
       }}
+      incomeExpense={incomeExpense}
+      projected={projected}
       pendencias={{
         uncategorizedCount: dashboard.uncategorizedCount,
         uncategorizedItems: pendenciaItems,
         divergentStatements: divergentItems,
-        ...(overBudget === undefined ? {} : { overBudget }),
+        overBudget,
+        overdueRecurring,
       }}
     />
   );

@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
-import type { MonthComposition } from '@/app/(app)/fluxo/_lib/to-cashflow-input';
+import type { MonthComposition } from '@/app/_lib/to-cashflow-input';
 import { type CashflowInput, type CashflowProjection, projectCashflow } from '@/lib/finance/cashflow';
 import type { Competence } from '@/lib/date';
 

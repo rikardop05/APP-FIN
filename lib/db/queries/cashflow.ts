@@ -18,7 +18,7 @@ import { cents, type Cents } from '@/lib/money';
  *
  * Esta query não classifica nem soma por mês: devolve as linhas que batem no
  * caixa da janela e o saldo de abertura. Quem decide em que balde do motor cada
- * linha cai é o adaptador puro `app/(app)/fluxo/_lib/to-cashflow-input.ts`.
+ * linha cai é o adaptador puro `app/_lib/to-cashflow-input.ts`.
  *
  * ## Eixo: CAIXA, não competência (RC-05)
  *

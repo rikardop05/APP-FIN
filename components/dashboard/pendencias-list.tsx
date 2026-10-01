@@ -47,10 +47,13 @@ type PendenciasListProps = {
   uncategorizedCount: number;
   uncategorizedItems: UncategorizedItem[];
   divergentStatements: DivergentStatementItem[];
-  /** Orçamentos estourados no mês (T-205). Omitido = a página ainda não carrega. */
-  overBudget?: OverBudgetListItem[];
+  /**
+   * Orçamentos estourados no mês (T-205). `null` = a consulta falhou: a lista
+   * avisa que não deu para conferir, em vez de sumir e deixar "nada pendente".
+   */
+  overBudget: OverBudgetListItem[] | null;
   /** Despesas recorrentes previstas, já vencidas e não realizadas. */
-  overdueRecurring?: { count: number; items: OverdueRecurringListItem[] };
+  overdueRecurring: { count: number; items: OverdueRecurringListItem[] };
 };
 
 /**
@@ -72,14 +75,18 @@ export function PendenciasList({
   uncategorizedCount,
   uncategorizedItems,
   divergentStatements,
-  overBudget = [],
-  overdueRecurring = { count: 0, items: [] },
+  overBudget,
+  overdueRecurring,
 }: PendenciasListProps) {
   const hasUncategorized = uncategorizedCount > 0;
   const hasDivergent = divergentStatements.length > 0;
-  const hasOverBudget = overBudget.length > 0;
+  const overBudgetUnavailable = overBudget === null;
+  const overBudgetItems = overBudget ?? [];
+  const hasOverBudget = overBudgetItems.length > 0;
   const hasOverdueRecurring = overdueRecurring.count > 0;
-  const isEmpty = !hasUncategorized && !hasDivergent && !hasOverBudget && !hasOverdueRecurring;
+  // `overBudget === null` NÃO conta como "nada pendente": não sabemos.
+  const isEmpty =
+    !hasUncategorized && !hasDivergent && !hasOverBudget && !hasOverdueRecurring && !overBudgetUnavailable;
 
   if (isEmpty) {
     return (
@@ -211,7 +218,7 @@ export function PendenciasList({
                 Orçamentos estourados
               </h3>
               <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
-                {overBudget.length} {overBudget.length === 1 ? 'categoria' : 'categorias'}
+                {overBudgetItems.length} {overBudgetItems.length === 1 ? 'categoria' : 'categorias'}
               </span>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -219,7 +226,7 @@ export function PendenciasList({
               diferir dos cards acima, que somam também o previsto.
             </p>
             <ul className="flex flex-col gap-1.5">
-              {overBudget.map((item) => (
+              {overBudgetItems.map((item) => (
                 <li
                   key={item.categoryId}
                   className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2"
@@ -244,6 +251,16 @@ export function PendenciasList({
               Abrir o orçamento →
             </Link>
           </article>
+        ) : null}
+
+        {overBudgetUnavailable ? (
+          <p role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            Não foi possível conferir os orçamentos estourados agora.{' '}
+            <Link href="/orcamento" className="underline underline-offset-2">
+              Abrir o orçamento
+            </Link>
+            .
+          </p>
         ) : null}
 
         {hasOverdueRecurring ? (

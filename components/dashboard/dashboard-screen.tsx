@@ -1,7 +1,6 @@
 import { BarChart3 } from 'lucide-react';
 
 import type { Competence } from '@/lib/date';
-import type { CashflowProjection } from '@/lib/finance/cashflow';
 import type { BasisPoints, Cents } from '@/lib/money';
 
 import { CommitmentChart } from './commitment-chart';
@@ -16,7 +15,7 @@ import {
   type OverdueRecurringListItem,
   type UncategorizedItem,
 } from './pendencias-list';
-import { ProjectedBalance } from './projected-balance';
+import { ProjectedBalance, type ProjectedState } from './projected-balance';
 import { SpendingByCategory } from './spending-by-category';
 
 type DashboardScreenProps = {
@@ -44,19 +43,26 @@ type DashboardScreenProps = {
     totalCents: Cents;
     lastCommittedCompetence: string | null;
     windowEnd: string;
-    /** `futureCommitment().byCompetence` — alimenta o gráfico 4. Omitido = sem gráfico. */
-    byCompetence?: { competence: Competence; totalCents: Cents }[];
+    /** `futureCommitment().byCompetence` — alimenta o gráfico 4. */
+    byCompetence: { competence: Competence; totalCents: Cents }[];
   };
-  /** Gráfico 1: últimos 12 meses, de `buildIncomeExpenseSeries`. Omitido = sem gráfico. */
-  incomeExpense?: IncomeExpenseMonth[];
-  /** Gráfico 3: a MESMA projeção de `/fluxo` (`loadProjectedCashflow`). Omitido = sem gráfico. */
-  projected?: { projection: CashflowProjection; warnings: string[] };
+  /**
+   * Os campos abaixo são OBRIGATÓRIOS de propósito: um componente opcional que a
+   * página esquece de passar compila, passa no lint e some da tela (foi o que
+   * aconteceu com o saldo projetado). Obrigatório faz o `tsc` pegar o esquecimento.
+   * "Não deu para carregar" é um valor explícito (`null` / `unavailable`), nunca omissão.
+   */
+  /** Gráfico 1: últimos 12 meses, de `buildIncomeExpenseSeries`. */
+  incomeExpense: IncomeExpenseMonth[];
+  /** Gráfico 3: a MESMA projeção de `/fluxo` (`loadProjectedCashflow`). */
+  projected: ProjectedState;
   pendencias: {
     uncategorizedCount: number;
     uncategorizedItems: UncategorizedItem[];
     divergentStatements: DivergentStatementItem[];
-    overBudget?: OverBudgetListItem[];
-    overdueRecurring?: { count: number; items: OverdueRecurringListItem[] };
+    /** `null` = a consulta de orçamento falhou; a lista diz isso em vez de omitir a seção. */
+    overBudget: OverBudgetListItem[] | null;
+    overdueRecurring: { count: number; items: OverdueRecurringListItem[] };
   };
 };
 
@@ -122,15 +128,11 @@ export function DashboardScreen({
 
       {/* Linha 2 (SPEC §5.8): os quatro gráficos desta fase. O 5 (renda passiva) é Fase 3. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {incomeExpense ? (
-          <IncomeExpenseChart months={incomeExpense} currentCompetence={competence} />
-        ) : null}
+        <IncomeExpenseChart months={incomeExpense} currentCompetence={competence} />
         <SpendingByCategory items={spending} competence={competence} />
-        {projected ? (
-          <ProjectedBalance projection={projected.projection} warnings={projected.warnings} />
-        ) : null}
+        <ProjectedBalance state={projected} />
         <div className="flex flex-col gap-6">
-          {commitment.byCompetence ? <CommitmentChart entries={commitment.byCompetence} /> : null}
+          <CommitmentChart entries={commitment.byCompetence} />
           <CommitmentSummary
             competence={competence}
             commitmentMonths={commitmentMonths}
