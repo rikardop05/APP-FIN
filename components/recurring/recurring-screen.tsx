@@ -67,6 +67,12 @@ type IncomeOptions = {
 
 type RecurringScreenProps = {
   today: string;
+  /**
+   * Horizonte do preview de ocorrências. Vem de `household_settings.projection_months`
+   * (T-115 fix: a tela não chumba em 12). Usado pelo `OccurrencesPreview`
+   * dentro dos diálogos de edição e pela lista de regras existentes.
+   */
+  previewMonths: number;
   expenses: RecurringExpenseItem[];
   incomes: IncomeItem[];
   recurringOptions: RecurringOptions;
@@ -106,6 +112,7 @@ function OccurrencesPreview({
   annualAdjustmentBp,
   today,
   oneOffCompetence,
+  previewMonths,
 }: {
   title: string;
   expectedCents: Cents;
@@ -116,6 +123,7 @@ function OccurrencesPreview({
   annualAdjustmentBp: BasisPoints | null;
   today: string;
   oneOffCompetence?: string | null;
+  previewMonths: number;
 }) {
   const fromCompetence = toCompetence(today);
   const occurrences = expandRecurrence(
@@ -128,7 +136,7 @@ function OccurrencesPreview({
       annualAdjustmentBp,
       oneOffCompetence: oneOffCompetence ?? null,
     },
-    { from: fromCompetence, months: 12 },
+    { from: fromCompetence, months: previewMonths },
   );
 
   return (
@@ -235,6 +243,7 @@ function ExpenseDialog({
   initial,
   options,
   today,
+  previewMonths,
   busy,
   error,
   onClose,
@@ -243,6 +252,7 @@ function ExpenseDialog({
   initial: RecurringExpenseFormInput | null;
   options: RecurringOptions;
   today: string;
+  previewMonths: number;
   busy: boolean;
   error: string | null;
   onClose: () => void;
@@ -451,7 +461,7 @@ function ExpenseDialog({
         </Button>
         {showPreview && previewReady && previewExpected !== null ? (
           <OccurrencesPreview
-            title="Próximas 12 ocorrências"
+            title={`Próximas ${previewMonths} ocorrências`}
             expectedCents={previewExpected}
             dueDay={Number(values.dueDay)}
             frequency={values.frequency}
@@ -463,6 +473,7 @@ function ExpenseDialog({
                 : (Number(values.annualAdjustmentBp) as unknown as BasisPoints)
             }
             today={today}
+            previewMonths={previewMonths}
           />
         ) : null}
       </div>
@@ -478,6 +489,7 @@ function IncomeDialog({
   initial,
   options,
   today,
+  previewMonths,
   busy,
   error,
   onClose,
@@ -486,6 +498,7 @@ function IncomeDialog({
   initial: IncomeFormInput | null;
   options: IncomeOptions;
   today: string;
+  previewMonths: number;
   busy: boolean;
   error: string | null;
   onClose: () => void;
@@ -666,7 +679,7 @@ function IncomeDialog({
         </Button>
         {showPreview && previewReady && previewExpected !== null ? (
           <OccurrencesPreview
-            title="Próximas 12 ocorrências"
+            title={`Próximas ${previewMonths} ocorrências`}
             expectedCents={previewExpected}
             dueDay={Number(values.receiveDay)}
             frequency={values.frequency}
@@ -675,6 +688,7 @@ function IncomeDialog({
             annualAdjustmentBp={null}
             today={today}
             oneOffCompetence={values.oneOffCompetence}
+            previewMonths={previewMonths}
           />
         ) : null}
       </div>
@@ -732,6 +746,7 @@ function ItemCard({
 
 export function RecurringScreen({
   today,
+  previewMonths,
   expenses,
   incomes,
   recurringOptions,
@@ -970,7 +985,7 @@ export function RecurringScreen({
                   </div>
                   {expense.active ? (
                     <OccurrencesPreview
-                      title="Próximas 12 ocorrências"
+                      title={`Próximas ${previewMonths} ocorrências`}
                       expectedCents={expense.expectedCents}
                       dueDay={expense.dueDay}
                       frequency={expense.frequency}
@@ -982,6 +997,7 @@ export function RecurringScreen({
                           : (expense.annualAdjustmentBp as unknown as BasisPoints)
                       }
                       today={today}
+                      previewMonths={previewMonths}
                     />
                   ) : null}
                 </ItemCard>
@@ -1054,7 +1070,7 @@ export function RecurringScreen({
                   </div>
                   {income.active ? (
                     <OccurrencesPreview
-                      title="Próximas 12 ocorrências"
+                      title={`Próximas ${previewMonths} ocorrências`}
                       expectedCents={income.expectedCents}
                       dueDay={income.receiveDay}
                       frequency={income.frequency}
@@ -1063,6 +1079,7 @@ export function RecurringScreen({
                       annualAdjustmentBp={null}
                       today={today}
                       oneOffCompetence={income.oneOffCompetence}
+                      previewMonths={previewMonths}
                     />
                   ) : null}
                 </ItemCard>
@@ -1077,6 +1094,7 @@ export function RecurringScreen({
           initial={null}
           options={recurringOptions}
           today={today}
+          previewMonths={previewMonths}
           busy={busy}
           error={error}
           onClose={() => {
@@ -1092,6 +1110,7 @@ export function RecurringScreen({
           initial={expenseToFormInput(editingExpense)}
           options={recurringOptions}
           today={today}
+          previewMonths={previewMonths}
           busy={busy}
           error={error}
           onClose={() => {
@@ -1107,6 +1126,7 @@ export function RecurringScreen({
           initial={null}
           options={incomeOptions}
           today={today}
+          previewMonths={previewMonths}
           busy={busy}
           error={error}
           onClose={() => {
@@ -1122,6 +1142,7 @@ export function RecurringScreen({
           initial={incomeToFormInput(editingIncome)}
           options={incomeOptions}
           today={today}
+          previewMonths={previewMonths}
           busy={busy}
           error={error}
           onClose={() => {

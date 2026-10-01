@@ -95,7 +95,17 @@ export interface CashflowMonth {
 export interface CashflowProjection {
   months: CashflowMonth[];
   firstNegativeCompetence: Competence | null;
-  minClosingCents: Cents;
+  /**
+   * Menor `closingCents` dos meses da janela — o pior FECHAMENTO, nao o ponto
+   * mais baixo da trajetoria. A abertura NAO entra (achado do Corvo no T-206: o
+   * nome promete "menor fechamento" e a versao anterior incluia a abertura).
+   *
+   * `null` quando `months` e 0: nao ha fechamento nenhum para minimizar, e
+   * devolver a abertura reintroduziria o mesmo defeito — um valor que nao e
+   * fechamento com nome de fechamento. Quando o pior momento e hoje, isso ja
+   * aparece no saldo atual; este campo responde "qual o pior mes".
+   */
+  minClosingCents: Cents | null;
 }
 
 function assertMonths(value: number): number {
@@ -146,8 +156,8 @@ function sumByCompetence(
  * invariante de encadeamento e o tratamento de sinal e de RC-03.
  *
  * `months` e uma contagem a partir de `fromCompetence` (inclusive); zero devolve
- * janela vazia, `firstNegativeCompetence: null` e `minClosingCents` igual ao saldo
- * de abertura (nao ha fechamento menor que o inicio).
+ * janela vazia, `firstNegativeCompetence: null` e `minClosingCents: null` (nao
+ * ha fechamento para minimizar — ver o docblock do campo).
  */
 export function projectCashflow(input: CashflowInput): CashflowProjection {
   const months = assertMonths(input.months);
@@ -189,7 +199,10 @@ export function projectCashflow(input: CashflowInput): CashflowProjection {
   const rows: CashflowMonth[] = [];
   let opening = openingBalance;
   let firstNegativeCompetence: Competence | null = null;
-  let minClosing = openingBalance;
+  // Menor FECHAMENTO da janela. `null` ate o primeiro mes; ver o docblock de
+  // `CashflowProjection`. NAO entra a abertura — o nome e o contrato (§11) dizem
+  // "menor fechamento" (achado do Corvo no T-206).
+  let minClosing: Cents | null = null;
 
   for (const competence of window) {
     const income = incomeByCompetence.get(competence) ?? cents(0);
@@ -218,7 +231,7 @@ export function projectCashflow(input: CashflowInput): CashflowProjection {
     if (negative && firstNegativeCompetence === null) {
       firstNegativeCompetence = competence;
     }
-    if (closing < minClosing) minClosing = closing;
+    if (minClosing === null || closing < minClosing) minClosing = closing;
 
     rows.push({
       competence,

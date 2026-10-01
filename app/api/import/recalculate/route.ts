@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
 import { finalizeImport } from '@/lib/import/pipeline';
 
+import { countRows } from './counts';
 import { recalculateBodySchema } from './schema';
 
 /**
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       totalCents: includedResult.totals.includedCents,
-      includedRowsCount: includedResult.transactions.length,
+      ...countRows(input.rows.length, includedResult),
       competenceByIndex,
     });
   } catch (error) {

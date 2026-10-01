@@ -222,13 +222,49 @@ describe('projectCashflow — janela, sinais e validacao', () => {
     ]);
   });
 
-  it('janela vazia devolve firstNegative null e minClosing = saldo de abertura', () => {
+  it('janela vazia: minClosingCents e null, nao o saldo de abertura', () => {
+    // Sem fechamento nao ha o que minimizar. Devolver a abertura seria um valor
+    // que nao e fechamento com nome de fechamento (achado do Corvo).
     const result = projectCashflow(
       baseInput({ openingBalanceCents: cents(4321), months: 0 }),
     );
     expect(result.months).toEqual([]);
     expect(result.firstNegativeCompetence).toBeNull();
-    expect(result.minClosingCents).toBe(4321);
+    expect(result.minClosingCents).toBeNull();
+  });
+
+  it('minClosingCents e o menor FECHAMENTO, nao a abertura (caso so sobe)', () => {
+    // Saldo 1000, 2 meses, so receita de 500/mes:
+    //   jan: open 1000 -> close 1500
+    //   fev: open 1500 -> close 2000
+    // Nenhum fechamento vale 1000: o minimo dos fechamentos e 1500, NAO a
+    // abertura (1000). A versao antiga devolvia 1000.
+    const result = projectCashflow(
+      baseInput({
+        openingBalanceCents: cents(1000),
+        months: 2,
+        incomes: [occ('2026-01', 500), occ('2026-02', 500)],
+      }),
+    );
+    expect(result.months.map((m) => m.closingCents)).toEqual([1500, 2000]);
+    expect(result.minClosingCents).toBe(1500);
+  });
+
+  it('minClosingCents pega o menor fechamento quando ele e menor que a abertura', () => {
+    // Saldo 1000; jan close 500, fev close 200, mar close 900.
+    // O menor FECHAMENTO e 200 (fev) — prova que a mudanca nao inverteu nada.
+    const result = projectCashflow(
+      baseInput({
+        openingBalanceCents: cents(1000),
+        months: 3,
+        recurringExpenses: [occ('2026-01', -500), occ('2026-02', -300)],
+        adjustments: [
+          { competence: '2026-03', amountCents: cents(700), label: 'extra' },
+        ],
+      }),
+    );
+    expect(result.months.map((m) => m.closingCents)).toEqual([500, 200, 900]);
+    expect(result.minClosingCents).toBe(200);
   });
 
   it('recusa despesa recorrente com sinal positivo', () => {

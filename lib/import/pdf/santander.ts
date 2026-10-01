@@ -45,7 +45,12 @@
 
 import { clampDayToMonth, type IsoDate } from '@/lib/date';
 import { detectInstallment } from '@/lib/import/installments';
-import type { ParsedRow, ParseDiagnostic, ParseResult } from '@/lib/import/types';
+import type {
+  DocumentDate,
+  ParsedRow,
+  ParseDiagnostic,
+  ParseResult,
+} from '@/lib/import/types';
 import type { PdfTextRow } from '@/lib/import/pdf/rows';
 import { cents, parseBRL, type Cents } from '@/lib/money';
 import {
@@ -335,6 +340,13 @@ export function parseSantanderPdf(
   const parsedRows: ParsedRow[] = [];
   const diagnostics: ParseDiagnostic[] = [];
   const reference = documentReference(rows);
+  // MEDIDO (§8.2 + gate): a primeira data completa fora dos lancamentos esta sob
+  // o rotulo literal "Vencimento" — e vencimento, nao data de emissao.
+  let documentDate: DocumentDate | null = null;
+  if (reference !== null) {
+    const iso = buildIsoDate(reference.year, reference.month, reference.day);
+    if (iso !== null) documentDate = { date: iso, kind: 'due_date' };
+  }
   const fallbackYear = validYear(opts?.defaultYear);
   let reportedTotalCents: Cents | null = null;
 
@@ -394,5 +406,5 @@ export function parseSantanderPdf(
     });
   }
 
-  return { rows: parsedRows, diagnostics, reportedTotalCents };
+  return { rows: parsedRows, diagnostics, reportedTotalCents, documentDate };
 }

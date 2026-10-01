@@ -123,6 +123,26 @@ export interface ParseDiagnostic {
 }
 
 /**
+ * O que a data impressa no documento **e**, para a tela escrever a frase certa.
+ *
+ * `'due_date'` = vencimento; `'statement_date'` = data de referencia da propria
+ * fatura (quando o documento nao imprime o vencimento). Nao e preciosismo: a tela
+ * vai dizer ao humano "este documento diz <data>, voce declarou <competencia>", e
+ * comparar um vencimento com uma competencia e comparar um mes possivelmente
+ * seguinte ao do fechamento. Um campo anonimo obrigaria quem le a adivinhar o
+ * tipo por banco — o mesmo erro do `moneyToken` em triplicata.
+ */
+export type DocumentDateKind = 'due_date' | 'statement_date';
+
+/** Data de referencia impressa no documento, com o seu significado. */
+export interface DocumentDate {
+  /** A data, `'YYYY-MM-DD'`. */
+  date: IsoDate;
+  /** O que essa data e. */
+  kind: DocumentDateKind;
+}
+
+/**
  * O que todo parser devolve, qualquer que seja a origem.
  *
  * `reportedTotalCents` e o total **impresso** no documento (o "total desta
@@ -130,9 +150,16 @@ export interface ParseDiagnostic {
  * `reconcileStatement` (CONTRACTS §3) e a diferenca aparece na confirmacao —
  * e o que denuncia linha perdida por mudanca de layout. `null` quando a origem
  * nao imprime total, que e o caso do texto colado.
+ *
+ * `documentDate` e a data de referencia que o documento imprime (vencimento, ou
+ * a data da fatura), com o seu `kind`. A competencia continua DECLARADA pelo
+ * usuario; o documento so levanta a mao para a tela avisar quando as duas
+ * divergem (avisa, nao bloqueia). Ausente/`null` quando a origem nao traz data
+ * (texto colado), por isso e opcional.
  */
 export interface ParseResult {
   rows: ParsedRow[];
   diagnostics: ParseDiagnostic[];
   reportedTotalCents: Cents | null;
+  documentDate?: DocumentDate | null;
 }

@@ -84,6 +84,18 @@ describe('recurringExpenseBodySchema — expectedCents', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('rejeita expectedCents positivo (loud — DATA-MODEL §2 diz saída é negativa)', () => {
+    // Caso do bug que pegou o Ricardo: a tela enviava positivo em algum
+    // caminho e o motor estourava depois em `projectCashflow`. A defesa é
+    // recusar aqui, alto, no boundary — silent normalization mascararia o
+    // bug do chamador, que é o mesmo padrão do G-07.
+    const result = recurringExpenseBodySchema.safeParse({
+      ...validExpense,
+      expectedCents: 5000,
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('recurringExpenseBodySchema — accountId XOR creditCardId', () => {

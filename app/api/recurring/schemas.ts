@@ -22,15 +22,25 @@ const frequencySchema = z.enum([
 /**
  * Recorrência de despesa (RF-ORC-01 e RF-ORC-02 do SPEC §5.4, via CONTRACTS §8).
  *
- * - `expectedCents` chega negativo (saída) — a tela inverte o sinal para o usuário,
- *   o schema normaliza para a convenção do banco.
+ * - `expectedCents` NEGATIVO (saída) — DATA-MODEL §2, transactions. A tela inverte
+ *   o sinal antes de enviar; o schema **rejeita** valor positivo em vez de
+ *   normalizar silenciosamente. Rejeitar é honesto (o cliente mandou errado) e
+ *   coerente com a borda de RECEITA (que também rejeita valor ≤ 0). Normalizar
+ *   silenciosamente mascara um bug de sinal na própria tela — e o defeito
+ *   aparece depois no `projectCashflow`, longe da causa. Lição do G-07 (parcela
+ *   11/12 voltando para 2025-11 em silêncio): falta de info deve falhar alto,
+ *   não cair em fallback. O CHECK no banco é da Estaca; até lá, esta é a
+ *   única linha de defesa e ela precisa ser alta.
  * - `accountId` XOR `creditCardId`: nunca os dois.
  * - `annualAdjustmentBp` em basis points (default zero = sem reajuste).
  */
 export const recurringExpenseBodySchema = z
   .object({
     description: z.string().trim().min(1).max(240),
-    expectedCents: centsSchema.refine((value) => value !== 0, 'Valor não pode ser zero.'),
+    expectedCents: centsSchema.refine(
+      (value) => value < 0,
+      'Despesa deve ser negativa — informe o valor como positivo e a tela inverte o sinal; valor já chegando positivo aqui é bug do chamador.',
+    ),
     categoryId: z.string().uuid(),
     dueDay: z
       .number()

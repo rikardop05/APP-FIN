@@ -7,6 +7,7 @@ import {
   listIncomes,
   listRecurringExpenses,
 } from '@/lib/db/queries/recurring';
+import { getSettings } from '@/lib/db/queries/settings';
 
 /**
  * Tela de despesas fixas e receitas (T-204). Server Component que carrega
@@ -36,14 +37,16 @@ export default async function RecorrentesPage() {
   const { householdId } = await requireSession();
   const today = todayInSaoPaulo();
 
-  const [expenses, incomes, categories, accounts, cards, members] = await Promise.all([
-    listRecurringExpenses(householdId),
-    listIncomes(householdId),
-    listCategories(householdId),
-    listAccounts(householdId),
-    listCards(householdId),
-    listMembers(householdId),
-  ]);
+  const [expenses, incomes, categories, accounts, cards, members, settings] =
+    await Promise.all([
+      listRecurringExpenses(householdId),
+      listIncomes(householdId),
+      listCategories(householdId),
+      listAccounts(householdId),
+      listCards(householdId),
+      listMembers(householdId),
+      getSettings(householdId),
+    ]);
 
   return (
     <>
@@ -53,6 +56,7 @@ export default async function RecorrentesPage() {
       />
       <RecurringScreen
         today={today}
+        previewMonths={settings.projectionMonths}
         expenses={expenses}
         incomes={incomes}
         recurringOptions={{

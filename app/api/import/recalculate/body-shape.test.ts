@@ -13,6 +13,11 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { recalculateResponseSchema } from '@/components/import/schemas';
+import { finalizeImport } from '@/lib/import/pipeline';
+import { cents } from '@/lib/money';
+
+import { countRows } from './counts';
 import { recalculateBodySchema } from './schema';
 
 /** Body EXATO que `components/import/import-confirmation.tsx` envia hoje. */
@@ -107,6 +112,18 @@ describe('recalculateBodySchema — body que a tela monta', () => {
     }
   });
 
+  it('plannedRowsCount NÃO é campo de entrada (é da resposta)', () => {
+    const body = buildRecalculateBodyFromScreen({
+      sourceKind: 'credit_card',
+      defaultCompetence: '2026-09',
+    });
+    const result = recalculateBodySchema.safeParse(body);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect('plannedRowsCount' in result.data).toBe(false);
+    }
+  });
+
   it('rejeita competence em formato errado (sanity)', () => {
     const body = buildRecalculateBodyFromScreen({
       sourceKind: 'credit_card',
@@ -115,5 +132,68 @@ describe('recalculateBodySchema — body que a tela monta', () => {
     const bad = { ...body, statementCompetence: '2026/09' };
     const result = recalculateBodySchema.safeParse(bad);
     expect(result.success).toBe(false);
+  });
+});
+
+/**
+ * A outra ponta: o que a rota devolve passa por `recalculateResponseSchema`,
+ * que é o que a tela usa em `.parse(body)`. Se a rota esquecer um campo, o
+ * `.parse` lança na tela — e nenhuma ferramenta compara as duas pontas.
+ */
+describe('resposta do recalculate — o que a tela faz parse', () => {
+  const row = (index: number, installment: { current: number; total: number } | null) => ({
+    index,
+    include: true,
+    occurredOn: '2026-09-10',
+    description: `COMPRA ${String(index)}`,
+    rawDescription: `COMPRA ${String(index)}`,
+    amountCents: cents(-5000),
+    categoryId: null,
+    memberId: null,
+    installment,
+  });
+
+  function respond(rows: ReturnType<typeof row>[]) {
+    const result = finalizeImport({
+      rows,
+      sourceId: '11111111-1111-4111-8111-111111111111',
+      sourceKind: 'credit_card',
+      cardCycle: { closingDay: 3, dueDay: 10 },
+      existingHashes: new Set<string>(),
+      reportedTotalCents: null,
+      statementCompetence: '2026-09',
+    });
+    return {
+      totalCents: result.totals.includedCents,
+      ...countRows(rows.length, result),
+      competenceByIndex: rows.map((r) => ({ index: r.index, competence: '2026-09' })),
+    };
+  }
+
+  it('sem parcelas: nenhuma futura, e o schema da tela aceita', () => {
+    const body = respond([row(0, null), row(1, null)]);
+    expect(body.includedRowsCount).toBe(2);
+    expect(body.plannedRowsCount).toBe(0);
+    expect(recalculateResponseSchema.safeParse(body).success).toBe(true);
+  });
+
+  it('compra 2/5 gera 3 futuras (3/5 a 5/5), não 4', () => {
+    const body = respond([row(0, { current: 2, total: 5 })]);
+    expect(body.plannedRowsCount).toBe(3);
+    expect(body.includedRowsCount).toBe(4); // 1 marcada + 3 futuras
+    expect(recalculateResponseSchema.safeParse(body).success).toBe(true);
+  });
+
+  it('linha desmarcada não conta como marcada nem gera futuras', () => {
+    const unchecked = { ...row(1, { current: 1, total: 4 }), include: false };
+    const body = respond([row(0, null), unchecked]);
+    expect(body.includedRowsCount).toBe(1);
+    expect(body.plannedRowsCount).toBe(0);
+  });
+
+  it('a resposta sem plannedRowsCount é rejeitada (falha alto)', () => {
+    const { plannedRowsCount: _omit, ...withoutPlanned } = respond([row(0, null)]);
+    void _omit;
+    expect(recalculateResponseSchema.safeParse(withoutPlanned).success).toBe(false);
   });
 });

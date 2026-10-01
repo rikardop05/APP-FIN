@@ -65,7 +65,12 @@
 
 import { clampDayToMonth, type IsoDate } from '@/lib/date';
 import { detectInstallment } from '@/lib/import/installments';
-import type { ParsedRow, ParseDiagnostic, ParseResult } from '@/lib/import/types';
+import type {
+  DocumentDate,
+  ParsedRow,
+  ParseDiagnostic,
+  ParseResult,
+} from '@/lib/import/types';
 import type { PdfTextRow } from '@/lib/import/pdf/rows';
 import {
   PDF_MONEY_TOKEN,
@@ -374,21 +379,21 @@ function leftmostX(row: PdfTextRow): number | null {
 }
 
 /**
- * Data de referencia da fatura, lida do cabecalho (§6.2).
+ * Procura uma data completa numa linha que contenha `marker`.
  *
- * So olha linhas **fora da area de transacao** que contenham um marcador de
- * fatura/emissao/vencimento/periodo. Restringir ao cabecalho evita que uma
- * descricao com "fatura" e um `20xx` definam a referencia. E a fonte da virada
- * de ano: uma data `dd MMM` sem ano que cai depois dela e do ano anterior.
+ * `requireOutsideTransactionRegion` protege o marcador generico de fatura; o de
+ * vencimento e especifico e aparece dentro da area de transacao (a linha
+ * "Data de vencimento" fica no meio da pagina 1), entao nao sofre esse filtro.
  */
-function headerReference(rows: PdfTextRow[]): ReferenceDate | null {
+function findHeaderDate(
+  rows: PdfTextRow[],
+  marker: string,
+  requireOutsideTransactionRegion: boolean,
+): ReferenceDate | null {
   for (const row of rows) {
-    if (inTransactionRegion(row)) continue;
+    if (requireOutsideTransactionRegion && inTransactionRegion(row)) continue;
     if (anchoredDate(row) !== null) continue;
-    const lower = row.text.toLowerCase();
-    if (!NUBANK_LAYOUT.yearMarkers.some((marker) => lower.includes(marker))) {
-      continue;
-    }
+    if (!row.text.toLowerCase().includes(marker)) continue;
     for (const pattern of NUBANK_LAYOUT.headerDatePatterns) {
       const match = pattern.exec(row.text);
       if (match === null) continue;
@@ -406,6 +411,44 @@ function headerReference(rows: PdfTextRow[]): ReferenceDate | null {
     }
   }
   return null;
+}
+
+/**
+ * Data de referencia da fatura, com o seu SIGNIFICADO, e a referencia para a
+ * virada de ano.
+ *
+ * Fonte preferida (medicao do gate): o **vencimento explicito**, literal
+ * `Data de vencimento: 09 SET 2026` — rotulo inequivoco, `due_date`. E a MESMA
+ * data do cabecalho `FATURA 09 SET 2026` (a emissao, `02 SET`, e outra e nao
+ * serve), mas sem ambiguidade. Reserva: a data da fatura no cabecalho, marcada
+ * `statement_date` — o documento nao costuma imprimir so a emissao, mas se
+ * imprimir, a tela precisa saber que nao e vencimento.
+ *
+ * A referencia tambem alimenta a virada de ano: uma data `dd MMM` sem ano que
+ * cai depois dela e do ano anterior.
+ */
+function documentReference(rows: PdfTextRow[]): {
+  documentDate: DocumentDate | null;
+  reference: ReferenceDate | null;
+} {
+  const due = findHeaderDate(rows, 'vencimento', false);
+  if (due !== null) {
+    const iso = buildIsoDate(due.year, due.month, due.day);
+    if (iso !== null) {
+      return { documentDate: { date: iso, kind: 'due_date' }, reference: due };
+    }
+  }
+  const statement = findHeaderDate(rows, 'fatura', true);
+  if (statement !== null) {
+    const iso = buildIsoDate(statement.year, statement.month, statement.day);
+    if (iso !== null) {
+      return {
+        documentDate: { date: iso, kind: 'statement_date' },
+        reference: statement,
+      };
+    }
+  }
+  return { documentDate: null, reference: null };
 }
 
 /** Ano valido do parametro, ou `null`. */
@@ -450,7 +493,7 @@ export function parseNubankPdf(
 ): ParseResult {
   const parsedRows: ParsedRow[] = [];
   const diagnostics: ParseDiagnostic[] = [];
-  const reference = headerReference(rows);
+  const { documentDate, reference } = documentReference(rows);
   const fallbackYear = validYear(opts?.defaultYear);
   let reportedTotalCents: Cents | null = null;
   let previous: ParsedRow | null = null;
@@ -544,5 +587,5 @@ export function parseNubankPdf(
     previous = parsed;
   });
 
-  return { rows: parsedRows, diagnostics, reportedTotalCents };
+  return { rows: parsedRows, diagnostics, reportedTotalCents, documentDate };
 }

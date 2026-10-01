@@ -433,6 +433,7 @@ describe('parseMercadoPagoPdf — linha inesperada e bordas', () => {
       rows: [],
       diagnostics: [],
       reportedTotalCents: null,
+      documentDate: null,
     });
   });
 });
@@ -521,5 +522,12 @@ describe('parseMercadoPagoPdf — gate T-116: tracos de menos e virada de ano', 
     ]);
     expect(result.rows[0]?.creditCardPayment).toBe(true);
     expect(result.rows[0]?.amountCents).toBe(20000);
+  });
+});
+
+describe('parseMercadoPagoPdf — data do documento', () => {
+  it('expoe o Vencimento impresso no cabecalho como due_date', () => {
+    const result = parseMercadoPagoPdf([headerRow()]);
+    expect(result.documentDate).toEqual({ date: '2026-07-20', kind: 'due_date' });
   });
 });

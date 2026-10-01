@@ -44,7 +44,12 @@ import { billingPeriodFor, type CardCycleConfig } from '@/lib/finance/billing';
 import { matchRule, type Rule } from '@/lib/finance/categorization';
 import { dedupeHash, normalizeDescription } from '@/lib/finance/dedupe';
 import { detectInstallment } from '@/lib/import/installments';
-import type { ParsedRow, ParseDiagnostic, ParseResult } from '@/lib/import/types';
+import type {
+  DocumentDate,
+  ParsedRow,
+  ParseDiagnostic,
+  ParseResult,
+} from '@/lib/import/types';
 import { addCents, cents, type Cents } from '@/lib/money';
 
 /** Tipo de origem: cartao de credito ou conta. */
@@ -130,6 +135,13 @@ export interface ImportPreview {
   rows: ImportPreviewRow[];
   summary: ImportPreviewSummary;
   diagnostics: ParseDiagnostic[];
+  /**
+   * Data de referencia impressa no documento, com o `kind` — o pipeline so
+   * CARREGA o que o parser expos. A comparacao com a competencia declarada e a
+   * frase sao da tela (avisa, nao bloqueia); aqui nada e recalculado a partir
+   * dela. `null` quando a origem nao traz data (texto colado).
+   */
+  documentDate: DocumentDate | null;
 }
 
 /** Competencia de uma data: fatura de cartao usa o ciclo; conta usa o mes. */
@@ -334,6 +346,7 @@ export function buildImportPreview(
       ).length,
     },
     diagnostics: input.parse.diagnostics,
+    documentDate: input.parse.documentDate ?? null,
   };
 }
 

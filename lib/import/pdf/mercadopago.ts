@@ -86,7 +86,12 @@
 
 import { clampDayToMonth, type IsoDate } from '@/lib/date';
 import { detectInstallment } from '@/lib/import/installments';
-import type { ParseDiagnostic, ParseResult, ParsedRow } from '@/lib/import/types';
+import type {
+  DocumentDate,
+  ParseDiagnostic,
+  ParseResult,
+  ParsedRow,
+} from '@/lib/import/types';
 import type { PdfTextRow } from '@/lib/import/pdf/rows';
 import { cents, parseBRL, type Cents } from '@/lib/money';
 import {
@@ -423,6 +428,12 @@ export function parseMercadoPagoPdf(
   const cards = collectCardDigits(rows);
   const multiCard = cards.size > 1;
   const reference = headerReference(rows);
+  // MEDIDO (§7): o cabecalho imprime literalmente `Vencimento: dd/MM/yyyy`.
+  let documentDate: DocumentDate | null = null;
+  if (reference !== null) {
+    const iso = buildIsoDate(reference.year, reference.month, reference.day);
+    if (iso !== null) documentDate = { date: iso, kind: 'due_date' };
+  }
   const fallbackYear = validYear(opts?.defaultYear);
   const totals: Cents[] = [];
 
@@ -551,5 +562,5 @@ export function parseMercadoPagoPdf(
       ? null
       : toSystemAmount(totals[0]);
 
-  return { rows: parsedRows, diagnostics, reportedTotalCents };
+  return { rows: parsedRows, diagnostics, reportedTotalCents, documentDate };
 }

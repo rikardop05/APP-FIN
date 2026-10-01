@@ -126,6 +126,12 @@ export const recalculateResponseSchema = z.object({
    * de a tela adivinhar.
    */
   includedRowsCount: z.number().int().nonnegative(),
+  /**
+   * Parcelas futuras que o motor projetou, já contadas DENTRO de
+   * `includedRowsCount`. `totalCents` cobre só as linhas marcadas; a contagem
+   * cobre as marcadas mais estas. O rodapé mostra os dois separados.
+   */
+  plannedRowsCount: z.number().int().nonnegative(),
   competenceByIndex: z.array(
     z.object({
       index: z.number().int(),

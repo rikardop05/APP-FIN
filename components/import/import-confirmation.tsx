@@ -54,8 +54,16 @@ type Calculation = {
    * Quantas linhas vão ser gravadas neste commit. Calculado pelo motor depois do
    * dedupe e do filtro de `include` — a tela exibe, não calcula. Atualiza a
    * cada edit; começa com a contagem inicial coerente com `initialDrafts`.
+   *
+   * Inclui TANTO as linhas confirmadas (que o usuário marcou) quanto as
+   * parcelas FUTURAS projetadas pelo motor a partir dos planos de
+   * parcelamento. O rodapé separa as duas contagens para não deixar a
+   * leitura "X linhas somando o total" parecer válida — o `totalCents`
+   * cobre só as confirmadas (ver docstring de `finalizeImport`).
    */
   includedRowsCount: number;
+  /** Parcelas futuras geradas pelo motor a partir de planos. */
+  plannedRowsCount: number;
   competenceByIndex: Map<number, string | null>;
 };
 
@@ -172,6 +180,27 @@ function competenceLabel(value: string | null): string {
   return `${value.slice(5)}/${value.slice(0, 4)}`;
 }
 
+/**
+ * Texto do rodapé que separa "linhas que o usuário marcou" de "parcelas futuras
+ * projetadas". Os dois números lado a lado, com `totalCents` do motor cobrindo
+ * só as marcadas, levavam à leitura falsa "X lançamentos somando o total".
+ * Quebrar em duas frases fecha a ambiguidade — sem mexer no cálculo, só no
+ * jeito de apresentar.
+ */
+function countLabel(includedRowsCount: number, plannedRowsCount: number): string {
+  const marked = includedRowsCount - plannedRowsCount;
+  const markedPart =
+    marked === 1 ? '1 linha marcada' : `${marked} linhas marcadas`;
+  if (plannedRowsCount === 0) {
+    return `${markedPart} serão gravadas`;
+  }
+  const futurePart =
+    plannedRowsCount === 1
+      ? '1 parcela futura gerada'
+      : `${plannedRowsCount} parcelas futuras geradas`;
+  return `${markedPart} + ${futurePart} (${includedRowsCount} no total)`;
+}
+
 function rowStatus(row: DraftRow): string {
   if (row.state === 'duplicate') return 'Duplicada';
   if (row.state === 'credit_card_payment') return 'Pagamento';
@@ -204,6 +233,9 @@ export function ImportConfirmation({
     includedRowsCount: preview.preview.rows.filter(
       (row) => row.state !== 'duplicate' && row.state !== 'credit_card_payment',
     ).length,
+    // Sem parcelamento detectado no preview inicial, futuras = 0. Atualiza
+    // no recalculate.
+    plannedRowsCount: 0,
     competenceByIndex: new Map(
       preview.preview.rows.map((row) => [row.index, row.competence] as const),
     ),
@@ -230,9 +262,8 @@ export function ImportConfirmation({
         rows: confirmedRows,
         // `statementCompetence` é a fonte da verdade para a competência de cada
         // linha quando a origem é cartão (RF-IMP-09). Para conta, vale `null`:
-        // não há fatura e o motor não usa esse campo. O `recalculateBodySchema`
-        // aceita os dois — é `.nullable().optional()`, o que evita o 400 que
-        // pegou o Ricardo em produção quando o campo vinha ausente.
+        // não há fatura e o motor não usa esse campo. A chave é OBRIGATÓRIA no
+        // `recalculateBodySchema` (valor `null` em conta): ausente dá 400.
         statementCompetence: sourceKind === 'credit_card' ? defaultCompetence : null,
       }),
       signal: controller.signal,
@@ -253,6 +284,7 @@ export function ImportConfirmation({
         setCalculation({
           totalCents: result.totalCents,
           includedRowsCount: result.includedRowsCount,
+          plannedRowsCount: result.plannedRowsCount,
           competenceByIndex: new Map(
             result.competenceByIndex.map((item) => [item.index, item.competence] as const),
           ),
@@ -606,9 +638,7 @@ export function ImportConfirmation({
             <Money value={calculation.totalCents} />
           </p>
           <p className="text-xs text-muted-foreground">
-            {calculation.includedRowsCount === 1
-              ? '1 linha será gravada'
-              : `${calculation.includedRowsCount} linhas serão gravadas`}
+            {countLabel(calculation.includedRowsCount, calculation.plannedRowsCount)}
           </p>
         </div>
         <Button type="button" onClick={() => void commit()} disabled={busy || recalculating || invalidIncluded.length > 0}>

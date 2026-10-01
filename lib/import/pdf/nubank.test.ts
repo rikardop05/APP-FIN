@@ -245,6 +245,7 @@ describe('parseNubankPdf — bordas', () => {
       rows: [],
       diagnostics: [],
       reportedTotalCents: null,
+      documentDate: null,
     });
   });
 
@@ -430,5 +431,42 @@ describe('parseNubankPdf — gate T-116: tracos de menos e virada de ano', () =>
     expect(result.rows[0]?.creditCardPayment).toBe(true);
     expect(result.rows[0]?.amountCents).toBe(120896);
     expect(result.rows[1]?.creditCardPayment).toBeUndefined();
+  });
+});
+
+describe('parseNubankPdf — data do documento com o seu significado', () => {
+  it('le o vencimento explicito ("Data de vencimento") como due_date', () => {
+    const result = parseNubankPdf([
+      makeRow(438, [{ x: 138, y: 438, text: 'Data de vencimento: 09 SET 2026' }]),
+      transactionRow(700, { date: '07 SET', description: 'PADARIA', value: 'R$ 5,00' }),
+    ]);
+
+    expect(result.documentDate).toEqual({ date: '2026-09-09', kind: 'due_date' });
+    // A referencia da virada de ano continua correta.
+    expect(result.rows[0]?.occurredOn).toBe('2026-09-07');
+  });
+
+  it('sem vencimento explicito, usa a data da fatura como statement_date', () => {
+    const result = parseNubankPdf([
+      makeRow(782, [
+        { x: 327, y: 782, text: 'FATURA 09 SET 2026' },
+        { x: 442, y: 782, text: 'EMISSAO E ENVIO 02 SET 2026' },
+      ]),
+      transactionRow(700, { date: '07 SET', description: 'PADARIA', value: 'R$ 5,00' }),
+    ]);
+
+    // Pega a data da FATURA (09 SET), nao a de emissao (02 SET), e sabe que nao
+    // e um vencimento.
+    expect(result.documentDate).toEqual({
+      date: '2026-09-09',
+      kind: 'statement_date',
+    });
+  });
+
+  it('sem data no documento, documentDate e null', () => {
+    const result = parseNubankPdf([
+      transactionRow(700, { date: '07 SET', description: 'PADARIA', value: 'R$ 5,00' }),
+    ]);
+    expect(result.documentDate).toBeNull();
   });
 });

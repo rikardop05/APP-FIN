@@ -540,3 +540,29 @@ describe('competencia da fatura e projecao de parcelas (decisao do Ricardo)', ()
     expect(projected?.cashDate).toBe('2026-10-20');
   });
 });
+
+describe('buildImportPreview — data do documento (base do aviso da tela)', () => {
+  it('carrega documentDate do parser ate o preview, com o kind', () => {
+    const result = buildImportPreview({
+      parse: {
+        rows: [parsed({})],
+        diagnostics: [],
+        reportedTotalCents: null,
+        documentDate: { date: '2026-07-20', kind: 'due_date' },
+      },
+      sourceId: SOURCE_ID,
+      sourceKind: 'credit_card',
+      cardCycle: CARD,
+      rules: [],
+      existingHashes: new Set<string>(),
+      today: '2026-09-30',
+      statementCompetence: null,
+    });
+
+    expect(result.documentDate).toEqual({ date: '2026-07-20', kind: 'due_date' });
+  });
+
+  it('sem data no documento, o preview devolve null', () => {
+    expect(preview([parsed({})]).documentDate).toBeNull();
+  });
+});

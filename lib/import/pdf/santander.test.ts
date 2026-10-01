@@ -256,6 +256,7 @@ describe('parseSantanderPdf — bordas', () => {
       rows: [],
       diagnostics: [],
       reportedTotalCents: null,
+      documentDate: null,
     });
   });
 
@@ -516,5 +517,14 @@ describe('parseSantanderPdf — G-08: a parcela vem da coluna x=168', () => {
     expect(projected[0]?.competence).toBe('2026-10');
     // Nenhuma parcela em competencia anterior a da fatura.
     expect(result.transactions.every((t) => t.competence >= '2026-09')).toBe(true);
+  });
+});
+
+describe('parseSantanderPdf — data do documento', () => {
+  it('expoe a primeira data completa fora dos lancamentos como due_date', () => {
+    const result = parseSantanderPdf([
+      makeRow(750, [{ x: 401, y: 750, text: '22/08/2026' }]),
+    ]);
+    expect(result.documentDate).toEqual({ date: '2026-08-22', kind: 'due_date' });
   });
 });
