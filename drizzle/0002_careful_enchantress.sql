@@ -1,0 +1,3 @@
+CREATE UNIQUE INDEX "transactions_hh_recurring_competence_planned_unique" ON "transactions" USING btree ("household_id","recurring_expense_id","competence") WHERE "transactions"."status" = 'planned' and "transactions"."recurring_expense_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "transactions_hh_income_competence_planned_unique" ON "transactions" USING btree ("household_id","income_id","competence") WHERE "transactions"."status" = 'planned' and "transactions"."income_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "transactions_hh_installment_plan_number_planned_unique" ON "transactions" USING btree ("household_id","installment_plan_id","installment_number") WHERE "transactions"."status" = 'planned';

@@ -15,6 +15,13 @@
       "when": 1789590068889,
       "tag": "0001_true_raider",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790821254008,
+      "tag": "0002_careful_enchantress",
+      "breakpoints": true
     }
   ]
 }

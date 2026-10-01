@@ -433,6 +433,23 @@ export const transactions = pgTable(
     uniqueIndex('transactions_household_id_dedupe_hash_unique')
       .on(t.householdId, t.dedupeHash)
       .where(sql`${t.dedupeHash} is not null`),
+    // Previsao gravada como linha (decisao de 2026-09-30): impedem duplicata de
+    // `planned` na criacao e na regeneracao. O predicado `status = 'planned'` e o
+    // coracao: sem ele a constraint colide com a linha `posted` que carrega o
+    // mesmo `recurring_expense_id` de origem — a que o RF-ORC-03 cria ao
+    // conciliar previsto com realizado. Nao remover. A frequencia minima e de 1
+    // mes, entao ha no maximo uma ocorrencia por (origem, competencia).
+    uniqueIndex('transactions_hh_recurring_competence_planned_unique')
+      .on(t.householdId, t.recurringExpenseId, t.competence)
+      .where(
+        sql`${t.status} = 'planned' and ${t.recurringExpenseId} is not null`,
+      ),
+    uniqueIndex('transactions_hh_income_competence_planned_unique')
+      .on(t.householdId, t.incomeId, t.competence)
+      .where(sql`${t.status} = 'planned' and ${t.incomeId} is not null`),
+    uniqueIndex('transactions_hh_installment_plan_number_planned_unique')
+      .on(t.householdId, t.installmentPlanId, t.installmentNumber)
+      .where(sql`${t.status} = 'planned'`),
     // DATA-MODEL §2, transactions, "Indices".
     index('transactions_household_id_occurred_on_idx').on(
       t.householdId,
