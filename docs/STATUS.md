@@ -3,7 +3,7 @@
 Mantido pelo orquestrador. Estados: `todo | doing | review | done | blocked`.
 Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATION.md` §9, equipe em `TEAM.md`.
 
-**Última atualização:** 2026-09-30 · 712 testes verdes · HEAD `f2c9f02`, sincronizado · **7 agentes em 7 frentes** (Trena entrou, Claude Code, no T-207)
+**Última atualização:** 2026-10-01 · 891 testes verdes · HEAD `3d96f02`, sincronizado · **Fases 1 e 2 completas e aceitas. Fase 3 não começou.**
 
 ## Tarefas
 
@@ -435,3 +435,61 @@ G-07 corrigido horas antes**: a parcela 11/12 voltaria para 2025-11 em silêncio
 plausível e errado na tela da família.
 
 **Falta de informação obrigatória tem de falhar alto.**
+
+---
+
+# RETOMADA — leia isto primeiro (2026-10-01)
+
+## Onde o projeto está
+
+**Fase 1 aceita.** As três faturas reais importam e fecham no centavo com o total que elas mesmas
+imprimem. O gate humano (T-116) achou **oito defeitos** que 591 testes verdes não achavam.
+
+**Fase 2 completa e vista pelo Ricardo.** Recorrentes, orçamento, fluxo de caixa e painel completo.
+Previsão de recorrência é **linha no banco** (`status='planned'`), não cálculo de tela.
+
+**Fase 3 não começou.** `/investimentos` e `/metas` são stubs do T-005, por desenho.
+
+891 testes, `tsc` e lint em zero. Migrations 0002, 0003 e 0004 **aplicadas**.
+
+## O que fazer ao retomar, em ordem
+
+1. **Ler `.notas/decisoes-para-o-ricardo.md`** — 11 decisões de produto acumuladas, cada uma com as
+   opções e o que custa. A nº 7 (como marcar que uma previsão foi cumprida) **bloqueia o RF-ORC-03**
+   e é a única com consequência de schema difícil de reverter.
+2. **Conferir quem está vivo:** `maestri check "<nome>"`. Em 2026-10-01 só **Prisma** e **Trena**
+   (Claude Code) respondiam; os cinco do OpenCode Go estavam sem saldo.
+3. **Fase 3** (T-301 a T-306) é o próximo bloco de trabalho, se o Ricardo quiser seguir.
+
+## O que NÃO redescobrir
+
+| Armadilha | Onde está escrito |
+|---|---|
+| Gate verde não prova que funciona — **quatro** entregas passaram com `tsc` e testes limpos e estavam quebradas na tela | abaixo |
+| `next dev` briga com `next build`, com o `.next`, e **com o humano usando a tela** | `ORCHESTRATION` §4.2 |
+| Agente não escreve no banco da casa | `ORCHESTRATION` §4.2b |
+| `git stash` com agente escrevendo apaga trabalho | `ORCHESTRATION` §4.2c |
+| Espelho de enum só onde a camada proíbe o import | `CONVENTIONS` §5 |
+| Medir árvore em movimento produz conclusão errada — **aconteceu sete vezes** | abaixo |
+
+## As quatro vezes que um gate verde escondeu uma tela quebrada
+
+| # | Passou verde com | Estava quebrado |
+|---|---|---|
+| T-004 | 405 testes | o login não funcionava de ponta a ponta |
+| G-01 | 591 testes | nenhum PDF importava: o worker do pdfjs não era emitido |
+| `f2c9f02` | 703 testes | o corpo da requisição não batia com o schema da rota |
+| aviso de vencimento | 837 testes | o Zod do cliente **descartava** o campo: o aviso nunca dispararia |
+
+As três primeiras são duas pontas de um contrato que nenhuma ferramenta compara. A quarta é pior:
+nem quebra, só some. A defesa que existe hoje são os **testes de fronteira**
+(`app/api/import/recalculate/body-shape.test.ts`) — monte o corpo como a tela monta, valide contra o
+schema real. Copie o padrão para toda rota nova.
+
+## Estado do ambiente
+
+- `next dev` na porta **3000**, iniciado por mim, logando em `.private/dev-server.log`. Pode ter
+  morrido; `npm run dev -- -p 3000` o traz de volta. Mate qualquer outro antes (§4.2).
+- O banco tem **dado real da família**: 3 cartões, 1 conta, e as faturas de Nubank (09/2026),
+  Santander (09/2026) e Mercado Pago (07/2026). Não é base de teste — §4.2b.
+- `.notas/` é correspondência com agentes, gitignorada e descartável.
