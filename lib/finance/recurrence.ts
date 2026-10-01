@@ -230,3 +230,108 @@ export function expandRecurrence(
 
   return occurrences;
 }
+
+// ---------------------------------------------------------------------------
+// Replanejamento: o que fazer com a previsao ja gravada quando a regra muda.
+// ---------------------------------------------------------------------------
+
+/** Uma linha `planned` ja gravada, como `replanRecurrence` a enxerga. */
+export interface StoredPlannedRow {
+  id: string;
+  /** `occurredOn` da linha. Em cartao e o dia da COBRANCA, nao o da fatura. */
+  date: IsoDate;
+  /**
+   * Ja conciliada com um lancamento realizado. A funcao NAO decide isso: recebe.
+   * Quem decide e a camada de banco, num unico lugar, porque o schema ainda nao
+   * tem marcador de conciliacao (`matchPlannedToPosted` casa, mas ninguem grava o
+   * par). Quando o RF-ORC-03 existir, muda-se aquele lugar e esta regra continua
+   * certa.
+   */
+  conciliated: boolean;
+}
+
+export interface ReplanRecurrenceInput {
+  /**
+   * A regra NOVA (ja editada). `null` = "a partir de hoje nao ha mais
+   * ocorrencia": e como a DESATIVACAO se expressa, um caminho so para editar e
+   * desativar.
+   */
+  rule: RecurrenceInput | null;
+  /** As `planned` hoje gravadas dessa origem. */
+  existing: readonly StoredPlannedRow[];
+  /** Janela da previsao; ocorrencia fora dela nao e devolvida. */
+  window: { from: Competence; months: number };
+  /** Hoje, por parametro: esta camada nao le o relogio. */
+  today: IsoDate;
+}
+
+export interface ReplanRecurrenceResult {
+  /** `planned`, `date >= today` e nao conciliada: sera apagada. */
+  deleteIds: string[];
+  /** O resto de `existing`: conciliadas (qualquer data) e vencidas nao conciliadas. */
+  preservedIds: string[];
+  /** Ocorrencias da regra nova com `date >= today`, dentro da janela. */
+  insert: PlannedOccurrence[];
+}
+
+/**
+ * Replaneja uma recorrencia editada: preserva o que ja foi conciliado e o que
+ * ja venceu, regenera so o futuro nao conciliado.
+ *
+ * Regra, em termos de "conciliada" (nao de data so):
+ *
+ * | Linha `planned` existente                     | Destino  |
+ * |-----------------------------------------------|----------|
+ * | conciliada (qualquer data)                    | preserva |
+ * | nao conciliada e `date < today` (vencida)     | preserva |
+ * | nao conciliada e `date >= today`              | apaga    |
+ *
+ * A vencida nao conciliada SOBREVIVE de proposito: SPEC §5.8 (Dashboard, linha 3 — ações pendentes) lista "despesas
+ * recorrentes previstas e nao realizadas" como pendencia do painel. Apaga-la
+ * sumiria com o aviso de que a familia esqueceu de registrar algo, e o painel
+ * ficaria limpo mentindo. Linha com `date === today` NAO esta vencida: e apagada
+ * e regenerada.
+ *
+ * O corte e a DATA de hoje, nao a competencia: a ocorrencia do mes corrente que
+ * ainda nao venceu entra no valor novo; a que ja passou fica com o valor antigo,
+ * porque foi com ele que aconteceu.
+ *
+ * NAO decide a ocupacao do indice unico. Devolve `insert` sem olhar se uma
+ * linha preservada ja ocupa a competencia — isso depende da competencia
+ * COLOCADA (em cartao e a da fatura, nao a do mes da data) e de ler o banco, e
+ * por isso e do chamador (`dropOccupied`, em `lib/db/queries`). Quando a
+ * competencia ja tem ocorrencia, o valor novo comeca na proxima.
+ *
+ * Garantias: `deleteIds` e `preservedIds` sao disjuntos e a uniao e exatamente
+ * `existing`; conciliada nunca e apagada; vencida nao conciliada nunca e
+ * apagada; toda ocorrencia de `insert` tem `date >= today`.
+ *
+ * Lanca (nao cai em fallback) em `today` ou `date` invalidos e em `id`
+ * repetido: uma lista em que o mesmo id aparece duas vezes nao daria para
+ * dividir sem perder ou duplicar linha.
+ */
+export function replanRecurrence(input: ReplanRecurrenceInput): ReplanRecurrenceResult {
+  const { rule, existing, window, today } = input;
+  // `toCompetence` valida a data: '2026-02-30' lanca aqui, nao vira 02/03.
+  toCompetence(today);
+
+  const seen = new Set<string>();
+  const deleteIds: string[] = [];
+  const preservedIds: string[] = [];
+  for (const row of existing) {
+    if (seen.has(row.id)) {
+      throw new RangeError(`Linha planejada repetida em existing: ${row.id}.`);
+    }
+    seen.add(row.id);
+    toCompetence(row.date);
+    if (!row.conciliated && row.date >= today) deleteIds.push(row.id);
+    else preservedIds.push(row.id);
+  }
+
+  const insert =
+    rule === null
+      ? []
+      : expandRecurrence(rule, window).filter((occurrence) => occurrence.date >= today);
+
+  return { deleteIds, preservedIds, insert };
+}

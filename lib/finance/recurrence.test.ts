@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   expandRecurrence,
+  replanRecurrence,
   type PlannedOccurrence,
   type RecurrenceInput,
+  type StoredPlannedRow,
 } from '@/lib/finance/recurrence';
 import { addCents, basisPoints, cents } from '@/lib/money';
 
@@ -420,5 +422,154 @@ describe('expandRecurrence — janela e validacao', () => {
         { from: '2026-01', months: 12 },
       ),
     ).toThrow(RangeError);
+  });
+});
+
+describe('replanRecurrence — o que se preserva e o que se regenera', () => {
+  // Hoje e 10/out/2026. A regra nova e a de sempre, mensal dia 5.
+  const TODAY = '2026-10-10';
+  const WINDOW = { from: '2026-10', months: 4 }; // out..jan
+  const stored = (id: string, date: string, conciliated = false): StoredPlannedRow => ({
+    id,
+    date,
+    conciliated,
+  });
+  const replan = (
+    existing: StoredPlannedRow[],
+    rule: RecurrenceInput | null = input({ startsOn: '2026-09-01' }),
+    today = TODAY,
+  ) => replanRecurrence({ rule, existing, window: WINDOW, today });
+
+  it('garantia 1: apagadas e preservadas são disjuntas e a união é exatamente o existente', () => {
+    const existing = [
+      stored('vencida', '2026-10-05'),
+      stored('futura', '2026-11-05'),
+      stored('conciliada-futura', '2026-12-05', true),
+      stored('conciliada-vencida', '2026-09-05', true),
+    ];
+    const { deleteIds, preservedIds } = replan(existing);
+    expect(deleteIds.filter((id) => preservedIds.includes(id))).toEqual([]);
+    expect([...deleteIds, ...preservedIds].sort()).toEqual(existing.map((r) => r.id).sort());
+    expect(deleteIds).toEqual(['futura']);
+  });
+
+  it('garantia 2: conciliada nunca é apagada, nem quando a data é futura', () => {
+    const { deleteIds, preservedIds } = replan([stored('c', '2027-03-05', true)]);
+    expect(deleteIds).toEqual([]);
+    expect(preservedIds).toEqual(['c']);
+  });
+
+  it('garantia 3: vencida e não conciliada nunca é apagada (é a pendência do painel)', () => {
+    const { deleteIds, preservedIds } = replan([stored('v', '2026-10-05'), stored('v2', '2026-09-28')]);
+    expect(deleteIds).toEqual([]);
+    expect(preservedIds).toEqual(['v', 'v2']);
+  });
+
+  it('garantia 4: linha de hoje, não conciliada, NÃO está vencida: é apagada', () => {
+    const { deleteIds } = replan([stored('hoje', TODAY), stored('ontem', '2026-10-09')]);
+    expect(deleteIds).toEqual(['hoje']);
+  });
+
+  it('garantia 5: toda ocorrência inserida tem date >= today e vem de expandRecurrence na mesma janela', () => {
+    const rule = input({ startsOn: '2026-09-01' });
+    const { insert } = replan([], rule);
+    expect(insert.every((o) => o.date >= TODAY)).toBe(true);
+    // 05/10 já passou: a competência de outubro NÃO é regenerada (vencida fica com o valor antigo).
+    expect(insert.map((o) => o.date)).toEqual(['2026-11-05', '2026-12-05', '2027-01-05']);
+    expect(insert).toEqual(expandRecurrence(rule, WINDOW).filter((o) => o.date >= TODAY));
+  });
+
+  it('o corte é a DATA, não a competência: dueDay 20 em 10/out ainda entra no mês corrente', () => {
+    const { insert } = replan([], input({ dueDay: 20, startsOn: '2026-09-01' }));
+    expect(insert[0]).toMatchObject({ competence: '2026-10', date: '2026-10-20' });
+  });
+
+  it('garantia 6: regra sem ocorrências futuras devolve insert vazio sem lançar, e apaga as futuras', () => {
+    const encerrada = input({ startsOn: '2026-01-01', endsOn: '2026-10-09' });
+    const r1 = replan([stored('f', '2026-11-05')], encerrada);
+    expect(r1.insert).toEqual([]);
+    expect(r1.deleteIds).toEqual(['f']);
+    // `rule: null` é a desativação: mesmo caminho, nada a inserir.
+    const r2 = replan([stored('f', '2026-11-05'), stored('v', '2026-10-05')], null);
+    expect(r2.insert).toEqual([]);
+    expect(r2.deleteIds).toEqual(['f']);
+    expect(r2.preservedIds).toEqual(['v']);
+  });
+
+  it('garantia 7: today inválido, date inválida e id repetido lançam (sem fallback)', () => {
+    expect(() => replan([], input({}), '2026-02-30')).toThrow();
+    expect(() => replan([], input({}), 'amanhã')).toThrow();
+    expect(() => replan([stored('x', '2026-13-01')])).toThrow();
+    expect(() => replan([stored('a', '2026-11-05'), stored('a', '2026-12-05')])).toThrow(RangeError);
+  });
+
+  it('valor muda de 180 para 220: o futuro sai no valor novo, a vencida fica como está', () => {
+    const rule = input({ expectedCents: cents(-22000), startsOn: '2026-09-01' });
+    const { deleteIds, preservedIds, insert } = replan(
+      [stored('out', '2026-10-05'), stored('nov', '2026-11-05')],
+      rule,
+    );
+    expect(preservedIds).toEqual(['out']);
+    expect(deleteIds).toEqual(['nov']);
+    expect(amounts(insert)).toEqual([-22000, -22000, -22000]);
+  });
+
+  it('frequência mensal -> trimestral: apaga o futuro do ritmo antigo e gera só o do novo', () => {
+    const rule = input({ frequency: 'quarterly', startsOn: '2026-09-01' });
+    const existing = [stored('nov', '2026-11-05'), stored('dez', '2026-12-05'), stored('jan', '2027-01-05')];
+    const { deleteIds, insert } = replan(existing, rule);
+    expect(deleteIds).toEqual(['nov', 'dez', 'jan']);
+    // Âncora na competência de startsOn (set): set, dez, mar... Em 10/out só dez entra.
+    expect(insert.map((o) => o.date)).toEqual(['2026-12-05']);
+  });
+
+  it('endsOn encurtado: o futuro além do fim some, o que cabe antes fica regenerado', () => {
+    const rule = input({ startsOn: '2026-09-01', endsOn: '2026-11-30' });
+    const { insert } = replan([stored('dez', '2026-12-05'), stored('nov', '2026-11-05')], rule);
+    expect(insert.map((o) => o.date)).toEqual(['2026-11-05']);
+  });
+
+  it('reajuste anual mudando: o futuro regenerado respeita o aniversário novo', () => {
+    const rule = input({
+      expectedCents: cents(-10000),
+      startsOn: '2025-12-01',
+      annualAdjustmentBp: basisPoints(1000),
+    });
+    const { insert } = replanRecurrence({
+      rule,
+      existing: [],
+      window: { from: '2026-10', months: 4 },
+      today: TODAY,
+    });
+    // nov/2026 ainda é o 1º ano; dez/2026 é o aniversário (12 meses desde dez/2025).
+    expect(amounts(insert)).toEqual([-10000, -11000, -11000]);
+  });
+
+  it('dueDay muda dentro do mesmo mês: a nova de 20/out entra (a ocupação é decidida pelo chamador)', () => {
+    const { deleteIds, preservedIds, insert } = replan(
+      [stored('antiga-5-out', '2026-10-05')],
+      input({ dueDay: 20, startsOn: '2026-09-01' }),
+    );
+    expect(preservedIds).toEqual(['antiga-5-out']);
+    expect(deleteIds).toEqual([]);
+    // Esta função devolve a de 20/out; quem sabe que out já tem ocorrência é `dropOccupied`.
+    expect(insert[0]?.date).toBe('2026-10-20');
+  });
+
+  it('today no último dia do mês: a ocorrência de hoje conta, a do mês seguinte também', () => {
+    const { insert } = replanRecurrence({
+      rule: input({ dueDay: 31, startsOn: '2026-09-01' }),
+      existing: [],
+      window: { from: '2026-10', months: 2 },
+      today: '2026-10-31',
+    });
+    expect(insert.map((o) => o.date)).toEqual(['2026-10-31', '2026-11-30']);
+  });
+
+  it('é pura: não altera a lista recebida', () => {
+    const existing = [stored('a', '2026-11-05')];
+    const snapshot = JSON.stringify(existing);
+    replan(existing);
+    expect(JSON.stringify(existing)).toBe(snapshot);
   });
 });

@@ -55,7 +55,11 @@
 import type { Frequency, TransactionKind } from '@/lib/db/enums';
 import { addCompetence, toCompetence, type Competence } from '@/lib/date';
 import { billingPeriodFor, type CardCycleConfig } from '@/lib/finance/billing';
-import { expandRecurrence, type PlannedOccurrence } from '@/lib/finance/recurrence';
+import {
+  expandRecurrence,
+  type PlannedOccurrence,
+  type RecurrenceInput,
+} from '@/lib/finance/recurrence';
 import { basisPoints, cents, type Cents } from '@/lib/money';
 
 /** Origem da previsão. Cada uma casa com um dos índices parciais. */
@@ -221,24 +225,25 @@ export function plannedWindowEnd(window: { from: Competence; months: number }): 
   return addCompetence(window.from, Math.max(0, window.months - 1));
 }
 
-export function plannedRowsForExpense(
+/** A regra de recorrência de uma despesa fixa, no formato do motor. */
+export function expenseRecurrence(rule: ExpenseRule): RecurrenceInput {
+  return {
+    expectedCents: cents(rule.expectedCents),
+    dueDay: rule.dueDay,
+    frequency: rule.frequency,
+    startsOn: rule.startsOn,
+    endsOn: rule.endsOn,
+    annualAdjustmentBp:
+      rule.annualAdjustmentBp === null ? null : basisPoints(rule.annualAdjustmentBp),
+  };
+}
+
+/** A série (origem, destino, campos copiados) de uma despesa fixa. */
+export function expenseSeries(
   householdId: string,
   rule: ExpenseRule,
   cycle: CardCycleConfig | null,
-  window: { from: Competence; months: number },
-): PlannedTransactionRow[] {
-  const occurrences = expandRecurrence(
-    {
-      expectedCents: cents(rule.expectedCents),
-      dueDay: rule.dueDay,
-      frequency: rule.frequency,
-      startsOn: rule.startsOn,
-      endsOn: rule.endsOn,
-      annualAdjustmentBp:
-        rule.annualAdjustmentBp === null ? null : basisPoints(rule.annualAdjustmentBp),
-    },
-    window,
-  );
+): PlannedSeries {
   let destination: PlannedDestination;
   if (rule.creditCardId !== null && rule.accountId === null) {
     if (cycle === null) {
@@ -250,24 +255,30 @@ export function plannedRowsForExpense(
   } else {
     throw new PlannedSeriesError('Despesa fixa sem destino único (conta XOR cartão).');
   }
+  return {
+    householdId,
+    origin: { kind: 'expense', recurringExpenseId: rule.id },
+    description: rule.description,
+    categoryId: rule.categoryId,
+    memberId: null,
+    destination,
+  };
+}
+
+export function plannedRowsForExpense(
+  householdId: string,
+  rule: ExpenseRule,
+  cycle: CardCycleConfig | null,
+  window: { from: Competence; months: number },
+): PlannedTransactionRow[] {
   return buildPlannedRows(
-    {
-      householdId,
-      origin: { kind: 'expense', recurringExpenseId: rule.id },
-      description: rule.description,
-      categoryId: rule.categoryId,
-      memberId: null,
-      destination,
-    },
-    occurrences,
+    expenseSeries(householdId, rule, cycle),
+    expandRecurrence(expenseRecurrence(rule), window),
   );
 }
 
-export function plannedRowsForIncome(
-  householdId: string,
-  rule: IncomeRule,
-  window: { from: Competence; months: number },
-): PlannedTransactionRow[] {
+/** A regra de recorrência de uma receita, no formato do motor. */
+export function incomeRecurrence(rule: IncomeRule): RecurrenceInput {
   // `expandRecurrence` valida `startsOn` em todo caminho, inclusive `one_off`
   // com competência fixa. Receita eventual pode ter `startsOn` nulo (a
   // competência é o que vale): ancora no primeiro dia dela.
@@ -277,27 +288,64 @@ export function plannedRowsForIncome(
   if (startsOn === null) {
     throw new PlannedSeriesError('Receita sem data de início nem competência fixa.');
   }
-  const occurrences = expandRecurrence(
-    {
-      expectedCents: cents(rule.expectedCents),
-      dueDay: rule.receiveDay,
-      frequency: rule.frequency,
-      startsOn,
-      endsOn: rule.endsOn,
-      annualAdjustmentBp: null,
-      oneOffCompetence: rule.oneOffCompetence,
-    },
-    window,
-  );
+  return {
+    expectedCents: cents(rule.expectedCents),
+    dueDay: rule.receiveDay,
+    frequency: rule.frequency,
+    startsOn,
+    endsOn: rule.endsOn,
+    annualAdjustmentBp: null,
+    oneOffCompetence: rule.oneOffCompetence,
+  };
+}
+
+/** A série (origem, destino, campos copiados) de uma receita. */
+export function incomeSeries(householdId: string, rule: IncomeRule): PlannedSeries {
+  return {
+    householdId,
+    origin: { kind: 'income', incomeId: rule.id },
+    description: rule.description,
+    categoryId: null,
+    memberId: rule.memberId,
+    destination: { accountId: rule.accountId, creditCardId: null },
+  };
+}
+
+export function plannedRowsForIncome(
+  householdId: string,
+  rule: IncomeRule,
+  window: { from: Competence; months: number },
+): PlannedTransactionRow[] {
   return buildPlannedRows(
-    {
-      householdId,
-      origin: { kind: 'income', incomeId: rule.id },
-      description: rule.description,
-      categoryId: null,
-      memberId: rule.memberId,
-      destination: { accountId: rule.accountId, creditCardId: null },
-    },
-    occurrences,
+    incomeSeries(householdId, rule),
+    expandRecurrence(incomeRecurrence(rule), window),
   );
+}
+
+/**
+ * Descarta as linhas que cairiam numa competência JÁ OCUPADA por outra linha da
+ * mesma origem, `planned` ou `posted`.
+ *
+ * Por que existe, além do índice parcial: (1) o índice só cobre `planned`, e
+ * inserir uma `planned` ao lado de uma `posted` da mesma origem e competência
+ * conta o gasto duas vezes; (2) uma `planned` VENCIDA e não conciliada é
+ * preservada na edição e continua ocupando a competência — gerar outra ao lado
+ * dela violaria o índice. Nos dois casos a regra é a mesma: quando a competência
+ * já tem ocorrência, o valor novo começa na PRÓXIMA (CONTRACTS §8). A de
+ * competência ocupada não é inserida e a pendência continua visível.
+ *
+ * `occupied` são as competências COLOCADAS (em cartão, a da fatura): as mesmas
+ * que `buildPlannedRows` grava.
+ */
+export function dropOccupied(
+  rows: readonly PlannedTransactionRow[],
+  occupied: ReadonlySet<string>,
+): { kept: PlannedTransactionRow[]; skipped: string[] } {
+  const kept: PlannedTransactionRow[] = [];
+  const skipped: string[] = [];
+  for (const row of rows) {
+    if (occupied.has(row.competence)) skipped.push(row.competence);
+    else kept.push(row);
+  }
+  return { kept, skipped };
 }
