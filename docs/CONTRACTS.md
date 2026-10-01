@@ -195,6 +195,27 @@ interface PlannedOccurrence { competence: Competence; date: IsoDate; amountCents
 function expandRecurrence(input: RecurrenceInput, window: { from: Competence; months: number }): PlannedOccurrence[]
 ```
 
+### Num cartão, `dueDay` é o dia da COBRANÇA, não o vencimento da fatura
+
+**Ratificado em 2026-09-30**, ao gravar previsão de recorrência como linha. A premissa era
+invisível no código e é do tipo que alguém inverte sem perceber.
+
+Uma assinatura com `dueDay = 28` num cartão que **fecha dia 25** é cobrada no dia 28 e entra na
+fatura que fecha em 25 do mês **seguinte**. O `dueDay` diz quando o lojista cobra; em que fatura
+isso cai é consequência do ciclo, não escolha de quem preenche o formulário.
+
+Então a competência de uma despesa fixa em cartão **não** é o mês do `dueDay`: é
+`billingPeriodFor(data da ocorrência, ciclo).competence`. Gravar o mês da data poria a despesa na
+fatura errada com um número inteiramente plausível — o defeito mais caro que este projeto produz.
+
+O caminho manual já fazia exatamente isso (`lib/db/queries/transactions.ts`, `transactionDateFields`).
+Usar outra regra para recorrência criaria o "segundo jeito" — e duas das arbitragens de 2026-09-30
+nasceram precisamente de duas implementações da mesma ideia divergindo em silêncio.
+
+O caso que revela um erro aqui é **fechamento 25 / vencimento 5**: é o único que atravessa o mês, e
+onde a regra errada passa despercebida em todos os outros ciclos.
+
+
 ### `dueDay` é a regra; `startsOn` é o piso
 
 Fixado em 2026-09-23 (dúvida do Esquadro no T-201). O contrato declarava os dois campos mas não

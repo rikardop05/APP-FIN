@@ -211,11 +211,18 @@ Mapeamento de colunas salvo por banco (RF-IMP-01).
 | category_id | uuid not null | |
 | due_day | smallint not null | |
 | frequency | frequency not null default 'monthly' | |
-| account_id / credit_card_id | uuid | onde debita |
+| account_id / credit_card_id | uuid | onde debita — **exatamente um dos dois**, ver o `check` abaixo |
 | starts_on | date not null | |
 | ends_on | date | null = sem fim |
 | annual_adjustment_bp | integer | reajuste anual, aplicado no aniversário de `starts_on` |
 | active | boolean not null default true | |
+
+`check`: `(account_id is not null) <> (credit_card_id is not null)` — **ratificado em 2026-09-30**.
+O Zod já proibia os dois preenchidos, mas deixava passar os dois nulos, e `recurring_expenses` não
+tinha `check` nenhum. Uma despesa fixa sem destino é criável hoje — e, com a previsão virando linha,
+o `INSERT` da `planned` quebraria contra o `check` de `transactions`, que exige exatamente um. O
+usuário veria erro de banco dois passos depois da causa, ou pior: despesa criada sem previsão
+nenhuma. Falha na fronteira, não na gravação.
 
 ### incomes
 | coluna | tipo | notas |
@@ -226,10 +233,25 @@ Mapeamento de colunas salvo por banco (RF-IMP-01).
 | kind | income_kind not null | |
 | expected_cents | bigint not null | positivo |
 | receive_day | smallint not null | |
+| account_id | uuid not null references accounts(id) | **em que conta o dinheiro cai** — ratificado em 2026-09-30 |
 | frequency | frequency not null default 'monthly' | `one_off` cobre 13º, PLR, bônus |
 | one_off_competence | text | obrigatório quando `frequency = 'one_off'` |
 
 `check`: `frequency <> 'one_off' or one_off_competence is not null` — receita eventual sem competência não projeta em lugar nenhum e viraria linha órfã.
+
+**Por que `account_id` é obrigatório (2026-09-30).** `incomes` nascera só com `member_id`: sem conta,
+sem cartão. Com a previsão de receita virando linha `planned`, qualquer `INSERT` violaria o `check`
+de `transactions` (exatamente um de conta/cartão), e o `POST /api/incomes` quebraria.
+
+As alternativas eram afrouxar aquele `check` para aceitar linha sem destino quando
+`status = 'planned'`, ou não projetar receita na v1. As duas foram recusadas: a primeira enfraquece
+a trava central da tabela mais usada do sistema para acomodar um caso que não deveria existir, e uma
+linha sem conta não entra em saldo de conta nenhuma — o oposto de previsão útil. A segunda deixaria
+o fluxo de caixa (T-206) **sem metade das entradas**.
+
+Receita que não cai em conta nenhuma não é previsão: é número flutuando. Aplicado enquanto havia
+**zero receitas** no banco, então o `not null` entrou sem backfill — daqui a um mês custaria
+migration com dado.
 | starts_on / ends_on | date | |
 | active | boolean not null default true | |
 
