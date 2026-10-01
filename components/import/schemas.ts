@@ -46,6 +46,28 @@ const categoryNodeSchema: z.ZodType<CategoryNodeShape> = z.lazy(() => z.object({
   children: z.array(z.lazy(() => categoryNodeSchema)),
 }));
 
+/**
+ * Resposta de `GET`/`PATCH /api/cards`: os campos que o `PATCH` exige de volta.
+ * `PATCH /api/cards/[id]` SUBSTITUI o cartão inteiro (`cardBodySchema`): omitir
+ * `bank`, `holderMemberId` ou `paymentAccountId` os zera. Quem corrige só o
+ * vencimento precisa mandar o resto como está, lido na hora.
+ */
+export const cardFullSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  bank: z.string().nullable(),
+  brand: z.enum(['visa', 'mastercard', 'elo', 'amex', 'other']),
+  holderMemberId: z.string().uuid().nullable(),
+  paymentAccountId: z.string().uuid().nullable(),
+  creditLimitCents: z.number().int().nonnegative().nullable(),
+  closingDay: z.number().int().min(1).max(31),
+  dueDay: z.number().int().min(1).max(31),
+});
+
+export const cardsFullResponseSchema = z.object({
+  cards: z.array(cardFullSchema),
+});
+
 export const categoriesResponseSchema = z.object({
   categories: z.array(categoryNodeSchema),
 });
@@ -88,6 +110,19 @@ const previewSchema = z.object({
       raw: z.string(),
     }),
   ),
+  /**
+   * Data impressa no documento (`lib/import/types.ts`, `DocumentDate`). DECLARADA
+   * aqui de propósito e OBRIGATÓRIA (só pode ser `null`): `z.object` descarta
+   * chave que o schema não conhece, e sem esta linha o aviso de competência
+   * divergente nunca dispararia, com tudo verde. Se a rota parar de enviá-la, o
+   * upload falha alto em vez de o aviso sumir em silêncio.
+   */
+  documentDate: z
+    .object({
+      date: isoDateSchema,
+      kind: z.enum(['due_date', 'statement_date']),
+    })
+    .nullable(),
 });
 
 const previousBatchSchema = z.object({
@@ -141,6 +176,7 @@ export const recalculateResponseSchema = z.object({
 });
 
 export type UploadResponse = z.infer<typeof uploadResponseSchema>;
+export type CardFull = z.infer<typeof cardFullSchema>;
 export type SourceItem = z.infer<typeof sourceItemSchema>;
 export type MemberItem = z.infer<typeof cardsResponseSchema>['members'][number];
 export type CategoryNode = z.infer<typeof categoryNodeSchema>;

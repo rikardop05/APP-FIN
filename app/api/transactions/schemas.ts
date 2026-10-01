@@ -97,3 +97,10 @@ export type TransactionUpdateInput = z.infer<typeof transactionUpdateSchema>;
 export type ManualTransactionBody = z.infer<typeof manualTransactionBodySchema>;
 export type BatchCategorizationInput = z.infer<typeof batchCategorizationSchema>;
 export type RuleBody = z.infer<typeof ruleBodySchema>;
+
+/**
+ * Escopo da exclusão. `only` (padrão, o menos destrutivo) apaga só a linha;
+ * `with-future` apaga também as parcelas FUTURAS `planned` do mesmo plano e só
+ * vale numa parcela (o servidor recusa nas outras).
+ */
+export const deleteScopeSchema = z.enum(['only', 'with-future']);

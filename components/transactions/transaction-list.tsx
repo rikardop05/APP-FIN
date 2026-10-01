@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Pencil, Tags } from 'lucide-react';
+import { Pencil, Tags, Trash2 } from 'lucide-react';
 import { formatBRL, parseBRL } from '@/lib/money';
 import {
   Badge,
@@ -30,6 +30,7 @@ type TransactionListProps = {
   onToggleAll: () => void;
   onEdit: (id: string) => void;
   onRule: (id: string) => void;
+  onDelete: (id: string) => void;
   editingId: string | null;
   onSaveEdit: (id: string, input: TransactionEditValues) => Promise<void>;
   onCancelEdit: () => void;
@@ -128,7 +129,17 @@ function TransactionEditor({ row, options, onSave, onCancel }: EditorProps) {
   );
 }
 
-function RowActions({ onEdit, onRule }: { onEdit: () => void; onRule: () => void }) {
+function RowActions({
+  description,
+  onEdit,
+  onRule,
+  onDelete,
+}: {
+  description: string;
+  onEdit: () => void;
+  onRule: () => void;
+  onDelete: () => void;
+}) {
   return (
     <div className="flex flex-wrap gap-2">
       <Button variant="ghost" size="sm" onClick={onEdit}>
@@ -136,6 +147,15 @@ function RowActions({ onEdit, onRule }: { onEdit: () => void; onRule: () => void
       </Button>
       <Button variant="ghost" size="sm" onClick={onRule}>
         <Tags className="mr-1 h-4 w-4" aria-hidden="true" /> Criar regra
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-destructive hover:text-destructive"
+        aria-label={`Excluir ${description}`}
+        onClick={onDelete}
+      >
+        <Trash2 className="mr-1 h-4 w-4" aria-hidden="true" /> Excluir
       </Button>
     </div>
   );
@@ -149,6 +169,7 @@ export function TransactionList({
   onToggleAll,
   onEdit,
   onRule,
+  onDelete,
   editingId,
   onSaveEdit,
   onCancelEdit,
@@ -188,7 +209,7 @@ export function TransactionList({
                     <td className="max-w-[10rem] truncate px-3 py-3 align-top text-muted-foreground" title={sourceLabel(row)}>{sourceLabel(row)}</td>
                     <td className="px-3 py-3 align-top">{row.categoryName ? row.categoryName : <Badge variant="warning">Não categorizado</Badge>}</td>
                     <td className="px-3 py-3 align-top text-muted-foreground">{row.memberName ?? '—'}</td>
-                    <td className="px-3 py-3 align-top"><RowActions onEdit={() => onEdit(row.id)} onRule={() => onRule(row.id)} /></td>
+                    <td className="px-3 py-3 align-top"><RowActions description={row.description} onEdit={() => onEdit(row.id)} onRule={() => onRule(row.id)} onDelete={() => onDelete(row.id)} /></td>
                   </>
                 )}
               </tr>
@@ -224,7 +245,7 @@ export function TransactionList({
                   <div><dt className="text-xs text-muted-foreground">Responsável</dt><dd>{row.memberName ?? '—'}</dd></div>
                   <div><dt className="text-xs text-muted-foreground">Competência</dt><dd>{row.competence}</dd></div>
                 </dl>
-                <div className="mt-3 border-t border-border pt-3"><RowActions onEdit={() => onEdit(row.id)} onRule={() => onRule(row.id)} /></div>
+                <div className="mt-3 border-t border-border pt-3"><RowActions description={row.description} onEdit={() => onEdit(row.id)} onRule={() => onRule(row.id)} onDelete={() => onDelete(row.id)} /></div>
               </>
             )}
           </article>

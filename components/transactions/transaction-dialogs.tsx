@@ -2,8 +2,17 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { parseBRL } from '@/lib/money';
-import { Button, Input, Select } from '@/components/ui-kit';
-import type { RuleSuggestion, TransactionOptions } from './schemas';
+import { competenceLabel } from '@/components/budget/labels';
+import { isSimpleDelete } from './delete-presentation';
+import { Button, DateText, Input, Money, Select } from '@/components/ui-kit';
+import {
+  deleteImpactSchema,
+  type DeleteEffect,
+  type DeleteImpact,
+  type RuleSuggestion,
+  type Transaction,
+  type TransactionOptions,
+} from './schemas';
 
 function DialogShell({
   title,
@@ -188,6 +197,226 @@ export function RuleDialog({
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end"><Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancelar</Button><Button type="submit" disabled={busy || !pattern || !categoryId}>{busy ? 'Criando…' : 'Criar regra'}</Button></div>
         </form>
       )}
+    </DialogShell>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Exclusão de lançamento
+// ---------------------------------------------------------------------------
+
+type DeleteScope = 'only' | 'with-future';
+
+function plural(count: number, one: string, many: string): string {
+  return `${String(count)} ${count === 1 ? one : many}`;
+}
+
+/** Uma frase por efeito. A tela só FORMATA o que o servidor calculou. */
+function EffectLine({ effect }: { effect: DeleteEffect }) {
+  switch (effect.kind) {
+    case 'plan_hole':
+      return (
+        <>
+          Fica um buraco no plano &ldquo;{effect.planDescription}&rdquo;:{' '}
+          {effect.remaining === 1 ? 'sobra 1 lançamento' : `sobram ${String(effect.remaining)} lançamentos`} dele.
+        </>
+      );
+    case 'plan_removed':
+      return <>O plano &ldquo;{effect.planDescription}&rdquo; deixa de existir: não sobra nenhuma parcela.</>;
+    case 'statement_total':
+      return (
+        <>
+          O total calculado da fatura de {effect.cardName} de {competenceLabel(effect.competence)} vai de{' '}
+          <Money value={effect.beforeCents} /> para <Money value={effect.afterCents} />.
+          {effect.reportedCents !== null ? (
+            <>
+              {' '}
+              O total impresso na fatura (<Money value={effect.reportedCents} />) não muda; se os dois divergirem, a fatura passa a mostrar divergência.
+            </>
+          ) : null}
+        </>
+      );
+    case 'statement_unpaid':
+      return <>A fatura de {effect.cardName} de {competenceLabel(effect.competence)} volta a constar como não paga.</>;
+    case 'import_batch':
+      return (
+        <>
+          O lote &ldquo;{effect.fileName}&rdquo; passa de {plural(effect.before, 'lançamento', 'lançamentos')} para{' '}
+          {effect.after}.
+        </>
+      );
+    case 'returns_on_reimport':
+      return <>Se você importar este arquivo de novo, este lançamento volta.</>;
+    case 'occurrence_skipped':
+      return (
+        <>
+          Só esta ocorrência de &ldquo;{effect.ruleDescription}&rdquo; ({competenceLabel(effect.competence)}) deixa de ser esperada; as outras continuam.
+        </>
+      );
+  }
+}
+
+/**
+ * Confirmação de exclusão. DUAS apresentações da MESMA resposta de
+ * `GET /api/transactions/[id]/delete-impact`:
+ *
+ * - **Simples** quando `effects` sai vazia e nenhuma parcela futura vai junto: a
+ *   exclusão alcança só a linha. Um aviso curto de que vai sumir.
+ * - **Detalhada** quando a exclusão alcança ALÉM da linha (parcela de plano, linha
+ *   de fatura, linha que volta na reimportação, previsão de recorrência,
+ *   pagamento de fatura): o número do que some e só os efeitos que existem.
+ *
+ * O critério é a lista de efeitos, não o tipo do lançamento: se um lançamento
+ * manual um dia ganhar efeito colateral, passa a mostrar o diálogo cheio sozinho.
+ * "Isto não pode ser desfeito" aparece nas duas: o app não tem desfazer.
+ */
+export function DeleteTransactionDialog({
+  transaction,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  transaction: Transaction;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: (scope: DeleteScope) => Promise<void>;
+}) {
+  const isInstallment = transaction.installmentNumber !== null;
+  const [scope, setScope] = useState<DeleteScope>('only');
+  const [impacts, setImpacts] = useState<{ only: DeleteImpact | null; withFuture: DeleteImpact | null }>({
+    only: null,
+    withFuture: null,
+  });
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function load(next: DeleteScope): Promise<DeleteImpact> {
+      const response = await fetch(`/api/transactions/${transaction.id}/delete-impact?scope=${next}`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      const body: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(
+          typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
+            ? body.error
+            : 'Não foi possível calcular o que será excluído.',
+        );
+      }
+      return deleteImpactSchema.parse(body);
+    }
+    // Parcela: busca os dois escopos para o rótulo "esta e as N futuras" ter número.
+    void Promise.all([load('only'), isInstallment ? load('with-future') : Promise.resolve(null)])
+      .then(([only, withFuture]) => setImpacts({ only, withFuture }))
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setLoadError(cause instanceof Error ? cause.message : 'Não foi possível calcular o que será excluído.');
+      });
+    return () => controller.abort();
+  }, [transaction.id, isInstallment]);
+
+  const impact = scope === 'with-future' ? impacts.withFuture : impacts.only;
+  const simple = impact !== null && isSimpleDelete(impact);
+  const futureCount = impacts.withFuture?.deleted.futureInstallments ?? 0;
+
+  async function confirm() {
+    setError(null);
+    try {
+      await onConfirm(scope);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível excluir o lançamento.');
+    }
+  }
+
+  const heading = (
+    <>
+      <strong className="font-medium">{transaction.description}</strong> (<Money value={transaction.amountCents} />,{' '}
+      <DateText value={transaction.occurredOn} />)
+    </>
+  );
+
+  return (
+    <DialogShell
+      title={simple ? 'Excluir lançamento?' : `Excluir "${transaction.description}"?`}
+      description={simple ? 'Esta exclusão não mexe em mais nada.' : 'Veja o que esta exclusão alcança antes de confirmar.'}
+      onClose={onClose}
+    >
+      <div className="flex flex-col gap-4 text-sm">
+        {loadError !== null ? (
+          <p role="alert" className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-900">
+            {loadError} Por segurança, a exclusão fica bloqueada: não dá para dizer o que ela apagaria.
+          </p>
+        ) : null}
+
+        {loadError === null && impact === null ? (
+          <p role="status" className="text-muted-foreground">Calculando o que será excluído…</p>
+        ) : null}
+
+        {impact !== null && simple ? (
+          <p>
+            {heading} vai sumir.
+          </p>
+        ) : null}
+
+        {impact !== null && !simple ? (
+          <div className="flex flex-col gap-3">
+            {isInstallment ? (
+              <fieldset className="flex flex-col gap-2" disabled={busy}>
+                <legend className="mb-1 text-xs text-muted-foreground">Parcela do plano {impact.target.description}</legend>
+                <label className="flex items-start gap-2">
+                  <input type="radio" name="delete-scope" checked={scope === 'only'} onChange={() => setScope('only')} className="mt-1" />
+                  <span>Só esta parcela</span>
+                </label>
+                <label className="flex items-start gap-2">
+                  <input type="radio" name="delete-scope" checked={scope === 'with-future'} onChange={() => setScope('with-future')} className="mt-1" />
+                  <span>
+                    Esta e as {plural(futureCount, 'parcela futura', 'parcelas futuras')} do plano
+                  </span>
+                </label>
+              </fieldset>
+            ) : null}
+
+            <p>
+              {heading}. Isto apaga <strong>{plural(impact.deleted.transactions, 'lançamento', 'lançamentos')}</strong>
+              {impact.deleted.futureInstallments > 0 ? (
+                <>
+                  {' '}e <strong>{plural(impact.deleted.futureInstallments, 'parcela futura', 'parcelas futuras')}</strong>
+                </>
+              ) : null}
+              .
+            </p>
+            {impact.effects.length > 0 ? (
+              <ul className="flex list-disc flex-col gap-1.5 pl-5">
+                {impact.effects.map((effect, index) => (
+                  <li key={`${effect.kind}-${String(index)}`}>
+                    <EffectLine effect={effect} />
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+
+        <p className="font-semibold">Isto não pode ser desfeito.</p>
+
+        {error !== null ? (
+          <p role="alert" className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-900">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="flex justify-end gap-2">
+          {/* O foco inicial fica em Cancelar: Enter sem querer não apaga. */}
+          <Button variant="outline" autoFocus disabled={busy} onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="destructive" disabled={busy || impact === null || loadError !== null} onClick={() => void confirm()}>
+            {busy ? 'Excluindo…' : 'Excluir'}
+          </Button>
+        </div>
+      </div>
     </DialogShell>
   );
 }

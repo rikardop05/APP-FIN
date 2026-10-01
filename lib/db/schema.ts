@@ -371,6 +371,57 @@ export const importBatches = pgTable('import_batches', {
 });
 
 // ---------------------------------------------------------------------------
+// skipped_occurrences — ocorrencias de recorrencia que a pessoa dispensou
+// ---------------------------------------------------------------------------
+
+/**
+ * "Esta ocorrencia nao vai acontecer; as outras continuam."
+ *
+ * Existe porque a previsao de recorrencia e gravada como linha `planned` e o
+ * `topUpPlanned` a regenera ao abrir o painel: apagar a linha sem deixar rastro
+ * a faria VOLTAR. A marca vive numa tabela a parte, e nao como estado na propria
+ * linha (`deleted_at`, um 3o valor de `status`), de proposito: todo consumidor de
+ * `transactions` que esquecesse de filtrar o novo estado passaria a somar linha
+ * apagada, errado por omissao e calado. Aqui, esquecer esta tabela faz a linha
+ * VOLTAR, que a pessoa ve.
+ *
+ * `competence` e a competencia COLOCADA da linha (em cartao, a da fatura), a mesma
+ * chave que o indice parcial de `transactions` usa. Efeito de produto: apagar uma
+ * previsao vencida e nao realizada resolve a pendencia do painel sem obrigar a
+ * pessoa a registrar um gasto que nao houve.
+ */
+export const skippedOccurrences = pgTable(
+  'skipped_occurrences',
+  {
+    id: id(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    recurringExpenseId: uuid('recurring_expense_id').references(() => recurringExpenses.id, {
+      onDelete: 'cascade',
+    }),
+    incomeId: uuid('income_id').references(() => incomes.id, { onDelete: 'cascade' }),
+    /** `YYYY-MM`, a competencia colocada da linha dispensada. */
+    competence: text('competence').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    // Exatamente uma origem.
+    check(
+      'skipped_occurrences_one_origin',
+      sql`(${t.recurringExpenseId} is not null) <> (${t.incomeId} is not null)`,
+    ),
+    // Dispensar duas vezes e idempotente (`DO NOTHING` nestes dois indices).
+    uniqueIndex('skipped_occurrences_expense_competence_unique')
+      .on(t.householdId, t.recurringExpenseId, t.competence)
+      .where(sql`${t.recurringExpenseId} is not null`),
+    uniqueIndex('skipped_occurrences_income_competence_unique')
+      .on(t.householdId, t.incomeId, t.competence)
+      .where(sql`${t.incomeId} is not null`),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // transactions — o registro central
 // ---------------------------------------------------------------------------
 

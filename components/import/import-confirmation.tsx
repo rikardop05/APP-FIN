@@ -8,6 +8,7 @@ import { formatBRL, parseBRL } from '@/lib/money';
 import type { Cents } from '@/lib/money';
 import type { RecalculateBody } from '@/app/api/import/recalculate/schema';
 import { Badge, Button, Checkbox, Input, Money, Select } from '@/components/ui-kit';
+import { CompetenceWarningBanner } from './competence-warning-banner';
 import {
   apiErrorSchema,
   recalculateResponseSchema,
@@ -71,6 +72,8 @@ type ImportConfirmationProps = {
   preview: UploadResponse;
   sourceKind: SourceKind;
   sourceId: string;
+  /** Nome da origem (do cartão, quando é cartão): entra na frase do aviso de cadastro. */
+  sourceName: string;
   members: MemberItem[];
   categories: CategoryNode[];
   /**
@@ -214,12 +217,18 @@ export function ImportConfirmation({
   preview,
   sourceKind,
   sourceId,
+  sourceName,
   members,
   categories,
   defaultCompetence,
   onBack,
   onCommitted,
 }: ImportConfirmationProps) {
+  // Ciclo VIGENTE do cartão: começa no do upload e passa a ser o que o servidor
+  // devolveu se o usuário corrigir o cadastro pelo aviso. Alimenta a comparação do
+  // aviso E o `recalculate` (que recebe o ciclo do cliente): o commit lê o ciclo do
+  // banco, então a prévia tem de usar o mesmo.
+  const [cardCycle, setCardCycle] = useState(preview.cardCycle);
   const [drafts, setDrafts] = useState<DraftRow[]>(() => initialDrafts(preview.preview.rows));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -258,7 +267,7 @@ export function ImportConfirmation({
       body: JSON.stringify({
         sourceKind,
         sourceId,
-        cardCycle: preview.cardCycle,
+        cardCycle,
         rows: confirmedRows,
         // `statementCompetence` é a fonte da verdade para a competência de cada
         // linha quando a origem é cartão (RF-IMP-09). Para conta, vale `null`:
@@ -301,7 +310,7 @@ export function ImportConfirmation({
       .finally(() => setRecalculating(false));
 
     return () => controller.abort();
-  }, [drafts, preview.cardCycle, sourceId, sourceKind, defaultCompetence]);
+  }, [drafts, cardCycle, sourceId, sourceKind, defaultCompetence]);
 
   function updateDraft(index: number, update: Partial<DraftRow>) {
     setDrafts((current) =>
@@ -387,6 +396,16 @@ export function ImportConfirmation({
           <span>{error}</span>
         </div>
       ) : null}
+
+      <CompetenceWarningBanner
+        sourceKind={sourceKind}
+        sourceId={sourceId}
+        sourceName={sourceName}
+        cardCycle={cardCycle}
+        declaredCompetence={defaultCompetence}
+        documentDate={preview.preview.documentDate}
+        onCycleChanged={setCardCycle}
+      />
 
       {preview.previousBatches.some((batch) => batch.status === 'committed') ? (
         <div className="mt-4 flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">

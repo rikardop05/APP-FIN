@@ -25,6 +25,7 @@ import {
   householdSettings,
   incomes,
   recurringExpenses,
+  skippedOccurrences,
   transactions,
 } from '@/lib/db/schema';
 import type { CardCycleConfig } from '@/lib/finance/billing';
@@ -191,12 +192,47 @@ function isConciliated(_row: { id: string }): boolean {
   return false;
 }
 
-type Origin = { expenseId: string } | { incomeId: string };
+export type Origin = { expenseId: string } | { incomeId: string };
 
 function originMatch(origin: Origin) {
   return 'expenseId' in origin
     ? eq(transactions.recurringExpenseId, origin.expenseId)
     : eq(transactions.incomeId, origin.incomeId);
+}
+
+function skippedOriginMatch(origin: Origin) {
+  return 'expenseId' in origin
+    ? eq(skippedOccurrences.recurringExpenseId, origin.expenseId)
+    : eq(skippedOccurrences.incomeId, origin.incomeId);
+}
+
+/**
+ * Marca a ocorrência (origem + competência COLOCADA) como dispensada pela pessoa:
+ * "esta não vai acontecer; as outras continuam". `topUpPlanned` e `replanSeries`
+ * a tratam como ocupada e NUNCA a regeneram. Idempotente.
+ *
+ * Existe porque apagar uma `planned` sem deixar rastro a faria VOLTAR no próximo
+ * painel (o top-up vê a falta e regenera). Efeito de produto: apagar uma previsão
+ * vencida e não realizada resolve a pendência do painel — antes, a única forma de
+ * limpar "prevista e não realizada" era registrar um gasto que não houve.
+ *
+ * Quem chama deve ter tomado `lockHousehold`, para o top-up que está rodando
+ * enxergar a marca na segunda passada.
+ */
+export async function recordSkippedOccurrence(
+  tx: DbTransaction,
+  householdId: string,
+  origin: Origin,
+  competence: string,
+): Promise<void> {
+  await tx
+    .insert(skippedOccurrences)
+    .values(
+      'expenseId' in origin
+        ? { householdId, recurringExpenseId: origin.expenseId, competence }
+        : { householdId, incomeId: origin.incomeId, competence },
+    )
+    .onConflictDoNothing();
 }
 
 /** A regra nova e a série a gravar. `null` = desativar: só apaga o futuro. */
@@ -269,13 +305,20 @@ export async function replanSeries(
   let inserted = 0;
   let skippedOccupied: string[] = [];
   if (plan !== null && result.insert.length > 0) {
-    const remaining = await tx
-      .select({ competence: transactions.competence })
-      .from(transactions)
-      .where(and(eq(transactions.householdId, householdId), originMatch(origin)));
+    const [remaining, dismissed] = await Promise.all([
+      tx
+        .select({ competence: transactions.competence })
+        .from(transactions)
+        .where(and(eq(transactions.householdId, householdId), originMatch(origin))),
+      // O que a pessoa dispensou continua dispensado depois de uma edição.
+      tx
+        .select({ competence: skippedOccurrences.competence })
+        .from(skippedOccurrences)
+        .where(and(eq(skippedOccurrences.householdId, householdId), skippedOriginMatch(origin))),
+    ]);
     const { kept, skipped } = dropOccupied(
       buildPlannedRows(plan.series, result.insert),
-      new Set(remaining.map((row) => row.competence)),
+      new Set([...remaining, ...dismissed].map((row) => row.competence)),
     );
     skippedOccupied = skipped;
     if (kept.length > 0) inserted = await insertPlannedRowsIdempotent(tx, kept);
@@ -419,8 +462,22 @@ async function computeMissingRows(
         or(isNotNull(transactions.recurringExpenseId), isNotNull(transactions.incomeId)),
       ),
     );
+  // A dispensa conta como "já existe". Se esta leitura FALHAR, a falha sobe e o
+  // top-up não insere nada: ignorar o erro regeneraria o que a pessoa apagou.
+  const dismissed = await reader
+    .select({
+      recurringExpenseId: skippedOccurrences.recurringExpenseId,
+      incomeId: skippedOccurrences.incomeId,
+      competence: skippedOccurrences.competence,
+    })
+    .from(skippedOccurrences)
+    .where(
+      and(eq(skippedOccurrences.householdId, householdId), gte(skippedOccurrences.competence, window.from)),
+    );
   const have = new Set(
-    existing.map((row) => `${row.recurringExpenseId ?? row.incomeId ?? ''}|${row.competence}`),
+    [...existing, ...dismissed].map(
+      (row) => `${row.recurringExpenseId ?? row.incomeId ?? ''}|${row.competence}`,
+    ),
   );
 
   const missing: PlannedTransactionRow[] = [];

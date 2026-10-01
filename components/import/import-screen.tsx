@@ -473,6 +473,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
           preview={preview}
           sourceKind={preview.sourceKind}
           sourceId={preview.sourceId}
+          sourceName={sources.find((source) => source.id === preview.sourceId)?.name ?? 'este cartão'}
           members={members}
           categories={categories}
           defaultCompetence={competence}

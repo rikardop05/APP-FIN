@@ -7,10 +7,12 @@ import { Button, EmptyState, PageHeader } from '@/components/ui-kit';
 import { TransactionFilters, type TransactionFilterValues } from './transaction-filters';
 import {
   BatchCategorizationDialog,
+  DeleteTransactionDialog,
   ManualTransactionDialog,
   RuleDialog,
 } from './transaction-dialogs';
 import {
+  deleteResultSchema,
   transactionResponseSchema,
   ruleSuggestionSchema,
   type RuleSuggestion,
@@ -44,6 +46,7 @@ type DialogState =
   | { kind: 'manual' }
   | { kind: 'batch' }
   | { kind: 'rule'; transactionId: string }
+  | { kind: 'delete'; transactionId: string }
   | null;
 
 async function readJson<T>(response: Response, schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } }): Promise<T> {
@@ -172,6 +175,23 @@ export function LancamentosScreen({ today }: { today: string }) {
     }
   }
 
+  /**
+   * Exclui o lançamento. Quem decide o que some é o servidor (o mesmo cálculo da
+   * confirmação); a tela só recarrega. Erro volta ao diálogo, que o mostra.
+   */
+  async function deleteRow(transactionId: string, scope: 'only' | 'with-future') {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}?scope=${scope}`, { method: 'DELETE' });
+      await readJson(response, deleteResultSchema);
+      setDialog(null);
+      setSelectedIds((previous) => previous.filter((id) => id !== transactionId));
+      await load(appliedFilters);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function openRule(transactionId: string) {
     setDialog({ kind: 'rule', transactionId });
     setRuleSuggestion(null);
@@ -240,12 +260,25 @@ export function LancamentosScreen({ today }: { today: string }) {
       ) : (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">{rows.length} lançamento{rows.length === 1 ? '' : 's'} encontrado{rows.length === 1 ? '' : 's'}</p>
-          <TransactionList rows={rows} options={options} selectedIds={selectedIds} onToggle={toggleSelection} onToggleAll={toggleAll} onEdit={setEditingId} onRule={openRule} editingId={editingId} onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} />
+          <TransactionList rows={rows} options={options} selectedIds={selectedIds} onToggle={toggleSelection} onToggleAll={toggleAll} onEdit={setEditingId} onRule={openRule} onDelete={(id) => setDialog({ kind: 'delete', transactionId: id })} editingId={editingId} onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} />
         </div>
       )}
 
       {dialog?.kind === 'manual' ? <ManualTransactionDialog today={today} options={options} busy={busy} onClose={() => setDialog(null)} onSubmit={createManual} /> : null}
       {dialog?.kind === 'batch' ? <BatchCategorizationDialog count={selectedIds.length} options={options} busy={busy} onClose={() => setDialog(null)} onSubmit={categorizeBatch} /> : null}
+      {dialog?.kind === 'delete' ? (
+        (() => {
+          const target = rows.find((row) => row.id === dialog.transactionId);
+          return target === undefined ? null : (
+            <DeleteTransactionDialog
+              transaction={target}
+              busy={busy}
+              onClose={() => setDialog(null)}
+              onConfirm={(scope) => deleteRow(target.id, scope)}
+            />
+          );
+        })()
+      ) : null}
       {dialog?.kind === 'rule' ? <RuleDialog suggestion={ruleSuggestion} options={options} busy={busy} loading={loadingRule} onClose={() => setDialog(null)} onSubmit={createRule} /> : null}
     </>
   );
