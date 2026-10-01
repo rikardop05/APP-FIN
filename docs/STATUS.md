@@ -3,7 +3,7 @@
 Mantido pelo orquestrador. Estados: `todo | doing | review | done | blocked`.
 Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATION.md` §9, equipe em `TEAM.md`.
 
-**Última atualização:** 2026-09-30 · 636 testes verdes · HEAD `0612014`, sincronizado · **T-116 em execução: o gate humano achou 8 defeitos que 591 testes verdes não achavam**
+**Última atualização:** 2026-09-30 · 656 testes verdes · HEAD `b162ec8`, sincronizado · **equipe parada: a assinatura OpenCode Go ficou sem saldo e os 6 agentes morreram**
 
 ## Tarefas
 
@@ -306,3 +306,70 @@ Toda posse de diretório agora declara o que exclui.
 | G-06 | competência da **fatura** tirada de uma transação qualquer | **corrigido** `0612014` |
 | G-07 | competência da **linha** derivada da data da compra, não da fatura | **corrigido** `0612014` |
 | G-08 | Santander detectava **zero** parcelas: a coluna em `x=168` foi medida como "data auxiliar" e nunca lida | **corrigido** — 5 planos onde havia 0 |
+
+## PARADA DA EQUIPE — assinatura sem saldo (2026-09-30)
+
+`Upstream request failed: Insufficient account funds`. **Os seis agentes morreram de uma vez** —
+não é um modelo, é a conta: testei o Corvo (DeepSeek) e a Lanterna (MiniMax) e os dois dão o mesmo
+erro. Só o Orquestrador (Claude Code) continua.
+
+A contingência que o Ricardo pré-autorizou em 2026-09-23 era Codex → OpenCode Go. Como é o próprio
+OpenCode Go que acabou, **não há para onde migrar sem decisão dele**.
+
+O T-204 estava com 2.255 linhas **só no disco, sem rastreio**, quando isso aconteceu. Commitado em
+`b162ec8` marcado como entrega parcial — preservar trabalho verde é diferente de aceitá-lo.
+
+## T-116: as três faturas fecham no centavo (verificado em 2026-09-30)
+
+| Fatura | Gravadas | Soma | Total impresso | Competência | Planos |
+|---|---|---|---|---|---|
+| Nubank | 13 | −R$ 1.074,82 | −R$ 1.074,82 | `2026-09` | 4 |
+| Santander | 23 | −R$ 2.874,49 | −R$ 2.874,49 | `2026-09` | 5 |
+| Mercado Pago | 17 | −R$ 1.469,01 | −R$ 1.469,01 | `2026-07` | 2 |
+
+Pagamento da fatura anterior desmarcado nas três; competência única e correta nas três; parcelas
+detectadas e projetadas. **Isso é o motor, não o aceite.** O que falta para o T-116 fechar é o
+Ricardo confirmar na tela e ver os números caírem no painel — a gravação de ponta a ponta com dado
+real ainda não foi exercitada por ninguém.
+
+Uma sobra: o Nubank tem duas linhas de `R$ 0,00` informativas que viram uma só pelo dedupe (mesma
+data, mesmo valor, mesma descrição). Não afeta total nenhum, mas elas não deviam entrar. Perguntei à
+Peneira e ela morreu antes de responder.
+
+## DECISÃO PENDENTE — previsão de recorrência: linha ou derivada?
+
+**Bloqueia T-205, T-207 e T-208.** O T-204 entregou as ocorrências calculadas **na tela**
+(`recurring-screen.tsx` chama `expandRecurrence`), sem gravar nada: as únicas escritas são
+`insert(incomes)` e `insert(recurringExpenses)`.
+
+### Minha recomendação: **gravar como `planned`**
+
+Não por preferência — porque **o sistema já faz exatamente isso para o caso irmão**:
+
+```ts
+// lib/db/queries/import.ts:409 — parcelas futuras de uma fatura importada
+const status: TransactionStatus = projected ? 'planned' : 'posted';
+```
+
+Parcela futura e recorrência futura são a mesma coisa: obrigação conhecida que ainda não aconteceu.
+Tratar uma como linha e a outra como cálculo de tela seria incoerência sem razão.
+
+| | Gravar como `planned` | Derivar na leitura |
+|---|---|---|
+| `DATA-MODEL:123` | a coluna `status` **nomeia** "recorrência" | precisaria mudar o modelo |
+| `RF-ORC-03` (conciliar previsto × realizado) | funciona: há linha com identidade para casar | impossível: não se concilia contra memória de navegador |
+| Dashboard (T-115) | vê, porque lê `transactions` | não vê sem query nova |
+| Fluxo de caixa (T-206) | consome direto | alguém tem de derivar no servidor de qualquer jeito |
+| Precedente | **já é assim** para parcelas | seria a exceção |
+
+**O único argumento contra é real:** estado duplicado diverge quando a regra muda — edite a despesa
+e as 12 linhas ficam velhas. Mas esse problema já foi resolvido no projeto, para o mesmo caso:
+
+> `replanInstallments` — *"ao editar um plano: preserva parcelas já realizadas, regenera as futuras"*
+> (CONTRACTS §4)
+
+A recorrência precisa do simétrico: ao editar a regra, preservar o que já foi conciliado e regerar
+o futuro. É trabalho, não impedimento — e é trabalho que já tem desenho pronto para copiar.
+
+**Se o Ricardo decidir derivar**, o `DATA-MODEL` muda e o `RF-ORC-03` precisa de outro mecanismo.
+Essa é a parte que torna a escolha dele e não minha.
