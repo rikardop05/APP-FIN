@@ -28,9 +28,11 @@ export type LoadedCashflow = CashflowBase & {
  * Vive em `app/_lib/` porque serve a duas rotas; `_lib` de uma rota não pode
  * servir a outra.
  *
- * Chama `topUpPlanned` primeiro, de propósito: o painel já completava a previsão
- * de recorrência antes de ler, e a projeção lê essas linhas. Se só uma das telas
- * completasse, a que fosse aberta primeiro mostraria um saldo diferente da outra.
+ * Chama `topUpPlanned` primeiro, de propósito: a projeção lê as linhas previstas
+ * de recorrência. Se só uma das telas completasse, a que fosse aberta primeiro
+ * mostraria um saldo diferente da outra. É a ÚNICA chamada de `topUpPlanned` no
+ * request de `/fluxo` e do painel: o painel chama este loader antes das suas
+ * outras leituras e não chama `topUpPlanned` por conta própria.
  * É escrita idempotente (`ON CONFLICT DO NOTHING` nos índices parciais) e nunca
  * lança. O resto é só leitura, e o motor roda no servidor: sinal errado lança
  * aqui, nunca vira gráfico torto.

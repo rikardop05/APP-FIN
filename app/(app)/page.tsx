@@ -17,7 +17,6 @@ import {
   listOverdueRecurring,
   listUncategorizedTransactionItems,
 } from '@/lib/db/queries/dashboard';
-import { topUpPlanned } from '@/lib/db/queries/recurring-planned-write';
 import { getSettings } from '@/lib/db/queries/settings';
 
 export const dynamic = 'force-dynamic';
@@ -52,22 +51,16 @@ export default async function DashboardPage() {
   const today = todayInSaoPaulo();
   const competence = toCompetence(today);
 
-  // Completa a previsao de recorrencia ate o horizonte antes de ler o painel.
-  // Nunca lanca: falha aqui nao pode virar 500 no dashboard.
-  await topUpPlanned(householdId, today);
-  const settings = await getSettings(householdId);
-
-  const [dashboard, uncategorizedItems, incomeExpenseRows, overdueRecurring] = await Promise.all([
-    getDashboardData(householdId, today, settings.commitmentMonths),
-    listUncategorizedTransactionItems(householdId, today),
-    listIncomeExpenseRows(householdId, today, INCOME_EXPENSE_MONTHS),
-    listOverdueRecurring(householdId, today, OVERDUE_RECURRING_LIMIT),
-  ]);
-
   // Saldo projetado (gráfico 3): o MESMO caminho de `/fluxo` (`loadProjectedCashflow`),
   // para as duas telas mostrarem o mesmo saldo. Falha NÃO some: vira `unavailable`,
   // que a tela escreve, e o erro vai para o log. Casa sem nada para projetar vira
   // `empty` (mesmo critério do `/fluxo`), em vez de uma curva reta em zero.
+  //
+  // Roda PRIMEIRO, e de propósito: o loader é quem chama `topUpPlanned` (completa
+  // a previsão de recorrência até o horizonte; nunca lança), e as leituras do
+  // painel abaixo precisam ver essas linhas. Assim a escrita roda UMA vez por
+  // visita. Não mova esta chamada para depois das leituras nem para dentro do
+  // `Promise.all`: elas leriam antes da previsão estar completa.
   let projected: ProjectedState;
   try {
     const loaded = await loadProjectedCashflow(householdId, today);
@@ -78,6 +71,15 @@ export default async function DashboardPage() {
     console.error('[dashboard] saldo projetado indisponivel:', error);
     projected = { kind: 'unavailable' };
   }
+
+  const settings = await getSettings(householdId);
+
+  const [dashboard, uncategorizedItems, incomeExpenseRows, overdueRecurring] = await Promise.all([
+    getDashboardData(householdId, today, settings.commitmentMonths),
+    listUncategorizedTransactionItems(householdId, today),
+    listIncomeExpenseRows(householdId, today, INCOME_EXPENSE_MONTHS),
+    listOverdueRecurring(householdId, today, OVERDUE_RECURRING_LIMIT),
+  ]);
 
   // Orcamentos estourados no mes (T-205): "estourado" e o `light === 'red'` de
   // `budgetStatus`, decidido la. Se a consulta falhar, o painel segue com um aviso

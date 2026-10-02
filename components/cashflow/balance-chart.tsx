@@ -14,7 +14,10 @@ type BalanceChartProps = {
 };
 
 const HEIGHT = 260;
-const PAD = { top: 28, right: 16, bottom: 34, left: 16 };
+// `left`/`right` cabem MEIO rótulo do eixo X ("out/2026" tem ~46px a 11px): o
+// rótulo é centrado no ponto (`textAnchor="middle"`), e com 16px o primeiro e o
+// último saíam cortados ("ut/2026", "set/202").
+const PAD = { top: 28, right: 30, bottom: 34, left: 30 };
 const MIN_LABEL_GAP = 52;
 
 /**

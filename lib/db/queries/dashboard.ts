@@ -159,6 +159,11 @@ export async function getDashboardData(
           eq(transactions.householdId, householdId),
           eq(transactions.status, 'planned'),
           eq(transactions.kind, 'expense'),
+          // Só parcela de verdade: linha de plano (`installment_plan_id`, que o
+          // CHECK `transactions_installment_number_iff_plan` amarra ao número).
+          // Sem isso, a previsão de despesa fixa (`recurring_expense_id`) e a
+          // `planned` avulsa entravam em "Parcelas a vencer".
+          isNotNull(transactions.installmentPlanId),
           gte(transactions.competence, futureInstallmentsStart),
           lte(transactions.competence, futureInstallmentsEnd),
         ),
@@ -365,6 +370,8 @@ export async function sumFutureInstallments(
         eq(transactions.householdId, householdId),
         eq(transactions.status, 'planned'),
         eq(transactions.kind, 'expense'),
+        // O mesmo recorte de `futureInstallmentsAgg`: só linha de plano.
+        isNotNull(transactions.installmentPlanId),
         gte(transactions.competence, from),
         lte(transactions.competence, to),
       ),
