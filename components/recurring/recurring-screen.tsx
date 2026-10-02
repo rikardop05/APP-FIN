@@ -7,8 +7,27 @@ import { Button, Input, Money, Select } from '@/components/ui-kit';
 import { type Frequency, type IncomeKind } from '@/lib/db';
 import { formatDateBR, toCompetence } from '@/lib/date';
 import { expandRecurrence, type PlannedOccurrence } from '@/lib/finance/recurrence';
-import { cents, formatBRL, parseBRL, type BasisPoints, type Cents } from '@/lib/money';
+import {
+  basisPoints,
+  cents,
+  formatBRL,
+  parseBRL,
+  type BasisPoints,
+  type Cents,
+} from '@/lib/money';
 
+import {
+  expenseText,
+  firstLeafId,
+  formatAdjustmentPercent,
+  incomeText,
+  leafCategoryName,
+  oneOffListSuffix,
+  oneOffMonthOptions,
+  parseAdjustmentPercent,
+  previewText,
+  type LeafCategoryGroup,
+} from './recurring-form';
 import {
   IncomeFormSchema,
   RecurringExpenseFormSchema,
@@ -58,7 +77,8 @@ type IncomeItem = {
 };
 
 type RecurringOptions = {
-  categories: { id: string; name: string; parentId: string | null; nature: 'essential' | 'non_essential' | 'investment' | 'income' }[];
+  /** Folhas agrupadas pela raiz (`leafCategoryGroups`). */
+  categories: LeafCategoryGroup[];
   accounts: { id: string; name: string }[];
   cards: { id: string; name: string }[];
 };
@@ -106,7 +126,6 @@ const INCOME_KIND_OPTIONS: IncomeKind[] = [
 // ---------------------------------------------------------------------------
 
 function OccurrencesPreview({
-  title,
   expectedCents,
   dueDay,
   frequency,
@@ -117,7 +136,6 @@ function OccurrencesPreview({
   oneOffCompetence,
   previewMonths,
 }: {
-  title: string;
   expectedCents: Cents;
   dueDay: number;
   frequency: Frequency;
@@ -145,11 +163,11 @@ function OccurrencesPreview({
   return (
     <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3">
       <p className="text-xs font-medium text-amber-900">
-        {title} — previsto, ainda não realizado.
+        {previewText.title(previewMonths)}
       </p>
       {occurrences.length === 0 ? (
         <p className="mt-1 text-xs text-amber-900/80">
-          Sem ocorrências previstas na janela dos próximos 12 meses.
+          {previewText.empty(previewMonths)}
         </p>
       ) : (
         <ul className="mt-2 space-y-1">
@@ -159,7 +177,7 @@ function OccurrencesPreview({
               className="flex items-center justify-between text-xs tabular"
             >
               <span className="text-amber-950">
-                {formatDateBR(occurrence.date)} · {occurrence.competence}
+                {formatDateBR(occurrence.date)} · {previewText.occurrenceMonth(occurrence.competence)}
               </span>
               <Money value={occurrence.amountCents} sign="never" />
             </li>
@@ -265,17 +283,19 @@ function ExpenseDialog({
     initial ?? {
       description: '',
       amountInput: '',
-      categoryId: options.categories[0]?.id ?? '',
+      categoryId: firstLeafId(options.categories),
       dueDay: '5',
       frequency: 'monthly',
       accountId: options.accounts[0]?.id ?? null,
       creditCardId: null,
       startsOn: today,
       endsOn: null,
-      annualAdjustmentBp: '',
+      annualAdjustmentPercent: '',
     },
   );
   const [showPreview, setShowPreview] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const previewAdjustment = parseAdjustmentPercent(values.annualAdjustmentPercent);
 
   function update<K extends keyof RecurringExpenseFormInput>(
     key: K,
@@ -303,17 +323,19 @@ function ExpenseDialog({
     event.preventDefault();
     const parsed = RecurringExpenseFormSchema.safeParse(values);
     if (!parsed.success) {
+      setFormError(parsed.error.issues[0]?.message ?? 'Confira os campos.');
       return;
     }
+    setFormError(null);
     await onSubmit(parsed.data);
   }
 
   return (
     <DialogShell
       title={initial ? 'Editar despesa fixa' : 'Nova despesa fixa'}
-      description={`Vencimento no \`dueDay\` a partir de \`startsOn\`. Janela de ${String(previewMonths)} meses no preview abaixo.`}
+      description={expenseText.dialogDescription(previewMonths)}
       busy={busy}
-      error={error}
+      error={formError ?? error}
       onClose={onClose}
       onSubmit={submit}
       submitLabel={initial ? 'Salvar alterações' : 'Criar despesa fixa'}
@@ -339,7 +361,7 @@ function ExpenseDialog({
             required
           />
           <span className="text-xs text-muted-foreground">
-            Use valor positivo. Saída é negativa no banco.
+            {expenseText.amountHint}
           </span>
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -369,19 +391,23 @@ function ExpenseDialog({
           </Select>
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-xs text-muted-foreground">Categoria (folha)</span>
+          <span className="text-xs text-muted-foreground">{expenseText.categoryLabel}</span>
           <Select
             value={values.categoryId}
             onChange={(event) => update('categoryId', event.target.value)}
             required
           >
             {options.categories.length === 0 ? (
-              <option value="">Sem categoria-folha cadastrada</option>
+              <option value="">{expenseText.categoryEmpty}</option>
             ) : (
-              options.categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
+              options.categories.map((group) => (
+                <optgroup key={group.id} label={group.name}>
+                  {group.leaves.map((leaf) => (
+                    <option key={leaf.id} value={leaf.id}>
+                      {leaf.name}
+                    </option>
+                  ))}
+                </optgroup>
               ))
             )}
           </Select>
@@ -420,7 +446,7 @@ function ExpenseDialog({
             ))}
           </Select>
           <span className="text-xs text-muted-foreground">
-            Escolha a conta OU o cartão de onde a despesa sai.
+            {expenseText.paymentHint}
           </span>
         </label>
         {options.accounts.length === 0 && options.cards.length === 0 ? (
@@ -437,7 +463,7 @@ function ExpenseDialog({
             required
           />
           <span className="text-xs text-muted-foreground">
-            Piso. A 1ª ocorrência é o 1º `dueDay` em ou depois desta data.
+            {expenseText.startsOnHint}
           </span>
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -449,15 +475,14 @@ function ExpenseDialog({
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-xs text-muted-foreground">Reajuste anual (bp, opcional)</span>
+          <span className="text-xs text-muted-foreground">{expenseText.adjustmentLabel}</span>
           <Input
-            type="number"
-            value={values.annualAdjustmentBp ?? ''}
-            onChange={(event) =>
-              update('annualAdjustmentBp', event.target.value === '' ? '' : event.target.value)
-            }
-            placeholder="500 = 5,00 %"
+            value={values.annualAdjustmentPercent}
+            onChange={(event) => update('annualAdjustmentPercent', event.target.value)}
+            placeholder={expenseText.adjustmentPlaceholder}
+            inputMode="decimal"
           />
+          <span className="text-xs text-muted-foreground">{expenseText.adjustmentHint}</span>
         </label>
       </div>
       <div className="flex flex-col gap-2">
@@ -472,16 +497,15 @@ function ExpenseDialog({
         </Button>
         {showPreview && previewReady && previewExpected !== null ? (
           <OccurrencesPreview
-            title={`Próximas ${previewMonths} ocorrências`}
             expectedCents={previewExpected}
             dueDay={Number(values.dueDay)}
             frequency={values.frequency}
             startsOn={previewStart}
             endsOn={values.endsOn}
             annualAdjustmentBp={
-              values.annualAdjustmentBp === null || values.annualAdjustmentBp === ''
-                ? null
-                : (Number(values.annualAdjustmentBp) as unknown as BasisPoints)
+              previewAdjustment.ok && previewAdjustment.basisPoints !== null
+                ? basisPoints(previewAdjustment.basisPoints)
+                : null
             }
             today={today}
             previewMonths={previewMonths}
@@ -530,6 +554,8 @@ function IncomeDialog({
     },
   );
   const [showPreview, setShowPreview] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const monthOptions = oneOffMonthOptions(today, previewMonths, values.oneOffCompetence);
 
   function update<K extends keyof IncomeFormInput>(key: K, value: IncomeFormInput[K]) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -551,16 +577,20 @@ function IncomeDialog({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const parsed = IncomeFormSchema.safeParse(values);
-    if (!parsed.success) return;
+    if (!parsed.success) {
+      setFormError(parsed.error.issues[0]?.message ?? 'Confira os campos.');
+      return;
+    }
+    setFormError(null);
     await onSubmit(parsed.data);
   }
 
   return (
     <DialogShell
       title={initial ? 'Editar receita' : 'Nova receita'}
-      description="Recebimento no `receiveDay` a partir de `startsOn`. Para 13º, use `one_off` com competência fixa."
+      description={incomeText.dialogDescription(previewMonths)}
       busy={busy}
-      error={error}
+      error={formError ?? error}
       onClose={onClose}
       onSubmit={submit}
       submitLabel={initial ? 'Salvar alterações' : 'Criar receita'}
@@ -658,9 +688,13 @@ function IncomeDialog({
           <span className="text-xs text-muted-foreground">Frequência</span>
           <Select
             value={values.frequency}
-            onChange={(event) =>
-              update('frequency', event.target.value as IncomeFormInput['frequency'])
-            }
+            onChange={(event) => {
+              const next = event.target.value as IncomeFormInput['frequency'];
+              update('frequency', next);
+              // O mes fixo so vale para eventual; deixa-lo preenchido ao trocar
+              // de frequencia faria o formulario recusar o envio.
+              if (next !== 'one_off') update('oneOffCompetence', null);
+            }}
           >
             {FREQUENCY_OPTIONS.map((frequency) => (
               <option key={frequency} value={frequency}>
@@ -670,38 +704,44 @@ function IncomeDialog({
           </Select>
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-xs text-muted-foreground">Início (opcional para não-eventual)</span>
+          <span className="text-xs text-muted-foreground">
+            {incomeText.startsOnLabel(values.frequency)}
+          </span>
           <Input
             type="date"
             value={values.startsOn ?? ''}
             onChange={(event) => update('startsOn', event.target.value || null)}
           />
           <span className="text-xs text-muted-foreground">
-            Piso. A 1ª ocorrência é o 1º `receiveDay` em ou depois desta data.
+            {incomeText.startsOnHint}
           </span>
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-xs text-muted-foreground">Fim (opcional)</span>
+          <span className="text-xs text-muted-foreground">{incomeText.endsOnLabel}</span>
           <Input
             type="date"
             value={values.endsOn ?? ''}
             onChange={(event) => update('endsOn', event.target.value || null)}
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-xs text-muted-foreground">Competência fixa (só para `one_off`)</span>
-          <Input
-            type="month"
-            value={values.oneOffCompetence ?? ''}
-            onChange={(event) =>
-              update('oneOffCompetence', event.target.value || null)
-            }
-            disabled={values.frequency !== 'one_off'}
-          />
-          <span className="text-xs text-muted-foreground">
-            Habilitada só para receita eventual (13º, PLR).
-          </span>
-        </label>
+        {values.frequency === 'one_off' ? (
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs text-muted-foreground">{incomeText.oneOffMonthLabel}</span>
+            <Select
+              value={values.oneOffCompetence ?? ''}
+              onChange={(event) => update('oneOffCompetence', event.target.value || null)}
+              required
+            >
+              <option value="">{incomeText.oneOffMonthPlaceholder}</option>
+              {monthOptions.map((month) => (
+                <option key={month.value} value={month.value}>
+                  {month.label}
+                </option>
+              ))}
+            </Select>
+            <span className="text-xs text-muted-foreground">{incomeText.oneOffMonthHint}</span>
+          </label>
+        ) : null}
       </div>
       <div className="flex flex-col gap-2">
         <Button
@@ -715,7 +755,6 @@ function IncomeDialog({
         </Button>
         {showPreview && previewReady && previewExpected !== null ? (
           <OccurrencesPreview
-            title={`Próximas ${previewMonths} ocorrências`}
             expectedCents={previewExpected}
             dueDay={Number(values.receiveDay)}
             frequency={values.frequency}
@@ -808,10 +847,13 @@ export function RecurringScreen({
         return;
       }
       const expectedCents = cents(-Math.abs(amountParsed));
-      const annualAdjustmentBp =
-        values.annualAdjustmentBp === null || values.annualAdjustmentBp === ''
-          ? null
-          : Number(values.annualAdjustmentBp);
+      // A pessoa digita percentual ("5" = 5%); o servidor recebe basis points.
+      const adjustment = parseAdjustmentPercent(values.annualAdjustmentPercent);
+      if (!adjustment.ok) {
+        setError(adjustment.message);
+        return;
+      }
+      const annualAdjustmentBp = adjustment.basisPoints;
       // O que vai no banco: `dueDay: number`, `annualAdjustmentBp: BasisPoints`.
       // O que vai pra API (Zod coerce): strings (saem do DOM) → coercidas pelo schema.
       const body = {
@@ -846,7 +888,14 @@ export function RecurringScreen({
       const saved = (await response.json()) as { id: string };
       // `values` ainda tem strings; o upsert converte para number com `Number()`.
       setExpenseList((current) =>
-        upsertExpense(current, saved.id, values, expectedCents, annualAdjustmentBp),
+        upsertExpense(
+          current,
+          saved.id,
+          values,
+          expectedCents,
+          annualAdjustmentBp,
+          recurringOptions,
+        ),
       );
       setEditingExpense(null);
       setCreatingExpense(false);
@@ -897,7 +946,7 @@ export function RecurringScreen({
       }
       const saved = (await response.json()) as { id: string };
       setIncomeList((current) =>
-        upsertIncome(current, saved.id, values, expectedCents, incomeOptions.accounts),
+        upsertIncome(current, saved.id, values, expectedCents, incomeOptions),
       );
       setEditingIncome(null);
       setCreatingIncome(false);
@@ -1024,7 +1073,6 @@ export function RecurringScreen({
                   </div>
                   {expense.active ? (
                     <OccurrencesPreview
-                      title={`Próximas ${previewMonths} ocorrências`}
                       expectedCents={expense.expectedCents}
                       dueDay={expense.dueDay}
                       frequency={expense.frequency}
@@ -1096,9 +1144,7 @@ export function RecurringScreen({
                       <span className="text-xs text-muted-foreground">
                         {incomeKindLabel(income.kind)} · {income.memberName} · dia{' '}
                         {income.receiveDay} · {frequencyLabel(income.frequency)}
-                        {income.oneOffCompetence
-                          ? ` · competência ${income.oneOffCompetence}`
-                          : ''}
+                        {oneOffListSuffix(income.oneOffCompetence)}
                       </span>
                     </div>
                     <Money
@@ -1109,7 +1155,6 @@ export function RecurringScreen({
                   </div>
                   {income.active ? (
                     <OccurrencesPreview
-                      title={`Próximas ${previewMonths} ocorrências`}
                       expectedCents={income.expectedCents}
                       dueDay={income.receiveDay}
                       frequency={income.frequency}
@@ -1210,8 +1255,7 @@ function expenseToFormInput(expense: RecurringExpenseItem): RecurringExpenseForm
     creditCardId: expense.creditCardId,
     startsOn: expense.startsOn,
     endsOn: expense.endsOn,
-    annualAdjustmentBp:
-      expense.annualAdjustmentBp === null ? '' : String(expense.annualAdjustmentBp),
+    annualAdjustmentPercent: formatAdjustmentPercent(expense.annualAdjustmentBp),
   };
 }
 
@@ -1245,31 +1289,24 @@ function upsertExpense(
   values: RecurringExpenseFormInput,
   expectedCents: Cents,
   annualAdjustmentBp: number | null,
+  options: RecurringOptions,
 ): RecurringExpenseItem[] {
-  const category = current
-    .map((item) => item)
-    .concat([])
-    .find((item) => item.categoryId === values.categoryId);
-  const account = current
-    .map((item) => item)
-    .concat([])
-    .find((item) => item.accountId !== null && item.accountId === values.accountId);
-  const card = current
-    .map((item) => item)
-    .concat([])
-    .find((item) => item.creditCardId !== null && item.creditCardId === values.creditCardId);
+  // Nomes saem das OPCOES do formulario, nao de outros itens da lista: um item
+  // recem-criado numa categoria/conta ainda nao usada aparecia com nome vazio.
+  const account = options.accounts.find((item) => item.id === values.accountId);
+  const card = options.cards.find((item) => item.id === values.creditCardId);
   const next: RecurringExpenseItem = {
     id,
     description: values.description.trim(),
     expectedCents,
     categoryId: values.categoryId,
-    categoryName: category?.categoryName ?? '',
+    categoryName: leafCategoryName(options.categories, values.categoryId) ?? '',
     dueDay: Number(values.dueDay),
     frequency: values.frequency,
     accountId: values.accountId,
-    accountName: values.accountId === null ? null : account?.accountName ?? null,
+    accountName: values.accountId === null ? null : account?.name ?? null,
     creditCardId: values.creditCardId,
-    creditCardName: values.creditCardId === null ? null : card?.creditCardName ?? null,
+    creditCardName: values.creditCardId === null ? null : card?.name ?? null,
     startsOn: values.startsOn,
     endsOn: values.endsOn,
     annualAdjustmentBp,
@@ -1287,21 +1324,18 @@ function upsertIncome(
   id: string,
   values: IncomeFormInput,
   expectedCents: Cents,
-  accounts: IncomeOptions['accounts'],
+  options: IncomeOptions,
 ): IncomeItem[] {
-  const member = current
-    .map((item) => item)
-    .concat([])
-    .find((item) => item.memberId === values.memberId);
+  const member = options.members.find((item) => item.id === values.memberId);
   const next: IncomeItem = {
     id,
     description: values.description.trim(),
     kind: values.kind,
     expectedCents,
     memberId: values.memberId,
-    memberName: member?.memberName ?? '',
+    memberName: member?.name ?? '',
     accountId: values.accountId,
-    accountName: accounts.find((account) => account.id === values.accountId)?.name ?? '',
+    accountName: options.accounts.find((account) => account.id === values.accountId)?.name ?? '',
     receiveDay: Number(values.receiveDay),
     frequency: values.frequency,
     oneOffCompetence: values.oneOffCompetence,

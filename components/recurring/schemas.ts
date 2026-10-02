@@ -1,14 +1,17 @@
 import { z } from 'zod';
 import { frequency, incomeKind, type Frequency, type IncomeKind } from '@/lib/db/enums';
 
-const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+import { parseAdjustmentPercent } from './recurring-form';
+
+// Mensagens em pt-BR: a tela mostra a primeira que falhar, e o default do Zod
+// ("Invalid uuid") e ingles e tecnico.
+const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Informe a data.');
 const nullableIsoDateSchema = isoDateSchema.nullable();
 const competenceSchema = z
   .string()
-  .regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Escolha o mês.');
 const nullableCompetenceSchema = competenceSchema.nullable();
-const nullableUuidSchema = z.string().uuid().nullable();
-const uuidSchema = z.string().uuid();
+const choiceSchema = (message: string) => z.string().uuid(message);
 
 /**
  * Strings vêm da DOM — `Input type="number"` devolve string. Validamos
@@ -48,24 +51,33 @@ export const RecurringExpenseFormSchema = z
     description: z.string().trim().min(1, 'Informe uma descrição.').max(240),
     /** Texto livre (R$ 0,00) — conversão para cents é no handler, com `parseBRL`. */
     amountInput: z.string().trim().min(1, 'Informe um valor.').max(40),
-    categoryId: uuidSchema,
+    categoryId: choiceSchema('Escolha a categoria.'),
     /** Strings do DOM — convertidas para number no handler. */
     dueDay: z.string().regex(/^\d{1,2}$/, 'Dia de 1 a 31.'),
     frequency: frequencySelectSchema,
-    accountId: nullableUuidSchema,
-    creditCardId: nullableUuidSchema,
+    accountId: choiceSchema('Escolha a conta.').nullable(),
+    creditCardId: choiceSchema('Escolha o cartão.').nullable(),
     startsOn: isoDateSchema,
     endsOn: nullableIsoDateSchema,
-    /** String vazia ou número em bp — conversão no handler. */
-    annualAdjustmentBp: z
-      .union([z.literal(''), z.string().regex(/^-?\d+$/, 'Informe um número inteiro.')])
-      .nullable(),
+    /**
+     * Percentual digitado ("5", "4,5", "" = sem reajuste). O handler converte
+     * para basis points com `parseAdjustmentPercent`; aqui so valida.
+     */
+    annualAdjustmentPercent: z.string().max(20),
   })
   .superRefine((value, ctx) => {
+    const adjustment = parseAdjustmentPercent(value.annualAdjustmentPercent);
+    if (!adjustment.ok) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: adjustment.message,
+        path: ['annualAdjustmentPercent'],
+      });
+    }
     if (value.accountId !== null && value.creditCardId !== null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Informe uma conta OU um cartão, não os dois.',
+        message: 'Escolha a conta ou o cartão, não os dois.',
         path: ['accountId'],
       });
     }
@@ -90,8 +102,8 @@ export const IncomeFormSchema = z
     description: z.string().trim().min(1, 'Informe uma descrição.').max(240),
     amountInput: z.string().trim().min(1, 'Informe um valor.').max(40),
     kind: incomeKindSelectSchema,
-    memberId: uuidSchema,
-    accountId: uuidSchema,
+    memberId: choiceSchema('Escolha o responsável.'),
+    accountId: choiceSchema('Escolha a conta onde o dinheiro cai.'),
     receiveDay: z.string().regex(/^\d{1,2}$/, 'Dia de 1 a 31.'),
     frequency: frequencySelectSchema,
     oneOffCompetence: nullableCompetenceSchema,
@@ -103,7 +115,7 @@ export const IncomeFormSchema = z
       if (value.oneOffCompetence === null) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'Receita eventual exige uma competência fixa.',
+          message: 'Escolha o mês do recebimento da receita eventual.',
           path: ['oneOffCompetence'],
         });
       }
@@ -112,7 +124,7 @@ export const IncomeFormSchema = z
     if (value.oneOffCompetence !== null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Competência fixa só se aplica a receitas eventuais.',
+        message: 'O mês fixo só vale para receita eventual.',
         path: ['oneOffCompetence'],
       });
     }

@@ -9,9 +9,9 @@
  *  1. `dueDay` e `receiveDay` chegam como **string** do DOM (input type="number"
  *     devolve string). Validamos o formato `\d{1,2}` no nível de string antes
  *     da conversão para number — falha cedo, mensagem em pt-BR.
- *  2. `annualAdjustmentBp` aceita **string vazia** como "sem reajuste", além
- *     de número em bp. O servidor recebe number já convertido; aqui ainda
- *     é texto do input.
+ *  2. `annualAdjustmentPercent` aceita **string vazia** como "sem reajuste", além
+ *     de percentual ("5", "4,5"). O servidor recebe basis points já convertidos
+ *     (`parseAdjustmentPercent`); aqui ainda é texto do input.
  *
  * Não duplico as superRefine do servidor: a lógica é a mesma, os testes do
  * servidor já a guardam.
@@ -34,7 +34,7 @@ const validExpense = {
   creditCardId: null,
   startsOn: '2026-09-10',
   endsOn: null,
-  annualAdjustmentBp: '',
+  annualAdjustmentPercent: '',
 };
 
 const validIncome = {
@@ -75,26 +75,28 @@ describe('RecurringExpenseFormSchema — particularidades do form (string vs num
     ).toBe(true);
   });
 
-  it('annualAdjustmentBp aceita string vazia (= "sem reajuste")', () => {
+  it('annualAdjustmentPercent aceita string vazia (= "sem reajuste")', () => {
     const result = RecurringExpenseFormSchema.safeParse({
       ...validExpense,
-      annualAdjustmentBp: '',
+      annualAdjustmentPercent: '',
     });
     expect(result.success).toBe(true);
   });
 
-  it('annualAdjustmentBp aceita número em bp', () => {
-    const result = RecurringExpenseFormSchema.safeParse({
-      ...validExpense,
-      annualAdjustmentBp: '500',
-    });
-    expect(result.success).toBe(true);
+  it('annualAdjustmentPercent aceita percentual ("5" e "4,5")', () => {
+    for (const annualAdjustmentPercent of ['5', '4,5']) {
+      const result = RecurringExpenseFormSchema.safeParse({
+        ...validExpense,
+        annualAdjustmentPercent,
+      });
+      expect(result.success).toBe(true);
+    }
   });
 
-  it('annualAdjustmentBp rejeita texto não-numérico', () => {
+  it('annualAdjustmentPercent rejeita texto não-numérico', () => {
     const result = RecurringExpenseFormSchema.safeParse({
       ...validExpense,
-      annualAdjustmentBp: 'cinco',
+      annualAdjustmentPercent: 'cinco',
     });
     expect(result.success).toBe(false);
   });

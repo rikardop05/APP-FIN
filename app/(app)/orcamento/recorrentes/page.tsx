@@ -1,4 +1,5 @@
 import { todayInSaoPaulo } from '@/app/_lib/today';
+import { leafCategoryGroups } from '@/components/recurring/recurring-form';
 import { RecurringScreen } from '@/components/recurring/recurring-screen';
 import { PageHeader } from '@/components/ui-kit';
 import { requireSession } from '@/lib/auth/session';
@@ -46,7 +47,7 @@ export default async function RecorrentesPage() {
     <>
       <PageHeader
         title="Despesas fixas e receitas"
-        description="O que se repete todo mês: aluguel, salário, assinaturas. O motor projeta as ocorrências previstas; esta tela só exibe."
+        description="O que se repete: aluguel, salário, assinaturas. Cada item gera as ocorrências previstas dos próximos meses, que entram no fluxo de caixa."
       />
       <RecurringScreen
         today={today}
@@ -55,8 +56,9 @@ export default async function RecorrentesPage() {
         incomes={incomes}
         recurringOptions={{
           // Apenas folhas — despesa fixa exige categoria-folha (RF-CAT-01),
-          // a borda do banco recusa raiz no POST.
-          categories: categories.filter((category) => category.parentId !== null),
+          // a borda do banco recusa raiz no POST. `listCategories` devolve a
+          // ARVORE (folhas em `children`): achatar aqui, nao filtrar o topo.
+          categories: leafCategoryGroups(categories),
           accounts: accounts.filter((account) => account.active),
           cards: cards.filter((card) => card.active),
         }}
