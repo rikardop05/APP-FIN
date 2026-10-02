@@ -566,3 +566,24 @@ describe('buildImportPreview — data do documento (base do aviso da tela)', () 
     expect(preview([parsed({})]).documentDate).toBeNull();
   });
 });
+
+describe('buildImportPreview — total impresso (vai ate o commit)', () => {
+  it('carrega reportedTotalCents do parser ate o preview', () => {
+    const result = buildImportPreview({
+      parse: { rows: [parsed({})], diagnostics: [], reportedTotalCents: cents(-1000) },
+      sourceId: SOURCE_ID,
+      sourceKind: 'credit_card',
+      cardCycle: CARD,
+      rules: [],
+      existingHashes: new Set<string>(),
+      today: '2026-09-30',
+      statementCompetence: null,
+    });
+
+    expect(result.reportedTotalCents).toBe(-1000);
+  });
+
+  it('sem total impresso (texto colado), o preview devolve null', () => {
+    expect(preview([parsed({})]).reportedTotalCents).toBeNull();
+  });
+});

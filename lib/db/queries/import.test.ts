@@ -384,4 +384,120 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('import dedupe and rever
       await fixture.cleanup();
     }
   });
+
+  /**
+   * O total IMPRESSO no documento atravessa o caminho inteiro: parser ->
+   * `buildImportPreview` -> JSON da rota de upload -> `uploadResponseSchema` do
+   * cliente -> corpo do commit (como `import-confirmation.tsx` o monta) ->
+   * `commitBodySchema` -> `commitImport` -> `statements.reported_total_cents`.
+   * Antes ele morria no preview e o cliente mandava `null` fixo.
+   *
+   * O impresso (-2000) difere de propósito da soma das linhas (-1500): prova
+   * que o gravado é o do documento, não um total recalculado.
+   */
+  it('grava em statements.reported_total_cents o total impresso que veio do preview', async () => {
+    const fixture = await createImportFixture('reported-total');
+    const [{ commitImport }, { buildImportPreview }, { uploadResponseSchema }, { commitBodySchema }] =
+      await Promise.all([
+        import('./import'),
+        import('@/lib/import/pipeline'),
+        import('@/components/import/schemas'),
+        import('@/app/api/import/schemas'),
+      ]);
+
+    try {
+      const preview = buildImportPreview({
+        parse: {
+          rows: [
+            {
+              occurredOn: '2026-09-05',
+              rawDescription: 'Compra com total impresso',
+              amountCents: cents(-1500),
+              fitId: null,
+              installment: null,
+            },
+          ],
+          diagnostics: [],
+          reportedTotalCents: cents(-2000),
+        },
+        sourceId: fixture.cardId,
+        sourceKind: 'credit_card',
+        cardCycle: { closingDay: 10, dueDay: 20 },
+        rules: [],
+        existingHashes: new Set<string>(),
+        today: '2026-09-30',
+        statementCompetence: '2026-09',
+      });
+      const uploaded = uploadResponseSchema.parse(
+        JSON.parse(
+          JSON.stringify({
+            fileName: 'total-impresso.pdf',
+            fileHash: 'f'.repeat(64),
+            format: 'pdf',
+            bankKey: 'santander',
+            sourceKind: 'credit_card',
+            sourceId: fixture.cardId,
+            cardCycle: { closingDay: 10, dueDay: 20 },
+            preview,
+            previousBatches: [],
+          }),
+        ),
+      );
+      const row = uploaded.preview.rows[0];
+      if (row === undefined || row.occurredOn === null || row.amountCents === null) {
+        throw new Error('Preview row was not built.');
+      }
+      const body = commitBodySchema.parse({
+        fileName: uploaded.fileName,
+        fileHash: uploaded.fileHash,
+        bankKey: uploaded.bankKey,
+        format: uploaded.format,
+        sourceKind: 'credit_card',
+        sourceId: uploaded.sourceId,
+        confirmedRows: [
+          {
+            index: row.index,
+            include: true,
+            occurredOn: row.occurredOn,
+            description: row.description,
+            rawDescription: row.rawDescription,
+            amountCents: row.amountCents,
+            categoryId: null,
+            memberId: null,
+            installment: null,
+          },
+        ],
+        reportedTotalCents: uploaded.preview.reportedTotalCents,
+        allowReimport: false,
+        defaultCompetence: '2026-09',
+      });
+      if (body.sourceKind !== 'credit_card') throw new Error('Unexpected source kind.');
+
+      await commitImport(fixture.householdId, {
+        fileName: body.fileName,
+        fileHash: body.fileHash,
+        bankKey: body.bankKey,
+        format: body.format,
+        sourceId: body.sourceId,
+        confirmedRows: body.confirmedRows,
+        reportedTotalCents: body.reportedTotalCents,
+        allowReimport: body.allowReimport,
+        sourceKind: 'credit_card',
+        statementCompetence: body.defaultCompetence,
+      });
+
+      const [statement] = await fixture.db
+        .select({ reported: fixture.schema.statements.reportedTotalCents })
+        .from(fixture.schema.statements)
+        .innerJoin(
+          fixture.schema.creditCards,
+          eq(fixture.schema.creditCards.id, fixture.schema.statements.creditCardId),
+        )
+        .where(eq(fixture.schema.creditCards.householdId, fixture.householdId));
+      expect(statement).toBeDefined();
+      expect(Number(statement?.reported)).toBe(-2000);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
 });

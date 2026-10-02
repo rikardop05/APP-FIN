@@ -142,6 +142,13 @@ export interface ImportPreview {
    * dela. `null` quando a origem nao traz data (texto colado).
    */
   documentDate: DocumentDate | null;
+  /**
+   * Total **impresso** no documento (`ParseResult.reportedTotalCents`), so
+   * CARREGADO ate a tela e devolvido no commit, que o grava em
+   * `statements.reported_total_cents` para a conferencia com a soma das linhas.
+   * `null` quando a origem nao imprime total (texto colado).
+   */
+  reportedTotalCents: Cents | null;
 }
 
 /** Competencia de uma data: fatura de cartao usa o ciclo; conta usa o mes. */
@@ -347,6 +354,7 @@ export function buildImportPreview(
     },
     diagnostics: input.parse.diagnostics,
     documentDate: input.parse.documentDate ?? null,
+    reportedTotalCents: input.parse.reportedTotalCents,
   };
 }
 

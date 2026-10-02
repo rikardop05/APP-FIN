@@ -93,7 +93,12 @@ const previewRowSchema = z.object({
   installment: installmentSchema,
 });
 
-const previewSchema = z.object({
+/**
+ * Espelho de `ImportPreview` (`lib/import/pipeline.ts`). `z.object` DESCARTA em
+ * silêncio a chave que não conhece — foi assim que o `documentDate` sumiu. A
+ * igualdade de tipos em `schemas.test.ts` quebra o `tsc` se os dois divergirem.
+ */
+export const previewSchema = z.object({
   rows: z.array(previewRowSchema),
   summary: z.object({
     rowsRead: z.number().int(),
@@ -123,6 +128,12 @@ const previewSchema = z.object({
       kind: z.enum(['due_date', 'statement_date']),
     })
     .nullable(),
+  /**
+   * Total impresso no documento; a tela o devolve no commit (vai para
+   * `statements.reported_total_cents`). Obrigatório, só pode ser `null`, pelo
+   * mesmo motivo do `documentDate`.
+   */
+  reportedTotalCents: centsSchema.nullable(),
 });
 
 const previousBatchSchema = z.object({

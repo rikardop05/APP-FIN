@@ -346,7 +346,9 @@ export function ImportConfirmation({
           sourceKind,
           sourceId,
           confirmedRows,
-          reportedTotalCents: null,
+          // Total IMPRESSO no documento, lido pelo parser: vai para
+          // `statements.reported_total_cents` (conferência com a soma das linhas).
+          reportedTotalCents: preview.preview.reportedTotalCents,
           allowReimport: false,
           defaultCompetence,
         }),
