@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import type { ImportFormat, TransactionKind, TransactionStatus } from '@/lib/db';
@@ -22,6 +23,7 @@ import {
 } from '@/lib/import/pipeline';
 import type { Rule } from '@/lib/finance/categorization';
 import type { Cents } from '@/lib/money';
+import { reconcileImportedPostings } from './import-reconcile';
 import { listTransactionDedupeHashes } from './transactions';
 
 export type ImportSourceContext = {
@@ -86,6 +88,8 @@ export type CommitImportResult = FinalizeResult & {
   rowsRead: number;
   rowsImported: number;
   rowsDuplicated: number;
+  /** Previsões de recorrência cumpridas por linhas deste lote (viraram `reconciled`). */
+  plannedReconciled: number;
 };
 
 export type CommitImportTestOptions = {
@@ -415,13 +419,18 @@ export async function commitImport(
 
     const importedRows = input.confirmedRows.filter((row) => row.include).length -
       result.skipped.filter((row) => row.reason === 'duplicate').length;
+    let plannedReconciled = 0;
     if (result.transactions.length > 0) {
+      // Ids gerados aqui (não lidos do `returning`): a conciliação não depende da
+      // ordem em que o Postgres devolve as linhas.
+      const ids = result.transactions.map(() => randomUUID());
       await tx.insert(transactions).values(
-        result.transactions.map((row) => {
+        result.transactions.map((row, index) => {
           const projected = row.rawDescription === '';
           const kind: TransactionKind = row.amountCents < 0 ? 'expense' : 'income';
           const status: TransactionStatus = projected ? 'planned' : 'posted';
           return {
+            id: ids[index],
             householdId,
             occurredOn: row.occurredOn,
             competence: row.competence,
@@ -443,6 +452,24 @@ export async function commitImport(
           };
         }),
       );
+
+      // RF-ORC-03: a linha REAL cumpre a previsão de recorrência. Parcela (de
+      // plano) e projetada não conciliam.
+      const postings = result.transactions.flatMap((row, index) => {
+        const id = ids[index];
+        if (id === undefined || row.rawDescription === '' || row.installmentPlanRef !== null) return [];
+        return [
+          {
+            id,
+            occurredOn: row.occurredOn,
+            amountCents: row.amountCents,
+            categoryId: row.categoryId,
+            kind: row.amountCents < 0 ? ('expense' as const) : ('income' as const),
+            accountId: source.accountId,
+          },
+        ];
+      });
+      plannedReconciled = await reconcileImportedPostings(tx, householdId, postings);
     }
     if (options.failAfter === 'transactions') throw new Error('Falha de teste após os lançamentos.');
 
@@ -460,6 +487,7 @@ export async function commitImport(
       rowsRead: input.confirmedRows.length,
       rowsImported: importedRows,
       rowsDuplicated: result.skipped.filter((row) => row.reason === 'duplicate').length,
+      plannedReconciled,
     };
   });
 }
@@ -506,6 +534,21 @@ export async function revertImport(
       .where(and(eq(transactions.householdId, householdId), eq(transactions.importBatchId, batchId)));
     const planIds = [...new Set(batchTransactions.flatMap((row) => (row.installmentPlanId === null ? [] : [row.installmentPlanId])))];
     if (batchTransactions.length > 0) {
+      // Desfazer a importação reabre as previsões que ela cumpriu: o RESTRICT de
+      // `reconciled_by_transaction_id` barraria o DELETE (decisão nº 7, §3.3).
+      await tx
+        .update(transactions)
+        .set({ status: 'planned', reconciledByTransactionId: null })
+        .where(
+          and(
+            eq(transactions.householdId, householdId),
+            eq(transactions.status, 'reconciled'),
+            inArray(
+              transactions.reconciledByTransactionId,
+              batchTransactions.map((row) => row.id),
+            ),
+          ),
+        );
       await tx.delete(transactions).where(and(eq(transactions.householdId, householdId), eq(transactions.importBatchId, batchId)));
     }
     let installmentPlansDeleted = 0;

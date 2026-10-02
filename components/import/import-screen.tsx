@@ -433,14 +433,18 @@ export function ImportScreen({ today }: ImportScreenProps) {
     setError(null);
   }
 
-  function handleCommitted(batchId: string) {
+  function handleCommitted(batchId: string, plannedReconciled: number) {
     setPreview(null);
     setPastedText('');
     setFile(null);
     setFileBytes(null);
     setDetection(null);
     setPassword('');
-    setSuccess(`Importação confirmada. Lote ${batchId} gravado.`);
+    const fulfilled =
+      plannedReconciled > 0
+        ? ` ${plannedReconciled === 1 ? '1 previsão cumprida' : `${plannedReconciled} previsões cumpridas`}.`
+        : '';
+    setSuccess(`Importação confirmada. Lote ${batchId} gravado.${fulfilled}`);
     setHistoryRefreshKey((current) => current + 1);
   }
 

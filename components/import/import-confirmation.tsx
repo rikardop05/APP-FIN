@@ -84,10 +84,13 @@ type ImportConfirmationProps = {
    */
   defaultCompetence: string;
   onBack: () => void;
-  onCommitted: (batchId: string) => void;
+  onCommitted: (batchId: string, plannedReconciled: number) => void;
 };
 
-const commitResponseSchema = z.object({ batchId: z.string().uuid() });
+const commitResponseSchema = z.object({
+  batchId: z.string().uuid(),
+  plannedReconciled: z.number().int().nonnegative().default(0),
+});
 
 function flattenCategories(
   nodes: CategoryNode[],
@@ -363,7 +366,7 @@ export function ImportConfirmation({
         );
       }
       const result = commitResponseSchema.parse(body);
-      onCommitted(result.batchId);
+      onCommitted(result.batchId, result.plannedReconciled);
     } catch (cause) {
       setError(
         cause instanceof Error
