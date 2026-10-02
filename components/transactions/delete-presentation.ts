@@ -1,3 +1,4 @@
+import { competenceLabel } from '@/components/budget/labels';
 import type { DeleteEffect, DeleteImpact } from './schemas';
 
 /**
@@ -61,4 +62,19 @@ export function reimportNotice(
     `Se você importar este arquivo de novo, a importação vai falhar enquanto ${remaining}. ` +
     `Para poder reimportar, exclua esta junto com ${one ? 'a futura' : 'as futuras'}.`
   );
+}
+
+/**
+ * Aviso de que uma previsão (`planned`) cumprida por este lançamento volta a
+ * ficar em aberto ao excluí-lo.
+ *
+ * `competenceLabel` (mesma fonte dos meses das outras telas) usa " de "; aqui o
+ * formato pedido é com barra (`outubro/2026`), então só o separador muda — os
+ * nomes dos meses continuam vindo de um lugar só.
+ */
+export function reopensPlannedNotice(
+  effect: Extract<DeleteEffect, { kind: 'reopens_planned' }>,
+): string {
+  const competence = competenceLabel(effect.competence).replace(' de ', '/');
+  return `A previsão de ${effect.ruleDescription} de ${competence} volta a ficar em aberto.`;
 }

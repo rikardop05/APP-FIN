@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { parseBRL } from '@/lib/money';
 import { competenceLabel } from '@/components/budget/labels';
-import { isSimpleDelete, reimportNotice, withFutureOptionLabel } from './delete-presentation';
+import { isSimpleDelete, reimportNotice, reopensPlannedNotice, withFutureOptionLabel } from './delete-presentation';
 import { signedAmountCents } from './manual-sign';
 import { Button, DateText, Input, Money, Select } from '@/components/ui-kit';
 import {
@@ -261,6 +261,14 @@ function EffectLine({ effect }: { effect: DeleteEffect }) {
           Só esta ocorrência de &ldquo;{effect.ruleDescription}&rdquo; ({competenceLabel(effect.competence)}) deixa de ser esperada; as outras continuam.
         </>
       );
+    case 'reopens_planned':
+      return <>{reopensPlannedNotice(effect)}</>;
+    default: {
+      // Exaustividade: um efeito novo sem case quebra o `tsc` aqui, em vez de
+      // nao renderizar nada e sumir calado da tela.
+      const unhandled: never = effect;
+      return unhandled;
+    }
   }
 }
 
