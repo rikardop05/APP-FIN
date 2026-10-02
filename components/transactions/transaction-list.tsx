@@ -13,6 +13,7 @@ import {
   Select,
 } from '@/components/ui-kit';
 import type { Transaction, TransactionOptions } from './schemas';
+import { amountForInput, signedAmountCents } from './manual-sign';
 
 const kindLabel: Record<Transaction['kind'], string> = {
   expense: 'Despesa',
@@ -60,7 +61,7 @@ type EditorProps = {
 function TransactionEditor({ row, options, onSave, onCancel }: EditorProps) {
   const [occurredOn, setOccurredOn] = useState(row.occurredOn);
   const [description, setDescription] = useState(row.description);
-  const [amount, setAmount] = useState(formatBRL(row.amountCents));
+  const [amount, setAmount] = useState(formatBRL(amountForInput(row.amountCents, row.kind)));
   const [categoryId, setCategoryId] = useState(row.categoryId ?? '');
   const [memberId, setMemberId] = useState(row.memberId ?? '');
   const [busy, setBusy] = useState(false);
@@ -68,11 +69,14 @@ function TransactionEditor({ row, options, onSave, onCancel }: EditorProps) {
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const amountCents = parseBRL(amount);
-    if (amountCents === null) {
+    const parsedAmount = parseBRL(amount);
+    if (parsedAmount === null) {
       setError('Informe um valor válido.');
       return;
     }
+    // Despesa e Receita: o campo mostra sem sinal e a gravacao reaplica o sinal
+    // do tipo, para editar nao inverter a direcao. Os demais seguem literais.
+    const amountCents = signedAmountCents(parsedAmount, row.kind);
     setBusy(true);
     setError(null);
     try {
