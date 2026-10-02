@@ -42,6 +42,10 @@ import { cents, type Cents } from '@/lib/money';
  * informado é o de INÍCIO desse dia (decisão do Ricardo, 2026-10-02), então o
  * movimento do próprio dia não está nele e entra. Um `opening_date` futuro não
  * soma movimento nenhum à abertura (o filtro `< dia 1` o descarta).
+ * A MESMA regra vale para as linhas de CONTA da janela: movimento anterior ao
+ * `opening_date` da própria conta fica fora (cada conta com a sua data), senão o
+ * dinheiro já contido no saldo informado contaria duas vezes. Linha de cartão não
+ * tem conta aqui: segue pelo `cash_date` da fatura, fora desta regra.
  */
 
 /** Tipos de linha que alguma ponta do motor consome. `transfer` e pagamento de fatura NÃO entram na janela (RC-03). */
@@ -132,6 +136,9 @@ export async function getCashflowData(
             or(
               and(
                 isNotNull(transactions.accountId),
+                // O saldo informado é de INÍCIO de `opening_date`: o que é anterior
+                // já está dentro dele e não entra de novo (mesma regra da abertura).
+                sql`${cashDay} >= ${accounts.openingDate}`,
                 sql`${cashDay} >= ${windowStart}::date`,
                 sql`${cashDay} < ${windowEnd}::date`,
               ),

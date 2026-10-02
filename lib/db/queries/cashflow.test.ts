@@ -114,5 +114,54 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
         await db.delete(households).where(eq(households.id, householdId));
       }
     });
+
+    it('janela: movimento de conta anterior ao opening_date DA PRÓPRIA conta fica fora; no dia entra', async () => {
+      const [{ db }, schema, { getCashflowData }] = await Promise.all([
+        import('@/lib/db'),
+        import('@/lib/db/schema'),
+        import('./cashflow'),
+      ]);
+      const { accounts, households, transactions } = schema;
+
+      const [household] = await db
+        .insert(households)
+        .values({ name: 'Cashflow opening_date window test' })
+        .returning({ id: households.id });
+      if (household === undefined) throw new Error('Household de teste não foi criado.');
+      const householdId = household.id;
+
+      try {
+        // A: saldo de início de 04/10 (futuro em relação ao dia 1). B: aberta em janeiro.
+        const [a] = await db
+          .insert(accounts)
+          .values({ householdId, name: 'A', kind: 'checking', openingBalanceCents: 740_000, openingDate: '2026-10-04' })
+          .returning({ id: accounts.id });
+        const [b] = await db
+          .insert(accounts)
+          .values({ householdId, name: 'B', kind: 'checking', openingBalanceCents: 10_000, openingDate: '2026-01-01' })
+          .returning({ id: accounts.id });
+        if (a === undefined || b === undefined) throw new Error('Fixture não foi criada.');
+
+        const base = { householdId, rawDescription: '', description: 'x' } as const;
+        await db.insert(transactions).values([
+          // A, dia 01/10 (< opening_date de A): já está no saldo informado → fora.
+          { ...base, accountId: a.id, occurredOn: '2026-10-01', competence: '2026-10', cashDate: '2026-10-01', amountCents: 740_000, kind: 'income', status: 'posted' },
+          // A, dia 04/10 (= opening_date): entra.
+          { ...base, accountId: a.id, occurredOn: '2026-10-04', competence: '2026-10', cashDate: '2026-10-04', amountCents: -1_000, kind: 'expense', status: 'posted' },
+          // A, planned antes do opening_date: também é movimento anterior → fora.
+          { ...base, accountId: a.id, occurredOn: '2026-10-02', competence: '2026-10', cashDate: '2026-10-02', amountCents: -2_000, kind: 'expense', status: 'planned' },
+          // B, mesmo dia 01/10 (opening_date de B é janeiro): entra.
+          { ...base, accountId: b.id, occurredOn: '2026-10-01', competence: '2026-10', cashDate: '2026-10-01', amountCents: -3_000, kind: 'expense', status: 'posted' },
+        ]);
+
+        const result = await getCashflowData(householdId, '2026-10-10', 12);
+
+        expect(result.openingBalanceCents).toBe(750_000);
+        const summary = result.rows.map((r) => `${r.cashDate} ${String(r.amountCents)}`).sort();
+        expect(summary).toEqual(['2026-10-01 -3000', '2026-10-04 -1000']);
+      } finally {
+        await db.delete(households).where(eq(households.id, householdId));
+      }
+    });
   },
 );
