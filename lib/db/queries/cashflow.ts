@@ -131,6 +131,9 @@ export async function getCashflowData(
           and(
             eq(transactions.householdId, householdId),
             inArray(transactions.kind, [...WINDOW_KINDS]),
+            // `reconciled` é previsão já cumprida por um `posted` que está na janela (ou na
+            // abertura): contá-la de novo seria dinheiro em dobro (decisão nº 7).
+            inArray(transactions.status, ['posted', 'planned']),
             // Linha de conta de conta desativada fica fora, como na abertura.
             or(isNull(accounts.id), eq(accounts.active, true)),
             or(

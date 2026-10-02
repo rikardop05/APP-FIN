@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNotNull, isNull, lte, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, or, sql } from 'drizzle-orm';
 
 import { addCompetence, toCompetence, type Competence, type IsoDate } from '@/lib/date';
 import { db } from '@/lib/db';
@@ -89,6 +89,14 @@ export type DashboardData = {
 const SPENDING_AVERAGE_WINDOW_MONTHS = 3;
 
 /**
+ * Status que contam como dinheiro do mês. `reconciled` (decisão nº 7) é uma previsão
+ * JÁ CUMPRIDA por um `posted`: contá-la de novo seria despesa em dobro. Lista
+ * POSITIVA de propósito: um status novo fica de fora até alguém decidir o contrário
+ * (certo por omissão). Toda leitura de dinheiro por competência passa por aqui.
+ */
+const COUNTED_STATUSES: TransactionStatus[] = ['posted', 'planned'];
+
+/**
  * Busca paralela de todos os dados do dashboard em UMA chamada. Oito
  * `Promise.all` rodam juntas no servidor; o objetivo é manter a latência do
  * dashboard abaixo do limite de 1,5 s com 5 mil lançamentos (aceite do T-115).
@@ -151,6 +159,7 @@ export async function getDashboardData(
         and(
           eq(transactions.householdId, householdId),
           eq(transactions.competence, competence),
+          inArray(transactions.status, COUNTED_STATUSES),
         ),
       ),
 
@@ -181,6 +190,7 @@ export async function getDashboardData(
         and(
           eq(transactions.householdId, householdId),
           eq(transactions.competence, competence),
+          inArray(transactions.status, COUNTED_STATUSES),
           isNull(transactions.categoryId),
         ),
       )
@@ -200,6 +210,7 @@ export async function getDashboardData(
           eq(transactions.householdId, householdId),
           gte(transactions.competence, spendingWindowStart),
           lte(transactions.competence, competence),
+          inArray(transactions.status, COUNTED_STATUSES),
         ),
       ),
 
@@ -365,6 +376,7 @@ export async function listCommitmentTransactions(
         // Compromisso de cartão é GASTO (e estorno). Pagamento de fatura e
         // transferência não são, mesmo se gravados com `credit_card_id` (RC-03).
         notInArray(transactions.kind, ['credit_card_payment', 'transfer']),
+        inArray(transactions.status, COUNTED_STATUSES),
         gte(transactions.competence, fromCompetence),
         lte(transactions.competence, to),
         or(eq(transactions.status, 'posted'), isNotNull(transactions.installmentPlanId)),
@@ -433,6 +445,7 @@ export async function listUncategorizedTransactionIds(
       and(
         eq(transactions.householdId, householdId),
         eq(transactions.competence, competence),
+        inArray(transactions.status, COUNTED_STATUSES),
         isNull(transactions.categoryId),
       ),
     );
@@ -462,6 +475,7 @@ export async function listUncategorizedTransactionItems(
       and(
         eq(transactions.householdId, householdId),
         eq(transactions.competence, competence),
+        inArray(transactions.status, COUNTED_STATUSES),
         isNull(transactions.categoryId),
       ),
     )
@@ -528,6 +542,7 @@ export async function listIncomeExpenseRows(
         eq(transactions.householdId, householdId),
         gte(transactions.competence, from),
         lte(transactions.competence, competence),
+        inArray(transactions.status, COUNTED_STATUSES),
       ),
     );
   return rows.map((row) => ({ ...row, amountCents: safeCents(row.amountCents) }));
@@ -546,10 +561,10 @@ export type OverdueRecurringItem = {
  * O corte é a DATA, não o mês, e `occurred_on = hoje` NÃO é vencida — a mesma
  * fronteira de `replanRecurrence`, que apaga e regenera a de hoje.
  *
- * "Não conciliada" ainda não tem marcador no schema (RF-ORC-03 não grava o par),
- * então hoje toda `planned` vencida conta. Enquanto isso, uma previsão paga e
- * importada como `posted` continua aqui: falso positivo conhecido, que a tela
- * declara em vez de esconder.
+ * Só `planned` conta: a previsão cumprida por um lançamento real vira `reconciled`
+ * (decisão nº 7) e sai daqui. Enquanto a importação não conciliar (§3.4) ou para
+ * lançamento manual (fora de escopo), uma previsão paga continua `planned` e
+ * aparece: falso positivo conhecido, que a tela declara em vez de esconder.
  *
  * Devolve o total e só os `limit` mais antigos — a lista não cresce sem teto.
  */
