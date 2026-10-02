@@ -76,7 +76,7 @@ export async function insertPlannedRowsIdempotent(
           transactions.recurringExpenseId,
           transactions.competence,
         ],
-        where: sql`${transactions.status} = 'planned' and ${transactions.recurringExpenseId} is not null`,
+        where: sql`${transactions.status} in ('planned', 'reconciled') and ${transactions.recurringExpenseId} is not null`,
       })
       .returning({ id: transactions.id });
     inserted += result.length;
@@ -87,7 +87,7 @@ export async function insertPlannedRowsIdempotent(
       .values(fromIncome.map((row) => ({ ...row })))
       .onConflictDoNothing({
         target: [transactions.householdId, transactions.incomeId, transactions.competence],
-        where: sql`${transactions.status} = 'planned' and ${transactions.incomeId} is not null`,
+        where: sql`${transactions.status} in ('planned', 'reconciled') and ${transactions.incomeId} is not null`,
       })
       .returning({ id: transactions.id });
     inserted += result.length;
@@ -170,28 +170,6 @@ export async function lockHousehold(tx: DbTransaction, householdId: string): Pro
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${householdId}))`);
 }
 
-/**
- * "Esta `planned` já foi conciliada com um lançamento realizado?"
- *
- * **Hoje devolve `false` para TODAS, de propósito, e este é o único lugar a
- * mudar.** `matchPlannedToPosted` (CONTRACTS §9) CASA previsto com realizado,
- * mas ninguém grava o par, e o schema não tem marcador de conciliação. A
- * heurística "a `posted` de mesma origem e competência é a que concilia" é
- * FALSA: com `dayWindow`, a conta de luz do dia 28 paga no dia 2 do mês seguinte
- * cai em OUTRA competência. Por isso não foi usada.
- *
- * Decisão pendente com o Ricardo (como o RF-ORC-03 grava o par): coluna
- * `matched_transaction_id`, ou status `reconciled`. Neste segundo desenho a
- * linha conciliada deixa de ser `planned`, nunca chega aqui, e esta função
- * continua `false` — a ocupação da competência (`dropOccupied`) já a protege.
- * Enquanto isso, nenhum teste de integração consegue provar a preservação de
- * uma conciliada; só `replanRecurrence` (pura) a prova.
- */
-function isConciliated(_row: { id: string }): boolean {
-  void _row;
-  return false;
-}
-
 export type Origin = { expenseId: string } | { incomeId: string };
 
 function originMatch(origin: Origin) {
@@ -269,12 +247,14 @@ export async function replanSeries(
   plan: ReplanPlan | null,
 ): Promise<ReplanSummary> {
   const stored = await tx
-    .select({ id: transactions.id, occurredOn: transactions.occurredOn })
+    .select({ id: transactions.id, occurredOn: transactions.occurredOn, status: transactions.status })
     .from(transactions)
     .where(
       and(
         eq(transactions.householdId, householdId),
-        eq(transactions.status, 'planned'),
+        // `reconciled` entra na leitura para o `replanRecurrence` a PRESERVAR
+        // (cumprida por um lançamento real: imutável). O DELETE abaixo só toca `planned`.
+        inArray(transactions.status, ['planned', 'reconciled']),
         originMatch(origin),
       ),
     );
@@ -284,7 +264,7 @@ export async function replanSeries(
     existing: stored.map((row) => ({
       id: row.id,
       date: row.occurredOn,
-      conciliated: isConciliated(row),
+      conciliated: row.status === 'reconciled',
     })),
     window: plannedWindow(today, months),
     today,

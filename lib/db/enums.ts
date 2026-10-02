@@ -44,6 +44,11 @@ export const transactionKind = pgEnum('transaction_kind', [
 export const transactionStatus = pgEnum('transaction_status', [
   'posted',
   'planned',
+  // Decisao n. 7 (Ricardo, 2026-10-02): uma previsao (`planned`) cumprida por um
+  // lancamento real (`posted`) vira `reconciled` e some de quem procura
+  // previsoes. Certo por omissao: quem esquecer de filtrar nao conta a despesa
+  // duas vezes. Ver `.notas/decisao-7-reconciled.md`.
+  'reconciled',
 ]);
 
 export const categoryNature = pgEnum('category_nature', [

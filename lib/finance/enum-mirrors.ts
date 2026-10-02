@@ -39,6 +39,15 @@ export const CATEGORY_NATURES = [
 export type CategoryNature = (typeof CATEGORY_NATURES)[number];
 
 /** Espelho de `transaction_status` (lib/db/enums.ts). */
-export const TRANSACTION_STATUSES = ['posted', 'planned'] as const;
+export const TRANSACTION_STATUSES = [
+  'posted',
+  'planned',
+  // Decisao nº 7 (Ricardo, 2026-10-02, `.notas/decisao-7-reconciled.md`): uma
+  // previsao (`planned`) cumprida por um lancamento real passa a `reconciled` e
+  // deixa de ser vista por quem procura previsoes. Certo por omissao: quem
+  // esquecer de filtrar nao conta a despesa duas vezes. O par com o lancamento
+  // real fica em `transactions.reconciled_by_transaction_id`.
+  'reconciled',
+] as const;
 
 export type TransactionStatus = (typeof TRANSACTION_STATUSES)[number];

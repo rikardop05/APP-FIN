@@ -1,0 +1,7 @@
+DROP INDEX "transactions_hh_recurring_competence_planned_unique";--> statement-breakpoint
+DROP INDEX "transactions_hh_income_competence_planned_unique";--> statement-breakpoint
+ALTER TABLE "transactions" ADD COLUMN "reconciled_by_transaction_id" uuid;--> statement-breakpoint
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_reconciled_by_transaction_id_transactions_id_fk" FOREIGN KEY ("reconciled_by_transaction_id") REFERENCES "public"."transactions"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "transactions_hh_recurring_competence_planned_unique" ON "transactions" USING btree ("household_id","recurring_expense_id","competence") WHERE "transactions"."status" in ('planned', 'reconciled') and "transactions"."recurring_expense_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "transactions_hh_income_competence_planned_unique" ON "transactions" USING btree ("household_id","income_id","competence") WHERE "transactions"."status" in ('planned', 'reconciled') and "transactions"."income_id" is not null;--> statement-breakpoint
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_reconciled_iff_reconciled_by" CHECK (("transactions"."status" = 'reconciled') = ("transactions"."reconciled_by_transaction_id" is not null));

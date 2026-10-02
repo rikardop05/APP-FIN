@@ -242,10 +242,13 @@ export interface StoredPlannedRow {
   date: IsoDate;
   /**
    * Ja conciliada com um lancamento realizado. A funcao NAO decide isso: recebe.
-   * Quem decide e a camada de banco, num unico lugar, porque o schema ainda nao
-   * tem marcador de conciliacao (`matchPlannedToPosted` casa, mas ninguem grava o
-   * par). Quando o RF-ORC-03 existir, muda-se aquele lugar e esta regra continua
-   * certa.
+   * Quem decide e a camada de banco, num unico lugar — hoje
+   * `status === 'reconciled'` (decisao nº 7, Ricardo, 2026-10-02): quando o
+   * RF-ORC-03 casa uma previsao `planned` com um lancamento real, ela vira
+   * `reconciled` e recebe `reconciled_by_transaction_id`. Antes disso o schema
+   * nao tinha marcador de conciliacao e este campo nao tinha de onde vir; agora
+   * tem, e continua sendo a camada de banco que o resolve — esta regra segue
+   * certa sem mudar.
    */
   conciliated: boolean;
 }

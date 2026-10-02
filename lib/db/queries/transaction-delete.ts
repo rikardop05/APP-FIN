@@ -18,6 +18,11 @@
  *   produto, apagar uma previsão vencida e não realizada RESOLVE a pendência do
  *   painel: antes, a única forma de limpá-la era registrar um gasto que não
  *   houve.
+ * - **`reconciled` (previsão já cumprida por um lançamento real)**: apagar é
+ *   apagar a previsão, com a mesma dispensa.
+ * - **`posted` que cumpria uma previsão**: a previsão volta a `planned` (coluna
+ *   do par anulada) na mesma transação, e o impacto diz isso (`reopens_planned`).
+ *   Sem reabrir, o `ON DELETE RESTRICT` de `reconciled_by_transaction_id` barra o DELETE.
  * - **Parcela de plano**: `scope = 'only'` (padrão, o menos destrutivo) apaga só
  *   esta; `'with-future'` apaga também as parcelas FUTURAS `planned` do mesmo
  *   plano. Se não sobrar linha no plano, o plano some (como em `revertImport`).
@@ -96,7 +101,9 @@ export type DeleteEffect =
   | { kind: 'reimport_will_fail'; planDescription: string; blockingInstallments: number }
   /** Parcela projetada: a reimportação pula a lida que a gerou e não a projeta de novo. */
   | { kind: 'stays_deleted_on_reimport' }
-  | { kind: 'occurrence_skipped'; ruleDescription: string; competence: string };
+  | { kind: 'occurrence_skipped'; ruleDescription: string; competence: string }
+  /** Este lançamento real cumpria uma previsão: ela volta a `planned` (em aberto). */
+  | { kind: 'reopens_planned'; ruleDescription: string; competence: string };
 
 export interface DeleteImpact {
   target: {
@@ -104,7 +111,7 @@ export interface DeleteImpact {
     description: string;
     amountCents: Cents;
     occurredOn: string;
-    status: 'posted' | 'planned';
+    status: 'posted' | 'planned' | 'reconciled';
   };
   /** "1 lançamento e 7 parcelas futuras": o que de fato some. */
   deleted: { transactions: number; futureInstallments: number };
@@ -121,6 +128,8 @@ interface DeletionPlan {
   planId: string | null;
   /** Lote cujo `rows_imported` cai em 1 (só se a linha foi contada). */
   decrementBatchId: string | null;
+  /** Previsões `reconciled` cumpridas por uma linha que vai sumir: voltam a `planned`. */
+  reopenIds: string[];
 }
 
 async function planDeletion(
@@ -314,9 +323,43 @@ async function planDeletion(
     effects.push({ kind: 'returns_on_reimport' });
   }
 
+  // --- este lançamento cumpria uma previsão: ela reabre ----------------------
+  // `reconciled_by_transaction_id` é RESTRICT: sem reabrir antes, o DELETE falha.
+  const fulfilled = await reader
+    .select({
+      id: transactions.id,
+      competence: transactions.competence,
+      description: transactions.description,
+      expenseRule: recurringExpenses.description,
+      incomeRule: incomes.description,
+    })
+    .from(transactions)
+    .leftJoin(recurringExpenses, eq(recurringExpenses.id, transactions.recurringExpenseId))
+    .leftJoin(incomes, eq(incomes.id, transactions.incomeId))
+    .where(
+      and(
+        eq(transactions.householdId, householdId),
+        eq(transactions.status, 'reconciled'),
+        inArray(transactions.reconciledByTransactionId, ids),
+      ),
+    )
+    .orderBy(asc(transactions.competence));
+  for (const row of fulfilled) {
+    effects.push({
+      kind: 'reopens_planned',
+      ruleDescription: row.expenseRule ?? row.incomeRule ?? row.description,
+      competence: row.competence,
+    });
+  }
+
   // --- previsão de recorrência: dispensa -----------------------------------
+  // Apagar uma `reconciled` (já cumprida) é apagar a previsão: dispensa também,
+  // senão o `topUpPlanned` a regeneraria.
   let skip: DeletionPlan['skip'] = null;
-  if (target.status === 'planned' && (target.recurringExpenseId !== null || target.incomeId !== null)) {
+  if (
+    (target.status === 'planned' || target.status === 'reconciled') &&
+    (target.recurringExpenseId !== null || target.incomeId !== null)
+  ) {
     const origin: Origin =
       target.recurringExpenseId !== null
         ? { expenseId: target.recurringExpenseId }
@@ -357,6 +400,7 @@ async function planDeletion(
     skip,
     planId: target.installmentPlanId,
     decrementBatchId,
+    reopenIds: fulfilled.map((row) => row.id),
   };
 }
 
@@ -391,6 +435,15 @@ export async function deleteTransaction(
       .update(statements)
       .set({ paidTransactionId: null })
       .where(inArray(statements.paidTransactionId, plan.ids));
+
+    // Reabre as previsões que estas linhas cumpriam (uma UPDATE só: status e
+    // coluna mudam juntos, que é o que o CHECK exige).
+    if (plan.reopenIds.length > 0) {
+      await tx
+        .update(transactions)
+        .set({ status: 'planned', reconciledByTransactionId: null })
+        .where(and(eq(transactions.householdId, householdId), inArray(transactions.id, plan.reopenIds)));
+    }
 
     if (plan.skip !== null) {
       await recordSkippedOccurrence(tx, householdId, plan.skip.origin, plan.skip.competence);

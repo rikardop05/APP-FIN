@@ -93,6 +93,7 @@ const deleteEffectSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('stays_deleted_on_reimport') }),
   z.object({ kind: z.literal('occurrence_skipped'), ruleDescription: z.string(), competence: z.string() }),
+  z.object({ kind: z.literal('reopens_planned'), ruleDescription: z.string(), competence: z.string() }),
 ]);
 
 const deletedCountsSchema = z.object({

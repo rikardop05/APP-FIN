@@ -479,6 +479,16 @@ export const transactions = pgTable(
     /** Origem, quando gerado. */
     incomeId: uuid('income_id').references(() => incomes.id),
     importBatchId: uuid('import_batch_id').references(() => importBatches.id),
+    /**
+     * Lancamento real (`posted`) que cumpriu esta previsao. So a linha
+     * `reconciled` o carrega (ver o CHECK). `RESTRICT`: apagar o real sem antes
+     * reabrir a previsao (§3.3) leva erro de FK — esquecimento barulhento, nunca
+     * silencioso. `SET NULL` violaria o CHECK. Decisao n. 7.
+     */
+    reconciledByTransactionId: uuid('reconciled_by_transaction_id').references(
+      (): AnyPgColumn => transactions.id,
+      { onDelete: 'restrict' },
+    ),
     /** Null para lancamento manual. */
     dedupeHash: text('dedupe_hash'),
     note: text('note'),
@@ -497,23 +507,35 @@ export const transactions = pgTable(
       'transactions_installment_number_iff_plan',
       sql`(${t.installmentNumber} is null) = (${t.installmentPlanId} is null)`,
     ),
+    // Decisao n. 7: `reconciled` <=> carrega o par que a cumpriu. Garante que
+    // "cumprida" sempre aponta para o lancamento real, e que so uma previsao
+    // cumprida leva o vinculo (uma `posted`/`planned` nao pode ter o par).
+    check(
+      'transactions_reconciled_iff_reconciled_by',
+      sql`(${t.status} = 'reconciled') = (${t.reconciledByTransactionId} is not null)`,
+    ),
     uniqueIndex('transactions_household_id_dedupe_hash_unique')
       .on(t.householdId, t.dedupeHash)
       .where(sql`${t.dedupeHash} is not null`),
     // Previsao gravada como linha (decisao de 2026-09-30): impedem duplicata de
-    // `planned` na criacao e na regeneracao. O predicado `status = 'planned'` e o
-    // coracao: sem ele a constraint colide com a linha `posted` que carrega o
-    // mesmo `recurring_expense_id` de origem — a que o RF-ORC-03 cria ao
-    // conciliar previsto com realizado. Nao remover. A frequencia minima e de 1
-    // mes, entao ha no maximo uma ocorrencia por (origem, competencia).
+    // previsao na criacao e na regeneracao. O predicado `status in
+    // ('planned', 'reconciled')` e o coracao: sem ele a constraint colide com a
+    // linha `posted` que carrega o mesmo `recurring_expense_id` de origem — a
+    // que o RF-ORC-03 cria ao conciliar previsto com realizado — E o
+    // `topUpPlanned` (ON CONFLICT DO NOTHING) regeneraria a previsao de um mes
+    // ja cumprido, trazendo a contagem dupla de volta (decisao n. 7). Nao
+    // remover. A frequencia minima e de 1 mes, entao ha no maximo uma ocorrencia
+    // por (origem, competencia).
     uniqueIndex('transactions_hh_recurring_competence_planned_unique')
       .on(t.householdId, t.recurringExpenseId, t.competence)
       .where(
-        sql`${t.status} = 'planned' and ${t.recurringExpenseId} is not null`,
+        sql`${t.status} in ('planned', 'reconciled') and ${t.recurringExpenseId} is not null`,
       ),
     uniqueIndex('transactions_hh_income_competence_planned_unique')
       .on(t.householdId, t.incomeId, t.competence)
-      .where(sql`${t.status} = 'planned' and ${t.incomeId} is not null`),
+      .where(
+        sql`${t.status} in ('planned', 'reconciled') and ${t.incomeId} is not null`,
+      ),
     uniqueIndex('transactions_hh_installment_plan_number_planned_unique')
       .on(t.householdId, t.installmentPlanId, t.installmentNumber)
       .where(sql`${t.status} = 'planned'`),

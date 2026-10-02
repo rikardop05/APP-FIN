@@ -36,6 +36,20 @@
       "when": 1790836488493,
       "tag": "0004_rare_jack_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790974530121,
+      "tag": "0005_needy_boomer",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790974562508,
+      "tag": "0006_ancient_betty_ross",
+      "breakpoints": true
     }
   ]
 }
