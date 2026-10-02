@@ -6,12 +6,20 @@ import { futureCommitment, type CommitmentInput } from '@/lib/finance/commitment
 import type { BasisPoints, Cents } from '@/lib/money';
 import { Badge, EmptyState, Money } from '@/components/ui-kit';
 import type { CardList } from '../schemas';
-import { CARDS_COMMITMENT_MONTHS as COMMITMENT_MONTHS } from './window';
 
 type CommitmentSectionProps = {
+  /**
+   * De `/api/cards` (cliente), NÃO da mesma foto do servidor das `transactions`: os
+   * dois são lidos em momentos diferentes. Corrida aceita (achado A2 do Corvo): se
+   * um cartão for desativado em outra aba, `usageBp`/limite podem divergir por um
+   * instante; o total não, pois o motor agrega por `creditCardId` das transações.
+   * Salvar/desativar nesta tela chama `router.refresh()` e realinha os dois.
+   */
   cards: CardList['cards'];
   /** Já recortadas no servidor por `listCommitmentTransactions` (o recorte do painel). */
   transactions: CommitmentInput['transactions'];
+  /** `household_settings.commitment_months`, lido no servidor (SPEC §5.8: nunca um número fixo na tela). */
+  months: number;
   today: string;
 };
 
@@ -120,9 +128,11 @@ function CommitmentTable({
 function LimitUsage({
   cards,
   usage,
+  months,
 }: {
   cards: CardList['cards'];
   usage: ReturnType<typeof futureCommitment>['limitUsage'];
+  months: number;
 }) {
   const cardsById = new Map(cards.map((card) => [card.id, card]));
 
@@ -130,7 +140,7 @@ function LimitUsage({
     <section aria-labelledby="commitment-limit-heading" className="flex flex-col gap-3">
       <div>
         <h3 id="commitment-limit-heading" className="text-base font-semibold tracking-tight">Uso de limite por cartão</h3>
-        <p className="text-sm text-muted-foreground">Quanto do limite está comprometido na janela de 24 meses.</p>
+        <p className="text-sm text-muted-foreground">Quanto do limite está comprometido na janela de {months} meses.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {usage.map((item) => {
@@ -171,11 +181,11 @@ function LimitUsage({
   );
 }
 
-export function CommitmentSection({ cards, transactions, today }: CommitmentSectionProps) {
+export function CommitmentSection({ cards, transactions, months, today }: CommitmentSectionProps) {
   const fromCompetence = toCompetence(today);
   const result = futureCommitment({
     fromCompetence,
-    months: COMMITMENT_MONTHS,
+    months,
     cards: cards.map((card) => ({
       id: card.id,
       name: card.name,
@@ -193,7 +203,7 @@ export function CommitmentSection({ cards, transactions, today }: CommitmentSect
     <section aria-labelledby="commitment-heading" className="flex flex-col gap-5">
       <div>
         <h2 id="commitment-heading" className="text-lg font-semibold tracking-tight">Comprometimento futuro</h2>
-        <p className="text-sm text-muted-foreground">Parcelas já contratadas nos próximos 24 meses.</p>
+        <p className="text-sm text-muted-foreground">Parcelas já contratadas nos próximos {months} meses.</p>
       </div>
 
       {lastCommittedCompetence !== null ? (
@@ -212,7 +222,7 @@ export function CommitmentSection({ cards, transactions, today }: CommitmentSect
         <EmptyState
           icon={BarChart3}
           title="Nenhum comprometimento futuro"
-          description="Não há mês devedor na janela de 24 meses. Estornos isolados não contam como comprometimento."
+          description="Não há mês devedor na janela de {months} meses. Estornos isolados não contam como comprometimento."
           action={{ label: 'Ver lançamentos', href: '/lancamentos' }}
         />
       )}
@@ -223,7 +233,7 @@ export function CommitmentSection({ cards, transactions, today }: CommitmentSect
             <h3 className="font-semibold">Visão mensal</h3>
             <p className="text-sm text-muted-foreground">Barras mostram apenas meses devedores.</p>
           </div>
-          <Badge variant="neutral">24 meses</Badge>
+          <Badge variant="neutral">{months} meses</Badge>
         </div>
         <CommitmentChart entries={result.byCompetence} maxMagnitude={maxMagnitude} />
       </div>
@@ -236,7 +246,7 @@ export function CommitmentSection({ cards, transactions, today }: CommitmentSect
         <CommitmentTable entries={result.byCompetence} />
       </div>
 
-      <LimitUsage cards={cards} usage={result.limitUsage} />
+      <LimitUsage cards={cards} usage={result.limitUsage} months={months} />
     </section>
   );
 }

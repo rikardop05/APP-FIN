@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { CreditCard, Landmark, Pencil, Plus, Trash2 } from 'lucide-react';
 import { parseBRL } from '@/lib/money';
@@ -58,11 +59,14 @@ function errorMessage(error: unknown) {
 
 type CartoesScreenProps = {
   today: string;
+  /** `household_settings.commitment_months`, lido no servidor como no painel. */
+  commitmentMonths: number;
   /** Do servidor (`listCommitmentTransactions`): o mesmo recorte do painel. */
   commitmentTransactions: CommitmentInput['transactions'];
 };
 
-export function CartoesScreen({ today, commitmentTransactions }: CartoesScreenProps) {
+export function CartoesScreen({ today, commitmentMonths, commitmentTransactions }: CartoesScreenProps) {
+  const router = useRouter();
   const [accounts, setAccounts] = useState<AccountList['accounts']>([]);
   const [cards, setCards] = useState<CardList['cards']>([]);
   const [members, setMembers] = useState<CardList['members']>([]);
@@ -117,6 +121,7 @@ export function CartoesScreen({ today, commitmentTransactions }: CartoesScreenPr
       await readResponse(response, accountListSchema);
       setDialog(null);
       await load();
+      router.refresh();
     } catch (saveError) {
       setError(errorMessage(saveError));
     } finally {
@@ -149,6 +154,9 @@ export function CartoesScreen({ today, commitmentTransactions }: CartoesScreenPr
       await readResponse(response, cardListSchema);
       setDialog(null);
       await load();
+      // As linhas do comprometimento vêm do servidor: sem refresh ficariam na foto
+      // do primeiro render, e o limite recém-salvo usaria transações velhas.
+      router.refresh();
     } catch (saveError) {
       setError(errorMessage(saveError));
     } finally {
@@ -169,6 +177,7 @@ export function CartoesScreen({ today, commitmentTransactions }: CartoesScreenPr
         await readResponse(response, accountListSchema);
       }
       await load();
+      router.refresh();
     } catch (archiveError) {
       setError(errorMessage(archiveError));
     }
@@ -316,7 +325,7 @@ export function CartoesScreen({ today, commitmentTransactions }: CartoesScreenPr
             )}
           </section>
 
-          {cards.length > 0 ? <CommitmentSection cards={cards} transactions={commitmentTransactions} today={today} /> : null}
+          {cards.length > 0 ? <CommitmentSection cards={cards} transactions={commitmentTransactions} months={commitmentMonths} today={today} /> : null}
         </div>
       )}
 

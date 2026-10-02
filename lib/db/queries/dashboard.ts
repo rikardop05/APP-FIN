@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNotNull, isNull, lte, notInArray, or, sql } from 'drizzle-orm';
 
 import { addCompetence, toCompetence, type Competence, type IsoDate } from '@/lib/date';
 import { db } from '@/lib/db';
@@ -362,6 +362,9 @@ export async function listCommitmentTransactions(
       and(
         eq(transactions.householdId, householdId),
         isNotNull(transactions.creditCardId),
+        // Compromisso de cartão é GASTO (e estorno). Pagamento de fatura e
+        // transferência não são, mesmo se gravados com `credit_card_id` (RC-03).
+        notInArray(transactions.kind, ['credit_card_payment', 'transfer']),
         gte(transactions.competence, fromCompetence),
         lte(transactions.competence, to),
         or(eq(transactions.status, 'posted'), isNotNull(transactions.installmentPlanId)),

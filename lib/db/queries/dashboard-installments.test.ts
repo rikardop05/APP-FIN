@@ -95,6 +95,10 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
           { ...onCard, description: 'planned avulsa no cartão', occurredOn: '2026-12-01', competence: '2026-12', amountCents: -777, kind: 'expense', status: 'planned' },
           { ...onCard, description: 'depois da janela', occurredOn: '2028-10-01', competence: '2028-10', amountCents: -3, kind: 'expense', status: 'posted' },
           { ...onCard, description: 'antes da janela', occurredOn: '2026-09-01', competence: '2026-09', amountCents: -4, kind: 'expense', status: 'posted' },
+          // A3: pagamento de fatura e transferência com credit_card_id (dado errado,
+          // mas possível) NÃO são comprometimento, nem como parcela.
+          { ...onCard, description: 'pagamento errado no cartão', occurredOn: '2026-10-05', competence: '2026-10', amountCents: -50_000, kind: 'credit_card_payment', status: 'posted' },
+          { ...onCard, description: 'transfer errada no cartão', occurredOn: '2026-10-05', competence: '2026-10', amountCents: -60_000, kind: 'transfer', status: 'posted' },
         ]);
 
         const dashboard = await queries.getDashboardData(householdId, '2026-10-10', 24);
@@ -115,6 +119,57 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
       } finally {
         // Transações primeiro: `transactions.credit_card_id` é RESTRICT, e a ordem
         // do cascade a partir de `households` não é garantida.
+        await db.delete(transactions).where(eq(transactions.householdId, householdId));
+        await db.delete(households).where(eq(households.id, householdId));
+      }
+    });
+
+    /**
+     * A1 do Corvo: a janela do comprometimento é `household_settings.commitment_months`
+     * (SPEC §5.8), não 24 fixo. As duas telas fazem exatamente isto: `getSettings` →
+     * `getDashboardData` (painel) e `getSettings` → `listCommitmentTransactions`
+     * (`/cartoes`). Com o setting em 12 elas têm de somar o mesmo, e a linha de
+     * 2027-10 (13º mês) fica fora das duas.
+     */
+    it('com commitment_months = 12 o painel e /cartoes somam o mesmo recorte', async () => {
+      const [{ db }, schema, queries, { getSettings }] = await Promise.all([
+        import('@/lib/db'),
+        import('@/lib/db/schema'),
+        import('./dashboard'),
+        import('./settings'),
+      ]);
+      const { creditCards, households, householdSettings, transactions } = schema;
+
+      const [household] = await db
+        .insert(households)
+        .values({ name: 'Comprometimento janela configuravel test' })
+        .returning({ id: households.id });
+      if (household === undefined) throw new Error('Household de teste não foi criado.');
+      const householdId = household.id;
+
+      try {
+        await db.insert(householdSettings).values({ householdId, commitmentMonths: 12 });
+        const [card] = await db
+          .insert(creditCards)
+          .values({ householdId, name: 'Cartão teste', closingDay: 1, dueDay: 10 })
+          .returning({ id: creditCards.id });
+        if (card === undefined) throw new Error('Fixture não foi criada.');
+        const onCard = { householdId, rawDescription: '', creditCardId: card.id, kind: 'expense', status: 'posted' } as const;
+        await db.insert(transactions).values([
+          { ...onCard, description: 'mês corrente', occurredOn: '2026-10-02', competence: '2026-10', amountCents: -100 },
+          { ...onCard, description: '12º mês', occurredOn: '2027-09-02', competence: '2027-09', amountCents: -200 },
+          { ...onCard, description: '13º mês (fora)', occurredOn: '2027-10-02', competence: '2027-10', amountCents: -400 },
+        ]);
+
+        const { commitmentMonths } = await getSettings(householdId);
+        expect(commitmentMonths).toBe(12);
+
+        const dashboard = await queries.getDashboardData(householdId, '2026-10-10', commitmentMonths);
+        const cards = await queries.listCommitmentTransactions(householdId, '2026-10', commitmentMonths);
+        const total = (rows: { amountCents: number }[]) => rows.reduce((sum, row) => sum + row.amountCents, 0);
+        expect(total(cards)).toBe(-300);
+        expect(total(dashboard.commitmentTransactions)).toBe(-300);
+      } finally {
         await db.delete(transactions).where(eq(transactions.householdId, householdId));
         await db.delete(households).where(eq(households.id, householdId));
       }
