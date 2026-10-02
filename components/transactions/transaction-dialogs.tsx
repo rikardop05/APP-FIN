@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { parseBRL } from '@/lib/money';
 import { competenceLabel } from '@/components/budget/labels';
 import { isSimpleDelete, reimportNotice, withFutureOptionLabel } from './delete-presentation';
+import { signedAmountCents } from './manual-sign';
 import { Button, DateText, Input, Money, Select } from '@/components/ui-kit';
 import {
   deleteImpactSchema,
@@ -85,13 +86,18 @@ export function ManualTransactionDialog({
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // Despesa e Receita: o sinal vem do tipo, entao o valor e digitado positivo e
+  // a dica antiga de "saida negativa" sai (decisao do Ricardo, 2026-10-02).
+  const positiveAmount = kind === 'expense' || kind === 'income';
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const amountCents = parseBRL(amount);
-    if (amountCents === null) {
-      setError('Informe um valor válido. Saídas devem ser negativas.');
+    const parsedAmount = parseBRL(amount);
+    if (parsedAmount === null) {
+      setError('Informe um valor válido.');
       return;
     }
+    const amountCents = signedAmountCents(parsedAmount, kind);
     if (!accountId && !creditCardId) {
       setError('Selecione uma conta ou um cartão.');
       return;
@@ -121,7 +127,7 @@ export function ManualTransactionDialog({
           <label className="flex flex-col gap-1 text-sm"><span className="text-xs text-muted-foreground">Data</span><Input type="date" value={occurredOn} onChange={(event) => setOccurredOn(event.target.value)} required /></label>
           <label className="flex flex-col gap-1 text-sm"><span className="text-xs text-muted-foreground">Tipo</span><Select value={kind} onChange={(event) => setKind(readTransactionKind(event.target.value))}><option value="expense">Despesa</option><option value="income">Receita</option><option value="transfer">Transferência</option><option value="credit_card_payment">Pagamento de fatura</option><option value="investment_contribution">Aporte</option></Select></label>
           <label className="flex flex-col gap-1 text-sm sm:col-span-2"><span className="text-xs text-muted-foreground">Descrição</span><Input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ex.: Mercado" maxLength={240} required /></label>
-          <label className="flex flex-col gap-1 text-sm"><span className="text-xs text-muted-foreground">Valor</span><Input value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="-R$ 0,00" inputMode="decimal" required /><span className="text-xs text-muted-foreground">Use valor negativo para saída.</span></label>
+          <label className="flex flex-col gap-1 text-sm"><span className="text-xs text-muted-foreground">Valor</span><Input value={amount} onChange={(event) => setAmount(event.target.value)} placeholder={positiveAmount ? 'R$ 0,00' : '-R$ 0,00'} inputMode="decimal" required />{positiveAmount ? null : <span className="text-xs text-muted-foreground">Use valor negativo para saída.</span>}</label>
           <label className="flex flex-col gap-1 text-sm"><span className="text-xs text-muted-foreground">Conta</span><Select value={accountId} onChange={(event) => { setAccountId(event.target.value); setCreditCardId(''); }}><option value="">Selecionar depois</option>{options.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</Select></label>
           <label className="flex flex-col gap-1 text-sm"><span className="text-xs text-muted-foreground">Cartão</span><Select value={creditCardId} onChange={(event) => { setCreditCardId(event.target.value); setAccountId(''); }}><option value="">Selecionar depois</option>{options.cards.map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}</Select></label>
           <label className="flex flex-col gap-1 text-sm"><span className="text-xs text-muted-foreground">Categoria</span><Select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">Não categorizado</option>{options.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select></label>
