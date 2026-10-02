@@ -69,7 +69,10 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
           // --- ANTES do dia 1 (entram na abertura, de qualquer kind) ---
           { ...base, accountId: account.id, occurredOn: '2026-09-15', competence: '2026-09', cashDate: '2026-09-15', amountCents: -10_000, kind: 'expense', status: 'posted' },
           { ...base, accountId: account.id, occurredOn: '2026-09-20', competence: '2026-09', cashDate: '2026-09-20', amountCents: -30_000, kind: 'credit_card_payment', status: 'posted' },
-          // No próprio `opening_date`: o saldo informado já a contém → fora.
+          // No próprio `opening_date`: o saldo informado é de INÍCIO do dia, então
+          // o movimento do dia NÃO está nele → entra.
+          // Antes de `opening_date`: o saldo já o contém → fora (−2.500, em 2025-12-31).
+          { ...base, accountId: account.id, occurredOn: '2025-12-31', competence: '2025-12', cashDate: '2025-12-31', amountCents: -2_500, kind: 'expense', status: 'posted' },
           { ...base, accountId: account.id, occurredOn: '2026-01-01', competence: '2026-01', cashDate: '2026-01-01', amountCents: -5_000, kind: 'expense', status: 'posted' },
           // Conta inativa: fora da abertura.
           { ...base, accountId: inactive.id, occurredOn: '2026-09-15', competence: '2026-09', cashDate: '2026-09-15', amountCents: -777, kind: 'expense', status: 'posted' },
@@ -90,9 +93,10 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
 
         const result = await getCashflowData(householdId, '2026-10-10', 12);
 
-        // 100.000 (conta ativa) − 10.000 − 30.000 = 60.000. A conta inativa
-        // (999.999), o dia de `opening_date` (−5.000) e o `planned` (−1.111) ficam de fora.
-        expect(result.openingBalanceCents).toBe(60_000);
+        // 100.000 (conta ativa) − 10.000 − 30.000 − 5.000 (dia de `opening_date`,
+        // incluído) = 55.000. A conta inativa (999.999), o dia anterior a
+        // `opening_date` (−2.500) e o `planned` (−1.111) ficam de fora.
+        expect(result.openingBalanceCents).toBe(55_000);
         expect(result.fromCompetence).toBe('2026-10');
 
         const summary = result.rows

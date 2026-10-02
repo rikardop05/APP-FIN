@@ -38,8 +38,10 @@ import { cents, type Cents } from '@/lib/money';
  * não existe. Dentro da janela o oposto vale (a fatura entra por
  * `statementsDue`), e a fronteira é o dia 1: não há dupla contagem nem lacuna.
  *
- * Só conta movimento POSTERIOR a `accounts.opening_date`: o saldo informado é o
- * "saldo no dia" e já contém o que aconteceu nele.
+ * Só conta movimento a partir de `accounts.opening_date`, inclusive: o saldo
+ * informado é o de INÍCIO desse dia (decisão do Ricardo, 2026-10-02), então o
+ * movimento do próprio dia não está nele e entra. Um `opening_date` futuro não
+ * soma movimento nenhum à abertura (o filtro `< dia 1` o descarta).
  */
 
 /** Tipos de linha que alguma ponta do motor consome. `transfer` e pagamento de fatura NÃO entram na janela (RC-03). */
@@ -105,7 +107,7 @@ export async function getCashflowData(
             eq(accounts.householdId, householdId),
             eq(accounts.active, true),
             eq(transactions.status, 'posted'),
-            sql`${cashDay} > ${accounts.openingDate}`,
+            sql`${cashDay} >= ${accounts.openingDate}`,
             sql`${cashDay} < ${windowStart}::date`,
           ),
         ),

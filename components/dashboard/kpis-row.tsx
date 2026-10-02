@@ -114,7 +114,7 @@ export function KpisRow({
           label={`Parcelas a vencer (${commitmentMonths} m)`}
           icon={Receipt}
           tone="neutral"
-          hint={`Soma das parcelas planejadas nos próximos ${commitmentMonths} meses (mesma janela do card de comprometimento).`}
+          hint={`Soma das parcelas previstas nos ${commitmentMonths} meses depois deste. A parcela deste mês já está em "Despesa do mês".`}
         >
           <Money value={futureInstallmentsCents} sign="never" />
         </KpiCard>

@@ -21,9 +21,9 @@ type CommitmentChartProps = {
  * do saldo DEVEDOR: mês com total positivo (só estorno) não é comprometimento
  * (CONTRACTS §5) e fica sem barra.
  *
- * O subtítulo diz o que a soma realmente é: o que já está lançado nas faturas de
- * cartão de cada mês. O feed é toda linha de cartão, então previsão recorrente em
- * cartão entra junto — não prometo "só parcelas".
+ * O feed é `listCommitmentTransactions` (o mesmo de `/cartoes`): linha de cartão
+ * já lançada (`posted`) e parcela de plano. Previsão de despesa fixa em cartão
+ * NÃO entra. Como entra compra à vista já lançada, não prometo "só parcelas".
  */
 export function CommitmentChart({ entries }: CommitmentChartProps) {
   const indebted = entries.filter((entry) => entry.totalCents < 0);

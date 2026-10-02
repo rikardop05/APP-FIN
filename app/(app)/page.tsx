@@ -43,8 +43,10 @@ const OVERDUE_RECURRING_LIMIT = 10;
  * única de 1 linha 1:1 (PK = `household_id`), então cabe em uma única
  * round-trip antes do agregado de queries do dashboard. O mesmo valor é
  * passado para `getDashboardData` (janela da soma de `futureInstallmentsCents`)
- * e para `futureCommitment` (janela do gráfico/tabela de comprometimento) —
- * a família não vê "parcelas a vencer" com dois números diferentes.
+ * e para `futureCommitment` (janela do gráfico/tabela de comprometimento). O N
+ * é o mesmo, as janelas não: "Parcelas a vencer" começa no mês SEGUINTE (a
+ * parcela do mês corrente já está na despesa do mês) e o comprometimento começa
+ * no mês corrente. A razão está em `getDashboardData`.
  */
 export default async function DashboardPage() {
   const { householdId } = await requireSession();

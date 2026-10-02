@@ -17,7 +17,7 @@ if (process.env.DATABASE_URL === undefined) {
 describe.skipIf(process.env.DATABASE_URL === undefined)(
   'getDashboardData: parcelas a vencer contra o banco real',
   () => {
-    it('soma a parcela futura e ignora a despesa fixa planejada', async () => {
+    it('parcelas a vencer soma só parcela; comprometimento ignora previsão; painel e /cartoes no mesmo recorte', async () => {
       const [{ db }, schema, queries] = await Promise.all([
         import('@/lib/db'),
         import('@/lib/db/schema'),
@@ -88,6 +88,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
           { ...onCard, description: 'Geladeira 2/2', occurredOn: '2026-09-20', competence: '2026-11', amountCents: -500, kind: 'expense', status: 'planned', installmentPlanId: plan.id, installmentNumber: 2 },
           { ...onCard, description: 'Streaming previsto', occurredOn: '2026-11-10', competence: '2026-11', amountCents: -18_000, kind: 'expense', status: 'planned', recurringExpenseId: rule.id },
           { householdId, rawDescription: '', accountId: account.id, description: 'planned avulsa', occurredOn: '2026-12-01', competence: '2026-12', amountCents: -999, kind: 'expense', status: 'planned' },
+          // Só para o comprometimento (janela 2026-10 .. 2028-09):
+          { ...onCard, description: 'Geladeira 1/2', occurredOn: '2026-09-20', competence: '2026-10', amountCents: -500, kind: 'expense', status: 'posted', installmentPlanId: plan.id, installmentNumber: 1 },
+          // Compra de agosto na fatura de outubro: o recorte é a competência, não a data.
+          { ...onCard, description: 'À vista lançada', occurredOn: '2026-08-30', competence: '2026-10', amountCents: -2_000, kind: 'expense', status: 'posted' },
+          { ...onCard, description: 'planned avulsa no cartão', occurredOn: '2026-12-01', competence: '2026-12', amountCents: -777, kind: 'expense', status: 'planned' },
+          { ...onCard, description: 'depois da janela', occurredOn: '2028-10-01', competence: '2028-10', amountCents: -3, kind: 'expense', status: 'posted' },
+          { ...onCard, description: 'antes da janela', occurredOn: '2026-09-01', competence: '2026-09', amountCents: -4, kind: 'expense', status: 'posted' },
         ]);
 
         const dashboard = await queries.getDashboardData(householdId, '2026-10-10', 24);
@@ -95,6 +102,16 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
 
         const summed = await queries.sumFutureInstallments(householdId, '2026-10-10', 24);
         expect(summed).toBe(-500);
+
+        // Comprometimento: parcelas (qualquer status) + o já lançado; sem previsão
+        // de despesa fixa nem `planned` avulsa. E o painel usa o MESMO recorte.
+        const commitment = await queries.listCommitmentTransactions(householdId, '2026-10', 24);
+        const sum = (rows: { amountCents: number }[]) => rows.reduce((total, row) => total + row.amountCents, 0);
+        expect(sum(commitment)).toBe(-3_000);
+        expect(commitment).toHaveLength(3);
+        const key = (row: { competence: string; amountCents: number; status: string }) =>
+          `${row.competence}|${row.amountCents}|${row.status}`;
+        expect(dashboard.commitmentTransactions.map(key).sort()).toEqual(commitment.map(key).sort());
       } finally {
         // Transações primeiro: `transactions.credit_card_id` é RESTRICT, e a ordem
         // do cascade a partir de `households` não é garantida.

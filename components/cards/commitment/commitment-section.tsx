@@ -2,19 +2,18 @@
 
 import { BarChart3, CreditCard } from 'lucide-react';
 import { toCompetence, type Competence } from '@/lib/date';
-import { futureCommitment } from '@/lib/finance/commitment';
+import { futureCommitment, type CommitmentInput } from '@/lib/finance/commitment';
 import type { BasisPoints, Cents } from '@/lib/money';
 import { Badge, EmptyState, Money } from '@/components/ui-kit';
 import type { CardList } from '../schemas';
-import type { Transaction } from '@/components/transactions/schemas';
+import { CARDS_COMMITMENT_MONTHS as COMMITMENT_MONTHS } from './window';
 
 type CommitmentSectionProps = {
   cards: CardList['cards'];
-  transactions: Transaction[];
+  /** Já recortadas no servidor por `listCommitmentTransactions` (o recorte do painel). */
+  transactions: CommitmentInput['transactions'];
   today: string;
 };
-
-const COMMITMENT_MONTHS = 24;
 
 function competenceLabel(competence: Competence): string {
   return `${competence.slice(5)}/${competence.slice(0, 4)}`;
@@ -182,16 +181,7 @@ export function CommitmentSection({ cards, transactions, today }: CommitmentSect
       name: card.name,
       creditLimitCents: card.creditLimitCents,
     })),
-    transactions: transactions.flatMap((transaction) =>
-      transaction.creditCardId === null
-        ? []
-        : [{
-            competence: transaction.competence,
-            amountCents: transaction.amountCents,
-            creditCardId: transaction.creditCardId,
-            status: transaction.status,
-          }],
-    ),
+    transactions,
   });
   const maxMagnitude = result.byCompetence.reduce(
     (maximum, entry) => Math.max(maximum, magnitude(entry.totalCents)),

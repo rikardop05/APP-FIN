@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNotNull, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 
 import { addCompetence, toCompetence, type Competence, type IsoDate } from '@/lib/date';
 import { db } from '@/lib/db';
@@ -99,11 +99,17 @@ const SPENDING_AVERAGE_WINDOW_MONTHS = 3;
  * valor pronto (ex.: `futureInstallmentsCents`); totais exibidos são
  * produzidos por `monthlyKpis`, `spendingByCategory` e `divergentStatements`.
  *
- * O horizonte do comprometimento vem de `household_settings.commitment_months`
- * (default 24) — a página passa o valor já lido. Mesma janela serve para o
- * `futureCommitment` e para o `futureInstallmentsCents`, evitando que o
- * dashboard e o card de comprometimento mostrem números diferentes para a
- * mesma pergunta ("parcelas a vencer").
+ * O horizonte vem de `household_settings.commitment_months` (N, default 24) — a
+ * página passa o valor já lido. As DUAS janelas usam o mesmo N, mas NÃO são a
+ * mesma janela, de propósito:
+ * - `futureInstallmentsCents` ("Parcelas a vencer"): competência+1 .. +N. O mês
+ *   corrente fica FORA porque a parcela dele já está em "Despesa do mês"
+ *   (`monthlyKpis` soma `posted` e `planned`, CONTRACTS §14); contar de novo
+ *   seria somar duas vezes. SPEC §5.8: "soma das parcelas futuras".
+ * - `commitmentTransactions` (card "Comprometimento futuro"): competência ..
+ *   +N-1, ou seja, os N meses A PARTIR do corrente, porque a fatura que vence
+ *   agora é compromisso de cartão (RF-CC-03, tabela de 24 meses).
+ * Por isso os dois números diferem pelo mês corrente e pelo último mês.
  */
 export async function getDashboardData(
   householdId: string,
@@ -114,7 +120,6 @@ export async function getDashboardData(
   const spendingWindowStart = addCompetence(competence, -SPENDING_AVERAGE_WINDOW_MONTHS);
   const futureInstallmentsStart = addCompetence(competence, 1);
   const futureInstallmentsEnd = addCompetence(competence, commitmentMonths);
-  const commitmentEnd = addCompetence(competence, commitmentMonths - 1);
 
   const [
     monthlyRows,
@@ -208,22 +213,7 @@ export async function getDashboardData(
       .where(eq(categories.householdId, householdId))
       .orderBy(asc(categories.sortOrder)),
 
-    db
-      .select({
-        competence: transactions.competence,
-        amountCents: transactions.amountCents,
-        creditCardId: transactions.creditCardId,
-        status: transactions.status,
-      })
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.householdId, householdId),
-          gte(transactions.competence, competence),
-          lte(transactions.competence, commitmentEnd),
-          isNotNull(transactions.creditCardId),
-        ),
-      ),
+    listCommitmentTransactions(householdId, competence, commitmentMonths),
 
     db
       .select({
@@ -293,14 +283,7 @@ export async function getDashboardData(
       categoryId: row.categoryId,
     })),
     categoriesForSpending: categoriesRows,
-    commitmentTransactions: commitmentRows
-      .filter((row): row is typeof row & { creditCardId: string } => row.creditCardId !== null)
-      .map((row) => ({
-        competence: row.competence,
-        amountCents: safeCents(row.amountCents),
-        creditCardId: row.creditCardId,
-        status: row.status,
-      })),
+    commitmentTransactions: commitmentRows,
     cards: cardsRows.map((row) => ({
       id: row.id,
       name: row.name,
@@ -346,13 +329,62 @@ function collectDivergentStatements(
 }
 
 /**
+ * Entrada de `futureCommitment` (CONTRACTS §5): o ÚNICO recorte de "comprometimento
+ * futuro". O painel (`getDashboardData`) e `/cartoes` chamam esta função, para as
+ * duas telas nunca mostrarem dois números para o mesmo cartão.
+ *
+ * Janela: as `months` competências A PARTIR de `fromCompetence` (inclusive), a
+ * mesma que o motor pavimenta. O recorte é por COMPETÊNCIA (o mês da fatura), não
+ * pela data da compra.
+ *
+ * Entra toda linha de cartão que é compromisso: o que já está lançado (`posted`,
+ * a fatura) e as parcelas de plano (`installment_plan_id`, em qualquer status).
+ * Fica FORA a linha `planned` que não é parcela: a previsão de despesa fixa em
+ * cartão (`recurring_expense_id`) e a `planned` avulsa. Previsão não é contrato;
+ * com ela, "Parcelas já contratadas" passaria a incluir a assinatura do mês que
+ * vem. Quando a previsão se realizar, ela chega como `posted` e entra.
+ */
+export async function listCommitmentTransactions(
+  householdId: string,
+  fromCompetence: Competence,
+  months: number,
+): Promise<DashboardCommitmentTransaction[]> {
+  const to = addCompetence(fromCompetence, months - 1);
+  const rows = await db
+    .select({
+      competence: transactions.competence,
+      amountCents: transactions.amountCents,
+      creditCardId: transactions.creditCardId,
+      status: transactions.status,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.householdId, householdId),
+        isNotNull(transactions.creditCardId),
+        gte(transactions.competence, fromCompetence),
+        lte(transactions.competence, to),
+        or(eq(transactions.status, 'posted'), isNotNull(transactions.installmentPlanId)),
+      ),
+    );
+  return rows
+    .filter((row): row is typeof row & { creditCardId: string } => row.creditCardId !== null)
+    .map((row) => ({
+      competence: row.competence,
+      amountCents: safeCents(row.amountCents),
+      creditCardId: row.creditCardId,
+      status: row.status,
+    }));
+}
+
+/**
  * Soma SQL — `SUM(amount_cents)` — de parcelas planejadas em uma janela
  * arbitrária. Mantida como utilitário público caso outra tela precise do
  * mesmo recorte (a Fase 2 pode usar para "parcelas a vencer 3 m", por ex.).
  *
- * Quem chama define `months`; o dashboard usa `commitmentMonths` da
- * household_settings, garantindo que o número exibido no KPI bata com o do
- * card de comprometimento.
+ * Quem chama define `months`; a janela é competência+1 .. +`months` (mês
+ * corrente fora), a mesma de `futureInstallmentsCents` em `getDashboardData`.
+ * NÃO é a janela do card de comprometimento (ver o comentário de lá).
  */
 export async function sumFutureInstallments(
   householdId: string,
