@@ -201,7 +201,16 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('exclusão de lançament
         const impact = await m.del.getDeleteImpact(s.householdId, p.ids[2] ?? '', 'only');
         expect(impact.deleted).toEqual({ transactions: 1, futureInstallments: 0 });
         expect(impact.effects).toContainEqual({ kind: 'plan_hole', planDescription: 'Magazine', remaining: 4 });
-        expect(impact.effects).toContainEqual({ kind: 'returns_on_reimport' });
+        // Parcela PROJETADA (#3) com a #1 lida ainda no banco: a reimportação pula a #1
+        // e não projeta nada, então a #3 NÃO volta (e nada colide).
+        expect(impact.effects).toContainEqual({ kind: 'stays_deleted_on_reimport' });
+        expect(impact.effects).not.toContainEqual({ kind: 'returns_on_reimport' });
+        expect(impact.effects.some((effect) => effect.kind === 'reimport_will_fail')).toBe(false);
+
+        // Parcela LIDA do arquivo (#1) com as 4 projetadas ficando: a reimportação falharia.
+        const first = await m.del.getDeleteImpact(s.householdId, p.ids[0] ?? '', 'only');
+        expect(first.effects).toContainEqual({ kind: 'reimport_will_fail', planDescription: 'Magazine', blockingInstallments: 4 });
+        expect(first.effects).not.toContainEqual({ kind: 'returns_on_reimport' });
 
         await m.del.deleteTransaction(s.householdId, p.ids[2] ?? '', 'only');
         expect(await s.exists(p.ids[2] ?? '')).toBe(false);
@@ -414,9 +423,29 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('exclusão de lançament
       const posted = rows.find((row) => row.status === 'posted');
       if (posted === undefined) throw new Error('Sem parcela postada.');
 
+      // A confirmação diz a VERDADE antes: com as 2 futuras ficando, a reimportação falha.
+      const only = await m.del.getDeleteImpact(s.householdId, posted.id, 'only');
+      expect(only.effects).toContainEqual({
+        kind: 'reimport_will_fail',
+        planDescription: 'Compra parcelada',
+        blockingInstallments: 2,
+      });
+      expect(only.effects).not.toContainEqual({ kind: 'returns_on_reimport' });
+      // Levando as futuras junto, nada colide: aí sim volta.
+      const withFuture = await m.del.getDeleteImpact(s.householdId, posted.id, 'with-future');
+      expect(withFuture.effects).toContainEqual({ kind: 'returns_on_reimport' });
+      expect(withFuture.effects.some((effect) => effect.kind === 'reimport_will_fail')).toBe(false);
+
       await m.del.deleteTransaction(s.householdId, posted.id, 'only'); // deixa as 2 futuras
       const afterDelete = await m.db.select({ id: m.schema.transactions.id }).from(m.schema.transactions).where(eq(m.schema.transactions.householdId, s.householdId));
       expect(afterDelete).toHaveLength(2);
+      // Sem a lida, apagar UMA das projetadas ainda deixa a outra colidindo.
+      const sibling = await m.del.getDeleteImpact(s.householdId, afterDelete[0]?.id ?? '', 'only');
+      expect(sibling.effects).toContainEqual({
+        kind: 'reimport_will_fail',
+        planDescription: 'Compra parcelada',
+        blockingInstallments: 1,
+      });
 
       // O resultado REAL (hipótese: o lote falha inteiro por violação do índice único
       // de dedupe_hash das filhas que ficaram; não duplica em silêncio).
@@ -439,6 +468,57 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('exclusão de lançament
       // E rejeitou PELO MOTIVO previsto, não por outro erro qualquer: violação (23505)
       // do índice único de dedupe_hash das parcelas futuras que ficaram.
       expect(cause).toBe('23505/transactions_household_id_dedupe_hash_unique');
+    } finally {
+      await cleanup(m, s.householdId);
+    }
+  });
+
+  it('apagar uma parcela PROJETADA com a lida ainda no banco: o impacto diz que não volta, e a reimportação real confirma', async () => {
+    const m = await modules();
+    const s = await seed(m);
+    try {
+      const input = {
+        fileName: 'fatura.txt',
+        fileHash: 'b'.repeat(64),
+        bankKey: null,
+        format: 'text' as const,
+        sourceKind: 'credit_card' as const,
+        sourceId: s.cardId,
+        confirmedRows: [
+          {
+            index: 0,
+            include: true,
+            occurredOn: '2026-09-05',
+            description: 'Compra parcelada',
+            rawDescription: 'Compra parcelada 1/3',
+            amountCents: cents(-1000),
+            categoryId: null,
+            memberId: null,
+            installment: { current: 1, total: 3 },
+          },
+        ],
+        reportedTotalCents: null,
+        allowReimport: true,
+        statementCompetence: '2026-09',
+      };
+      await m.imp.commitImport(s.householdId, input);
+      const rows = async () =>
+        m.db
+          .select({ id: m.schema.transactions.id, n: m.schema.transactions.installmentNumber })
+          .from(m.schema.transactions)
+          .where(eq(m.schema.transactions.householdId, s.householdId));
+      const second = (await rows()).find((row) => row.n === 2);
+      if (second === undefined) throw new Error('Sem a parcela 2/3.');
+
+      const impact = await m.del.getDeleteImpact(s.householdId, second.id, 'only');
+      expect(impact.effects).toContainEqual({ kind: 'stays_deleted_on_reimport' });
+      expect(impact.effects).not.toContainEqual({ kind: 'returns_on_reimport' });
+
+      await m.del.deleteTransaction(s.householdId, second.id, 'only');
+      await m.imp.commitImport(s.householdId, input); // não falha: a 1/3 é pulada como duplicada
+      const after = await rows();
+      expect(after).toHaveLength(2);
+      expect(after.map((row) => row.n).sort()).toEqual([1, 3]); // a 2/3 NÃO voltou
     } finally {
       await cleanup(m, s.householdId);
     }

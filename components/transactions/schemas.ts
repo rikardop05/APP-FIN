@@ -86,6 +86,12 @@ const deleteEffectSchema = z.discriminatedUnion('kind', [
     after: z.number().int(),
   }),
   z.object({ kind: z.literal('returns_on_reimport') }),
+  z.object({
+    kind: z.literal('reimport_will_fail'),
+    planDescription: z.string(),
+    blockingInstallments: z.number().int().positive(),
+  }),
+  z.object({ kind: z.literal('stays_deleted_on_reimport') }),
   z.object({ kind: z.literal('occurrence_skipped'), ruleDescription: z.string(), competence: z.string() }),
 ]);
 

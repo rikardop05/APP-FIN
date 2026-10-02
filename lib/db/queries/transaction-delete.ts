@@ -32,6 +32,15 @@
  *   tombstone (decisão de 2026-10-01): o preview já mostra cada linha com
  *   checkbox. A confirmação avisa em palavras, e SÓ quando há hash — lançamento
  *   manual não volta.
+ * - **Exceção: parcela lida do arquivo com as futuras projetadas ainda lá.**
+ *   Reimportar recria a parcela E projeta de novo as futuras, com os MESMOS
+ *   `dedupe_hash` das que ficaram: o índice único rejeita o lote inteiro (23505
+ *   em `transactions_household_id_dedupe_hash_unique`) e nada volta. Nesse caso
+ *   o efeito é `reimport_will_fail`, NO LUGAR de `returns_on_reimport`: dizer
+ *   "volta" seria mentira.
+ * - **Parcela projetada com a lida que a gerou ainda no banco**: a reimportação
+ *   pula a lida como duplicada e não projeta nada, então esta NÃO volta
+ *   (`stays_deleted_on_reimport`).
  *
  * Fronteira de household (CONVENTIONS §7): toda consulta carrega `household_id`.
  */
@@ -83,6 +92,10 @@ export type DeleteEffect =
   | { kind: 'statement_unpaid'; cardName: string; competence: string }
   | { kind: 'import_batch'; fileName: string; before: number; after: number }
   | { kind: 'returns_on_reimport' }
+  /** Reimportar o arquivo falha enquanto `blockingInstallments` parcelas projetadas existirem. */
+  | { kind: 'reimport_will_fail'; planDescription: string; blockingInstallments: number }
+  /** Parcela projetada: a reimportação pula a lida que a gerou e não a projeta de novo. */
+  | { kind: 'stays_deleted_on_reimport' }
   | { kind: 'occurrence_skipped'; ruleDescription: string; competence: string };
 
 export interface DeleteImpact {
@@ -146,6 +159,8 @@ async function planDeletion(
 
   // --- parcelas -------------------------------------------------------------
   let planDescription: string | null = null;
+  let blockingInstallments = 0;
+  let staysDeletedOnReimport = false;
   if (inPlan && target.installmentPlanId !== null && target.installmentNumber !== null) {
     const [plan] = await reader
       .select({ description: installmentPlans.description })
@@ -173,7 +188,12 @@ async function planDeletion(
     }
 
     const others = await reader
-      .select({ id: transactions.id })
+      .select({
+        id: transactions.id,
+        installmentNumber: transactions.installmentNumber,
+        rawDescription: transactions.rawDescription,
+        dedupeHash: transactions.dedupeHash,
+      })
       .from(transactions)
       .where(
         and(
@@ -187,6 +207,34 @@ async function planDeletion(
       effects.push({ kind: 'plan_removed', planDescription });
     } else if (scope === 'only') {
       effects.push({ kind: 'plan_hole', planDescription, remaining: others.length });
+    }
+
+    // O que a reimportação do mesmo arquivo faz (`finalizeImport`): a parcela LIDA
+    // do arquivo é pulada se o hash dela existe; se não existe, é recriada e
+    // projeta de novo as de número maior, com os mesmos hashes.
+    if (target.dedupeHash !== null) {
+      const targetNumber = target.installmentNumber;
+      const projected = (row: (typeof others)[number]) => row.rawDescription === '' && row.dedupeHash !== null;
+      if (target.rawDescription !== '') {
+        // Lida do arquivo: as projetadas acima dela que ficarem colidem, e o lote
+        // falha inteiro no índice único.
+        blockingInstallments = others.filter(
+          (row) => projected(row) && row.installmentNumber !== null && row.installmentNumber > targetNumber,
+        ).length;
+      } else {
+        // Projetada: enquanto a lida que a gerou existir, a reimportação a pula e
+        // NÃO projeta nada; esta parcela não volta. Sem a lida, a reimportação a
+        // recria junto com as irmãs projetadas que ficaram, e essas colidem.
+        const sourceRow = others.some(
+          (row) =>
+            row.rawDescription !== '' &&
+            row.dedupeHash !== null &&
+            row.installmentNumber !== null &&
+            row.installmentNumber < targetNumber,
+        );
+        if (sourceRow) staysDeletedOnReimport = true;
+        else blockingInstallments = others.filter(projected).length;
+      }
     }
   }
 
@@ -253,8 +301,18 @@ async function planDeletion(
     }
   }
 
-  // --- volta na reimportação -----------------------------------------------
-  if (target.dedupeHash !== null) effects.push({ kind: 'returns_on_reimport' });
+  // --- volta na reimportação (ou a reimportação falha) -----------------------
+  if (blockingInstallments > 0) {
+    effects.push({
+      kind: 'reimport_will_fail',
+      planDescription: planDescription ?? target.description,
+      blockingInstallments,
+    });
+  } else if (staysDeletedOnReimport) {
+    effects.push({ kind: 'stays_deleted_on_reimport' });
+  } else if (target.dedupeHash !== null) {
+    effects.push({ kind: 'returns_on_reimport' });
+  }
 
   // --- previsão de recorrência: dispensa -----------------------------------
   let skip: DeletionPlan['skip'] = null;

@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { parseBRL } from '@/lib/money';
 import { competenceLabel } from '@/components/budget/labels';
-import { isSimpleDelete } from './delete-presentation';
+import { isSimpleDelete, reimportNotice, withFutureOptionLabel } from './delete-presentation';
 import { Button, DateText, Input, Money, Select } from '@/components/ui-kit';
 import {
   deleteImpactSchema,
@@ -246,7 +246,9 @@ function EffectLine({ effect }: { effect: DeleteEffect }) {
         </>
       );
     case 'returns_on_reimport':
-      return <>Se você importar este arquivo de novo, este lançamento volta.</>;
+    case 'reimport_will_fail':
+    case 'stays_deleted_on_reimport':
+      return <>{reimportNotice(effect)}</>;
     case 'occurrence_skipped':
       return (
         <>
@@ -319,7 +321,8 @@ export function DeleteTransactionDialog({
 
   const impact = scope === 'with-future' ? impacts.withFuture : impacts.only;
   const simple = impact !== null && isSimpleDelete(impact);
-  const futureCount = impacts.withFuture?.deleted.futureInstallments ?? 0;
+  // `null` quando não há futura (ex.: a 12/12): a escolha some, as duas opções seriam iguais.
+  const withFutureLabel = withFutureOptionLabel(impacts.withFuture?.deleted.futureInstallments ?? 0);
 
   async function confirm() {
     setError(null);
@@ -362,7 +365,7 @@ export function DeleteTransactionDialog({
 
         {impact !== null && !simple ? (
           <div className="flex flex-col gap-3">
-            {isInstallment ? (
+            {isInstallment && withFutureLabel !== null ? (
               <fieldset className="flex flex-col gap-2" disabled={busy}>
                 <legend className="mb-1 text-xs text-muted-foreground">Parcela do plano {impact.target.description}</legend>
                 <label className="flex items-start gap-2">
@@ -371,9 +374,7 @@ export function DeleteTransactionDialog({
                 </label>
                 <label className="flex items-start gap-2">
                   <input type="radio" name="delete-scope" checked={scope === 'with-future'} onChange={() => setScope('with-future')} className="mt-1" />
-                  <span>
-                    Esta e as {plural(futureCount, 'parcela futura', 'parcelas futuras')} do plano
-                  </span>
+                  <span>{withFutureLabel}</span>
                 </label>
               </fieldset>
             ) : null}

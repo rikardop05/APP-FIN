@@ -11,7 +11,11 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { isSimpleDelete } from '@/components/transactions/delete-presentation';
+import {
+  isSimpleDelete,
+  reimportNotice,
+  withFutureOptionLabel,
+} from '@/components/transactions/delete-presentation';
 import { deleteImpactSchema, deleteResultSchema } from '@/components/transactions/schemas';
 import type { DeleteImpact } from '@/lib/db/queries/transaction-delete';
 import { cents } from '@/lib/money';
@@ -50,6 +54,8 @@ const everyEffect: DeleteImpact['effects'] = [
   { kind: 'statement_unpaid', cardName: 'Nubank', competence: '2026-09' },
   { kind: 'import_batch', fileName: 'fatura.pdf', before: 14, after: 13 },
   { kind: 'returns_on_reimport' },
+  { kind: 'reimport_will_fail', planDescription: 'Magazine', blockingInstallments: 2 },
+  { kind: 'stays_deleted_on_reimport' },
   { kind: 'occurrence_skipped', ruleDescription: 'Conta de luz', competence: '2026-11' },
 ];
 
@@ -112,5 +118,56 @@ describe('isSimpleDelete: simples × detalhada', () => {
 
   it('parcelas futuras indo junto são DETALHADA mesmo com a lista de efeitos vazia', () => {
     expect(isSimpleDelete({ effects: [], deleted: { transactions: 1, futureInstallments: 2 } })).toBe(false);
+  });
+});
+
+describe('reimportNotice: o que a reimportação faz', () => {
+  it('sem futuras projetadas sobrando: o lançamento volta (texto de antes, intocado)', () => {
+    expect(reimportNotice({ kind: 'returns_on_reimport' })).toBe(
+      'Se você importar este arquivo de novo, este lançamento volta.',
+    );
+  });
+
+  it('com futuras sobrando: diz que a importação FALHA, e não que volta', () => {
+    const text = reimportNotice({ kind: 'reimport_will_fail', planDescription: 'Magazine', blockingInstallments: 2 });
+    expect(text).toBe(
+      'Se você importar este arquivo de novo, a importação vai falhar enquanto as 2 parcelas futuras deste plano existirem. ' +
+        'Para poder reimportar, exclua esta junto com as futuras.',
+    );
+    expect(text).not.toMatch(/volta/);
+  });
+
+  it('uma futura só: singular', () => {
+    expect(reimportNotice({ kind: 'reimport_will_fail', planDescription: 'Magazine', blockingInstallments: 1 })).toBe(
+      'Se você importar este arquivo de novo, a importação vai falhar enquanto a parcela futura deste plano existir. ' +
+        'Para poder reimportar, exclua esta junto com a futura.',
+    );
+  });
+
+  it('parcela projetada com a lida ainda no banco: diz que NÃO volta', () => {
+    const text = reimportNotice({ kind: 'stays_deleted_on_reimport' });
+    expect(text).toBe(
+      'Se você importar este arquivo de novo, esta parcela não volta: a compra já consta como importada.',
+    );
+  });
+
+  it('o schema da tela recusa reimport_will_fail sem parcela bloqueando', () => {
+    const base = { target, deleted: { transactions: 1, futureInstallments: 0 } };
+    const effect = { kind: 'reimport_will_fail', planDescription: 'Magazine', blockingInstallments: 0 };
+    expect(deleteImpactSchema.safeParse({ ...base, effects: [effect] }).success).toBe(false);
+  });
+});
+
+describe('withFutureOptionLabel: a escolha "esta e as futuras"', () => {
+  it('sem futuras (ex.: a 12/12): a escolha NÃO aparece, nada de "0 parcelas"', () => {
+    expect(withFutureOptionLabel(0)).toBeNull();
+  });
+
+  it('uma futura: singular', () => {
+    expect(withFutureOptionLabel(1)).toBe('Esta e a parcela futura do plano');
+  });
+
+  it('várias futuras: com o número', () => {
+    expect(withFutureOptionLabel(7)).toBe('Esta e as 7 parcelas futuras do plano');
   });
 });
