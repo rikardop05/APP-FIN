@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import type { ImportFormat, TransactionKind, TransactionStatus } from '@/lib/db';
 import {
@@ -277,7 +277,21 @@ async function findOrCreateStatement(
       ),
     )
     .limit(1);
-  if (existing !== undefined) return existing.id;
+  if (existing !== undefined) {
+    // Fatura que já existe (2º lote do período, ou `allowReimport`) não pode
+    // descartar o total impresso do documento: sem ele a conciliação impresso ×
+    // soma nunca dispara. COALESCE: só preenche o que está NULL; um total já
+    // gravado não é sobrescrito (idempotente).
+    if (result.totals.reportedCents !== null) {
+      await tx
+        .update(statements)
+        .set({
+          reportedTotalCents: sql`coalesce(${statements.reportedTotalCents}, ${result.totals.reportedCents})`,
+        })
+        .where(eq(statements.id, existing.id));
+    }
+    return existing.id;
+  }
 
   const [created] = await tx
     .insert(statements)

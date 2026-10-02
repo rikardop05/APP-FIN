@@ -500,4 +500,72 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('import dedupe and rever
       await fixture.cleanup();
     }
   });
+
+  /**
+   * Achado A2 do Corvo: o ramo de fatura JÁ EXISTENTE descartava o total impresso.
+   * Fixture: 1º lote sem total (fatura com NULL, como as gravadas antes de 0d01c12);
+   * 2º lote do MESMO período, arquivo diferente, com total → preenche; 3º lote com
+   * outro total → NÃO sobrescreve (COALESCE, idempotente).
+   */
+  it('2º lote do mesmo período preenche o total impresso NULL e não sobrescreve um já gravado', async () => {
+    const fixture = await createImportFixture('reported-total-existing');
+    const { commitImport } = await import('./import');
+    const batch = (hash: string, description: string, reported: number | null) => ({
+      fileName: `${hash}.txt`,
+      fileHash: hash.repeat(64).slice(0, 64),
+      bankKey: null,
+      format: 'text' as const,
+      sourceKind: 'credit_card' as const,
+      sourceId: fixture.cardId,
+      confirmedRows: [
+        {
+          index: 0,
+          include: true,
+          occurredOn: '2026-09-05',
+          description,
+          rawDescription: description,
+          amountCents: cents(-1500),
+          categoryId: null,
+          memberId: null,
+          installment: null,
+        },
+      ],
+      reportedTotalCents: reported === null ? null : cents(reported),
+      allowReimport: false,
+      statementCompetence: '2026-09' as const,
+    });
+    const readReported = async () => {
+      const rows = await fixture.db
+        .select({
+          id: fixture.schema.statements.id,
+          reported: fixture.schema.statements.reportedTotalCents,
+        })
+        .from(fixture.schema.statements)
+        .innerJoin(
+          fixture.schema.creditCards,
+          eq(fixture.schema.creditCards.id, fixture.schema.statements.creditCardId),
+        )
+        .where(eq(fixture.schema.creditCards.householdId, fixture.householdId));
+      return rows;
+    };
+
+    try {
+      await commitImport(fixture.householdId, batch('a', 'Compra A', null));
+      const [afterFirst, ...extraFirst] = await readReported();
+      expect(extraFirst).toHaveLength(0);
+      expect(afterFirst?.reported).toBeNull();
+
+      await commitImport(fixture.householdId, batch('b', 'Compra B', -2000));
+      const [afterSecond, ...extraSecond] = await readReported();
+      expect(extraSecond).toHaveLength(0);
+      expect(afterSecond?.id).toBe(afterFirst?.id);
+      expect(Number(afterSecond?.reported)).toBe(-2000);
+
+      await commitImport(fixture.householdId, batch('c', 'Compra C', -9999));
+      const [afterThird] = await readReported();
+      expect(Number(afterThird?.reported)).toBe(-2000);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
 });
