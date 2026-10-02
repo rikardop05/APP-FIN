@@ -24,7 +24,8 @@ export const transactionSchema = z.object({
   rawDescription: z.string(),
   amountCents: centsSchema,
   kind: z.enum(['expense', 'income', 'transfer', 'credit_card_payment', 'investment_contribution']),
-  status: z.enum(['posted', 'planned']),
+  // `reconciled` a lista não devolve (decisão nº 7), mas o parse nunca deve quebrar por status novo.
+  status: z.enum(['posted', 'planned', 'reconciled']),
   categoryId: z.string().uuid().nullable(),
   categoryName: z.string().nullable(),
   categoryNature: z.enum(['essential', 'non_essential', 'investment', 'income']).nullable(),
@@ -107,7 +108,7 @@ export const deleteImpactSchema = z.object({
     description: z.string(),
     amountCents: centsSchema,
     occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    status: z.enum(['posted', 'planned']),
+    status: z.enum(['posted', 'planned', 'reconciled']),
   }),
   deleted: deletedCountsSchema,
   effects: z.array(deleteEffectSchema),

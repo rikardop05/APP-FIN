@@ -12,6 +12,7 @@ import {
   or,
 } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { COUNTED_STATUSES } from './counted-statuses';
 import type {
   CategoryNature,
   MatchType,
@@ -245,7 +246,12 @@ function transactionPredicates(
   householdId: string,
   filters: TransactionFilters,
 ) {
-  const predicates = [eq(transactions.householdId, householdId)];
+  // A lista esconde a previsão `reconciled` (decisão nº 7): o lançamento real que
+  // a cumpriu já a substituiu. Filtro positivo: status novo fica de fora.
+  const predicates = [
+    eq(transactions.householdId, householdId),
+    inArray(transactions.status, COUNTED_STATUSES),
+  ];
   if (filters.from) predicates.push(gte(transactions.occurredOn, filters.from));
   if (filters.to) predicates.push(lte(transactions.occurredOn, filters.to));
   if (filters.categoryId) predicates.push(eq(transactions.categoryId, filters.categoryId));

@@ -1,5 +1,6 @@
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { COUNTED_STATUSES } from './counted-statuses';
 import type { AccountKind, CardBrand } from '@/lib/db';
 import { accounts, creditCards, members, statements, transactions } from '@/lib/db/schema';
 import type { Cents } from '@/lib/money';
@@ -172,6 +173,8 @@ export async function listCards(householdId: string): Promise<CardListItem[]> {
         and(
           eq(transactions.statementId, statements.id),
           eq(transactions.householdId, householdId),
+          // Total calculado da fatura = o que foi lançado; `reconciled` fora (decisão nº 7).
+          inArray(transactions.status, COUNTED_STATUSES),
         ),
       )
       .where(eq(creditCards.householdId, householdId))

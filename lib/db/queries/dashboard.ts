@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, o
 
 import { addCompetence, toCompetence, type Competence, type IsoDate } from '@/lib/date';
 import { db } from '@/lib/db';
+import { COUNTED_STATUSES } from './counted-statuses';
 import type { CategoryNature, TransactionKind, TransactionStatus } from '@/lib/db';
 import {
   categories,
@@ -88,13 +89,7 @@ export type DashboardData = {
 
 const SPENDING_AVERAGE_WINDOW_MONTHS = 3;
 
-/**
- * Status que contam como dinheiro do mês. `reconciled` (decisão nº 7) é uma previsão
- * JÁ CUMPRIDA por um `posted`: contá-la de novo seria despesa em dobro. Lista
- * POSITIVA de propósito: um status novo fica de fora até alguém decidir o contrário
- * (certo por omissão). Toda leitura de dinheiro por competência passa por aqui.
- */
-const COUNTED_STATUSES: TransactionStatus[] = ['posted', 'planned'];
+
 
 /**
  * Busca paralela de todos os dados do dashboard em UMA chamada. Oito
@@ -253,6 +248,8 @@ export async function getDashboardData(
         and(
           eq(transactions.statementId, statements.id),
           eq(transactions.householdId, householdId),
+          // Fatura é o que foi lançado: `reconciled` (previsão cumprida) fora.
+          inArray(transactions.status, COUNTED_STATUSES),
         ),
       )
       .where(
