@@ -214,12 +214,12 @@ async function planDeletion(
     // projeta de novo as de número maior, com os mesmos hashes.
     if (target.dedupeHash !== null) {
       const targetNumber = target.installmentNumber;
-      const projected = (row: (typeof others)[number]) => row.rawDescription === '' && row.dedupeHash !== null;
       if (target.rawDescription !== '') {
-        // Lida do arquivo: as projetadas acima dela que ficarem colidem, e o lote
-        // falha inteiro no índice único.
+        // Lida do arquivo: as irmãs de número maior que ficarem (projetadas OU lidas
+        // de outro lote, num plano importado mês a mes) colidem com o que a
+        // reimportação recria e projeta, e o lote falha inteiro no índice único.
         blockingInstallments = others.filter(
-          (row) => projected(row) && row.installmentNumber !== null && row.installmentNumber > targetNumber,
+          (row) => row.installmentNumber !== null && row.installmentNumber > targetNumber,
         ).length;
       } else {
         // Projetada: enquanto a lida que a gerou existir, a reimportação a pula e
@@ -233,7 +233,7 @@ async function planDeletion(
             row.installmentNumber < targetNumber,
         );
         if (sourceRow) staysDeletedOnReimport = true;
-        else blockingInstallments = others.filter(projected).length;
+        else blockingInstallments = others.filter((row) => row.dedupeHash !== null).length;
       }
     }
   }

@@ -473,6 +473,64 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('exclusão de lançament
     }
   });
 
+  it('A1: plano importado mês a mês (3/10 no lote A, 4/10 no lote B, ambas lidas): apagar a 3/10 avisa que a reimportação falha', async () => {
+    const m = await modules();
+    const s = await seed(m);
+    try {
+      const [plan] = await m.db
+        .insert(m.schema.installmentPlans)
+        .values({
+          householdId: s.householdId,
+          creditCardId: s.cardId,
+          description: 'Geladeira',
+          totalCents: -100000,
+          installmentsCount: 10,
+          firstCompetence: '2026-07',
+          source: 'import',
+        })
+        .returning({ id: m.schema.installmentPlans.id });
+      if (plan === undefined) throw new Error('Plano não foi criado.');
+      const lote = async (fileName: string) => {
+        const [batch] = await m.db
+          .insert(m.schema.importBatches)
+          .values({ householdId: s.householdId, fileName, fileHash: fileName.padEnd(64, 'x'), format: 'text', rowsImported: 1 })
+          .returning({ id: m.schema.importBatches.id });
+        if (batch === undefined) throw new Error('Lote não foi criado.');
+        return batch.id;
+      };
+      const [batchA, batchB] = [await lote('a'), await lote('b')];
+      const parcela = (n: number, batchId: string) =>
+        s.insertTx({
+          competence: addCompetence('2026-07', n - 3),
+          creditCardId: s.cardId,
+          accountId: null,
+          description: `Geladeira (${String(n)}/10)`,
+          rawDescription: `GELADEIRA ${String(n)}/10`,
+          installmentPlanId: plan.id,
+          installmentNumber: n,
+          importBatchId: batchId,
+          dedupeHash: `spread-hash-${String(n)}`,
+        });
+      const third = await parcela(3, batchA);
+      const fourth = await parcela(4, batchB);
+
+      // A 4/10 (lida, de outro lote) ficando colide com o que o lote A recriaria.
+      const only = await m.del.getDeleteImpact(s.householdId, third, 'only');
+      expect(only.effects).toContainEqual({
+        kind: 'reimport_will_fail',
+        planDescription: 'Geladeira',
+        blockingInstallments: 1,
+      });
+      expect(only.effects).not.toContainEqual({ kind: 'returns_on_reimport' });
+
+      // Apagar a 4/10 com a 3/10 lida ainda lá: a 3/10 é pulada na reimportação, nada colide.
+      const fourthImpact = await m.del.getDeleteImpact(s.householdId, fourth, 'only');
+      expect(fourthImpact.effects.some((effect) => effect.kind === 'reimport_will_fail')).toBe(false);
+    } finally {
+      await cleanup(m, s.householdId);
+    }
+  });
+
   it('apagar uma parcela PROJETADA com a lida ainda no banco: o impacto diz que não volta, e a reimportação real confirma', async () => {
     const m = await modules();
     const s = await seed(m);
