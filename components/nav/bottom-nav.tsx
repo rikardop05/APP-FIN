@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { MoreHorizontal, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NAV_ITEMS, isNavItemActive } from './nav-items';
+import { SignOutButton } from './sign-out-button';
 
 /** Quantas rotas cabem confortavelmente como toque direto em 390 px; o resto vai para "Mais". */
 const PRIMARY_COUNT = 4;
@@ -105,6 +106,7 @@ export function BottomNav() {
                   </Link>
                 );
               })}
+              <SignOutButton variant="tile" />
             </div>
           </nav>
         </div>

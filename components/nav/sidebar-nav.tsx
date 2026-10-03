@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { NAV_ITEMS, isNavItemActive } from './nav-items';
+import { SignOutButton } from './sign-out-button';
 
 /** Navegação lateral, visível a partir de `md`. Abaixo disso quem navega é `BottomNav`. */
 export function SidebarNav() {
@@ -37,6 +38,9 @@ export function SidebarNav() {
           </Link>
         );
       })}
+      <div className="mt-auto border-t border-border pt-3">
+        <SignOutButton variant="sidebar" />
+      </div>
     </nav>
   );
 }

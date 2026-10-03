@@ -36,6 +36,10 @@ export default auth((request) => {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest|txt|xml)$).*)',
+    // Exclui do middleware: assets internos do Next, o favicon, e os arquivos do
+    // service worker (`/sw.js`, `/sw-policy.js`) — sem isto eles sem sessao
+    // respondem 307 para /login e a ATUALIZACAO do service worker falha (o
+    // navegador busca esses arquivos fora do escopo de sessao do app).
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|sw-policy\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest|txt|xml)$).*)',
   ],
 };
