@@ -13,6 +13,7 @@ import {
   Workflow,
 } from 'lucide-react';
 import { Badge, Button, EmptyState, PageHeader } from '@/components/ui-kit';
+import { BackupSection } from './backup-section';
 import { CategoryForm } from './category-form';
 import { RuleForm, type CategoryOption } from './rule-form';
 import { SettingsForm } from './settings-form';
@@ -605,6 +606,8 @@ export function ConfigScreen() {
               </div>
             )}
           </section>
+
+          <BackupSection />
         </div>
       )}
 
