@@ -148,7 +148,12 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('posições reais de inv
       ]);
 
       const response = await m.loadPositionsResponse(householdId, TODAY);
-      expect(response.plan).toEqual({ plannedMonthlyCents: 200_000, currentPortfolioCents: 5_000_000, startCompetence: '2026-07' });
+      expect(response.plan).toEqual({
+        plannedMonthlyCents: 200_000,
+        currentPortfolioCents: 5_000_000,
+        startCompetence: '2026-07',
+        currentPortfolioAsOf: '2026-07-10',
+      });
       // Aderência só desde a criação do plano (jul..out): 3 meses fechados, não 12; a lista de
       // aportes continua com a janela inteira.
       expect(response.adherence?.months.map((month) => month.competence)).toEqual(['2026-07', '2026-08', '2026-09', '2026-10']);
@@ -182,10 +187,15 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('posições reais de inv
       // ponto 0 (patrimônio sem rendimento ainda), então bate exato com a projeção.
       const anchored = await m.loadPositionsResponse(householdId, TODAY);
       expect(anchored.plan?.startCompetence).toBe('2026-09');
+      // A data exata identifica o registro copiado, mesmo com outro registro no mesmo mês.
+      await m.positions.saveSnapshot(householdId, { asOf: '2026-09-15', portfolioCents: cents(5_700_000), note: null });
+      const sameMonth = await m.loadPositionsResponse(householdId, TODAY);
+      expect(sameMonth.plan?.currentPortfolioAsOf).toBe('2026-09-30');
+      expect(sameMonth.snapshots.filter((row) => row.asOf === sameMonth.plan?.currentPortfolioAsOf)).toHaveLength(1);
       expect(anchored.comparison?.find((row) => row.asOf === '2026-09-30')?.byScenario.every((item) => item.diffCents === 0)).toBe(true);
 
       await m.positions.deleteSnapshot(householdId, early.id);
-      expect((await m.positions.listSnapshots(householdId)).map((row) => row.asOf)).toEqual(['2026-09-30']);
+      expect((await m.positions.listSnapshots(householdId)).map((row) => row.asOf)).toEqual(['2026-09-15', '2026-09-30']);
     } finally {
       await cleanup(m, householdId);
     }

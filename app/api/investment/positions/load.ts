@@ -5,7 +5,7 @@ import {
   listSnapshots,
   type SnapshotRow,
 } from '@/lib/db/queries/investment-positions';
-import { addCompetence, diffMonths, toCompetence, type Competence } from '@/lib/date';
+import { addCompetence, diffMonths, toCompetence, type Competence, type IsoDate } from '@/lib/date';
 import { accumulationCurve, DEFAULT_HORIZONS_YEARS } from '@/lib/finance/investment';
 import { contributionAdherence, portfolioVsProjection } from '@/lib/finance/positions';
 import { cents, type Cents } from '@/lib/money';
@@ -24,6 +24,12 @@ export type PositionsResponse = {
     currentPortfolioCents: Cents;
     /** Competência de `current_portfolio_as_of`: âncora da curva de comparação (D7). */
     startCompetence: Competence;
+    /**
+     * Data exata a que `currentPortfolioCents` se refere (`current_portfolio_as_of`, D7). É o
+     * que identifica O registro que virou o patrimônio atual: dois registros no mesmo mês
+     * têm a mesma competência, nunca a mesma data.
+     */
+    currentPortfolioAsOf: IsoDate;
   } | null;
   snapshots: SnapshotRow[];
   /** Aporte efetivo da janela D5, mês a mês, com 0 nos meses sem aporte. */
@@ -89,6 +95,7 @@ export async function loadPositionsResponse(householdId: string, today: string):
       plannedMonthlyCents: plan.currentMonthlyContributionCents,
       currentPortfolioCents: plan.currentPortfolioCents,
       startCompetence,
+      currentPortfolioAsOf: plan.currentPortfolioAsOf,
     },
     snapshots,
     contributions,
