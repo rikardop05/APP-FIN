@@ -151,7 +151,8 @@ export function BackupSection() {
               <Button variant="outline" disabled={busy} onClick={() => setPending(null)}>
                 Cancelar
               </Button>
-              <Button disabled={busy} onClick={() => void restore()}>
+              {/* Household com dado: a API recusaria (409); o botão nem deixa tentar. */}
+              <Button disabled={busy || refusal !== null} onClick={() => void restore()}>
                 {busy ? 'Restaurando…' : 'Restaurar'}
               </Button>
             </div>

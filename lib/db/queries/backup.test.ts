@@ -215,9 +215,16 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('backup e restauração 
       };
 
       expect(await problemsOf({ format: 'outro' })).toContain('format');
-      const oldSchema = clone();
-      oldSchema.schemaMigration = { tag: '0003_antiga', createdAt: 1 };
-      expect(await problemsOf(oldSchema)).toContain('só restaura backup do mesmo schema');
+      // Coluna NOT NULL sem default ausente (backup de antes de ela existir): recusado, dizendo qual.
+      const missingRequired = clone();
+      delete (missingRequired.tables.transactions?.[0] as Record<string, unknown>).amountCents;
+      expect(await problemsOf(missingRequired)).toContain(
+        'transactions[0]: falta a coluna obrigatória amountCents (o schema atual não tem valor padrão aceitável para ela)',
+      );
+      // Enum com default também é exigido: `status` ausente não pode virar 'posted' em silêncio.
+      const missingStatus = clone();
+      delete (missingStatus.tables.transactions?.[0] as Record<string, unknown>).status;
+      expect(await problemsOf(missingStatus)).toContain('transactions[0]: falta a coluna obrigatória status');
       const dangling = clone();
       (dangling.tables.transactions?.[0] as Record<string, unknown>).categoryId = randomUUID();
       expect(await problemsOf(dangling)).toContain('categoryId aponta para categories que não está no backup');
@@ -244,6 +251,38 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('backup e restauração 
 
       // Household com dado: 409 já no restore, e o dry-run diz quais tabelas.
       expect((await m.backup.dryRunRestore(source.householdId, clone(), source.memberId)).targetHasData).toContain('transactions');
+    } finally {
+      await cleanup(m, source.householdId);
+      await cleanup(m, target.householdId);
+    }
+  }, 60_000);
+
+  it('compatibilidade de forma: outra migration é aviso; coluna nullable ou com default ausente restaura', async () => {
+    const m = await modules();
+    const source = await newHousehold(m, 'T-402 backup test (origem)');
+    const target = await newHousehold(m, 'T-402 backup test (destino)');
+    try {
+      await seedEverything(m, source.householdId, source.memberId);
+      const file = JSON.parse(JSON.stringify(await m.backup.exportHousehold(source.householdId, EXPORTED_AT))) as Awaited<
+        ReturnType<typeof m.backup.exportHousehold>
+      >;
+      // Simula um backup de antes de `transactions.note` (nullable) e `accounts.active`
+      // (NOT NULL com default) existirem, gerado noutra migration.
+      file.schemaMigration = { tag: '0003_antiga', createdAt: 1 };
+      for (const row of file.tables.transactions ?? []) delete row.note;
+      for (const row of file.tables.accounts ?? []) delete row.active;
+
+      const dry = await m.backup.dryRunRestore(target.householdId, file, target.memberId);
+      expect(dry.warnings[0]).toMatch(/^O backup foi gerado na versão 0003_antiga; o app está na \S+\./);
+      expect(m.backup.migrationWarning(file, file.schemaMigration)).toBeNull();
+
+      const restored = await m.backup.restoreHousehold(target.householdId, file, target.memberId);
+      expect(restored.warnings[0]).toContain('0003_antiga');
+      const accountsRows = await m.db.select({ active: m.schema.accounts.active }).from(m.schema.accounts).where(eq(m.schema.accounts.householdId, target.householdId));
+      expect(accountsRows.map((row) => row.active)).toEqual([true]);
+      const notes = await m.db.select({ note: m.schema.transactions.note }).from(m.schema.transactions).where(eq(m.schema.transactions.householdId, target.householdId));
+      expect(notes.length).toBe(file.tables.transactions?.length);
+      expect(notes.every((row) => row.note === null)).toBe(true);
     } finally {
       await cleanup(m, source.householdId);
       await cleanup(m, target.householdId);

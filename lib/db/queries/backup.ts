@@ -48,8 +48,9 @@ import {
  * - Datas `date` como `YYYY-MM-DD`; `timestamptz` como ISO 8601 em UTC; `jsonb` como está.
  * - `schemaMigration`: a última migration aplicada no banco (`drizzle.__drizzle_migrations`):
  *   `createdAt` (o `when` do journal) e o `tag` do arquivo, quando o journal está à mão.
- *   A restauração exige o MESMO `createdAt` do banco de destino (version 1: sem conversão
- *   entre versões de schema).
+ *   Migration diferente da do banco é só AVISO: a compatibilidade é de FORMA (o arquivo vale
+ *   contra as colunas do schema atual; coluna ausente só se tiver default ou aceitar nulo,
+ *   coluna desconhecida é recusada). Ver `rowSchema`.
  *
  * ## Fora do arquivo (e por quê)
  *
@@ -242,8 +243,43 @@ function backupColumns(table: PgTable): [string, PgColumn][] {
   return Object.entries(getTableColumns(table)).filter(([key]) => key !== 'householdId');
 }
 
+/**
+ * Coluna que o arquivo PRECISA trazer: `id` (as FKs internas dependem dele) e toda coluna
+ * NOT NULL sem default no schema ATUAL. As outras podem faltar (backup de uma versão anterior
+ * à coluna): a restauração as omite no INSERT e o banco põe o default ou NULL.
+ */
+function isRequired(key: string, column: PgColumn): boolean {
+  if (key === 'id') return true;
+  if (!column.notNull) return false;
+  // Enum NOT NULL é sempre exigido, mesmo com default: o default de enum tem SENTIDO de
+  // negócio (`transactions.status` 'posted', `statements.status` 'open', `frequency`
+  // 'monthly'), e preenchê-lo em silêncio mudaria o que conta (laudo do Corvo, A1).
+  return !column.hasDefault || column.columnType === 'PgEnumColumn';
+}
+
+/**
+ * Compatibilidade de FORMA (decisão do Orquestrador, 2026-10-03): o arquivo vale contra as
+ * colunas do schema atual, não contra a migration em que foi gerado. Coluna desconhecida é
+ * recusada (`.strict()`); coluna ausente só se não for obrigatória (`isRequired`).
+ */
 function rowSchema(table: PgTable): z.ZodTypeAny {
-  return z.object(Object.fromEntries(backupColumns(table).map(([key, column]) => [key, columnSchema(column)]))).strict();
+  return z
+    .object(
+      Object.fromEntries(
+        backupColumns(table).map(([key, column]) => [
+          key,
+          isRequired(key, column) ? columnSchema(column) : columnSchema(column).optional(),
+        ]),
+      ),
+    )
+    .strict();
+}
+
+/** Colunas obrigatórias por tabela, para a mensagem de coluna ausente. */
+function requiredKeys(table: PgTable): string[] {
+  return backupColumns(table)
+    .filter(([key, column]) => isRequired(key, column))
+    .map(([key]) => key);
 }
 
 const memberSchema = z.object({ id: z.string().uuid(), name: z.string(), email: z.string(), color: z.string() }).strict();
@@ -398,14 +434,25 @@ export class BackupTargetNotEmptyError extends Error {
 }
 
 const ROW_SCHEMAS = new Map(TABLES.map((spec) => [spec.key, rowSchema(spec.table)]));
+const REQUIRED_KEYS = new Map(TABLES.map((spec) => [spec.key, requiredKeys(spec.table)]));
+
+/** Backup de outra versão do schema: aviso, não erro (a forma é que decide). `null` se igual. */
+export function migrationWarning(
+  file: Pick<BackupFile, 'schemaMigration'>,
+  current: BackupFile['schemaMigration'],
+): string | null {
+  if (file.schemaMigration.createdAt === current.createdAt) return null;
+  const name = (migration: BackupFile['schemaMigration']) => migration.tag ?? String(migration.createdAt);
+  return `O backup foi gerado na versão ${name(file.schemaMigration)}; o app está na ${name(current)}. Colunas que o backup não tem recebem o valor padrão.`;
+}
 const MAX_PROBLEMS = 50;
 
 /**
- * Formato, versão, migration, Zod linha a linha (tipos derivados das colunas do schema),
- * ids únicos por tabela e FKs internas fechando. Não toca no banco além de ler a migration
- * de quem chama (`expectedMigration`).
+ * Formato, versão, Zod linha a linha contra as colunas do schema ATUAL (compatibilidade de
+ * forma: ver `rowSchema`), ids únicos por tabela e FKs internas fechando. Puro: a migration
+ * diferente não é erro, é aviso (`migrationWarning`).
  */
-export function validateBackup(input: unknown, expectedMigration: BackupFile['schemaMigration']): BackupFile {
+export function validateBackup(input: unknown): BackupFile {
   const problems: string[] = [];
   const envelope = envelopeSchema.safeParse(input);
   if (!envelope.success) {
@@ -415,11 +462,6 @@ export function validateBackup(input: unknown, expectedMigration: BackupFile['sc
     throw new BackupInvalidError(problems);
   }
   const file = envelope.data;
-  if (file.schemaMigration.createdAt !== expectedMigration.createdAt) {
-    throw new BackupInvalidError([
-      `o backup é da migration ${file.schemaMigration.tag ?? String(file.schemaMigration.createdAt)} e o banco está na ${expectedMigration.tag ?? String(expectedMigration.createdAt)}; esta versão só restaura backup do mesmo schema`,
-    ]);
-  }
   const unknownTables = Object.keys(file.tables).filter((key) => !ROW_SCHEMAS.has(key));
   for (const key of unknownTables) problems.push(`tables.${key}: tabela desconhecida`);
   for (const key of BACKUP_TABLES) if (!(key in file.tables)) problems.push(`tables.${key}: ausente`);
@@ -436,7 +478,17 @@ export function validateBackup(input: unknown, expectedMigration: BackupFile['sc
   for (const spec of TABLES) {
     const schema = ROW_SCHEMAS.get(spec.key) as z.ZodTypeAny;
     const parsed: BackupRow[] = [];
+    const required = REQUIRED_KEYS.get(spec.key) ?? [];
     (file.tables[spec.key] ?? []).forEach((raw, index) => {
+      if (raw !== null && typeof raw === 'object') {
+        const missing = required.filter((key) => !(key in raw));
+        if (missing.length > 0) {
+          problems.push(
+            `${spec.key}[${String(index)}]: falta a coluna obrigatória ${missing.join(', ')} (o schema atual não tem valor padrão aceitável para ela)`,
+          );
+          return;
+        }
+      }
       const result = schema.safeParse(raw);
       if (!result.success) {
         const issue = result.error.issues[0];
@@ -484,7 +536,12 @@ export async function nonEmptyDataTables(householdId: string, reader: Pick<typeo
 }
 
 /** O que a restauração vai fazer além de inserir (para o resumo e para quem restaura). */
-export async function restoreWarnings(file: BackupFile, householdId: string, fallbackMemberId: string): Promise<string[]> {
+export async function restoreWarnings(
+  file: BackupFile,
+  householdId: string,
+  fallbackMemberId: string,
+  current: BackupFile['schemaMigration'],
+): Promise<string[]> {
   const targetMembers = await db
     .select({ id: members.id, email: members.email })
     .from(members)
@@ -492,6 +549,8 @@ export async function restoreWarnings(file: BackupFile, householdId: string, fal
   const emails = new Set(targetMembers.map((member) => member.email.toLowerCase()));
   const fallback = targetMembers.find((member) => member.id === fallbackMemberId);
   const warnings: string[] = [];
+  const version = migrationWarning(file, current);
+  if (version !== null) warnings.push(version);
   for (const member of file.members) {
     if (!emails.has(member.email.toLowerCase())) {
       warnings.push(
@@ -565,8 +624,8 @@ export async function restoreHousehold(
   fallbackMemberId: string,
 ): Promise<RestoreResult> {
   const expected = await currentSchemaMigration();
-  const file = validateBackup(input, expected);
-  const warnings = await restoreWarnings(file, householdId, fallbackMemberId);
+  const file = validateBackup(input);
+  const warnings = await restoreWarnings(file, householdId, fallbackMemberId, expected);
 
   const idMap = await db.transaction(async (tx) => {
     // A mesma trava das outras escritas do household: ninguém grava no meio.
@@ -600,15 +659,17 @@ export async function restoreHousehold(
       const rows = file.tables[spec.key] ?? [];
       if (spec.key === 'categories') {
         // Raízes antes das filhas.
-        const ordered = [...rows].sort((a, b) => Number(a.parentId !== null) - Number(b.parentId !== null));
+        const ordered = [...rows].sort(
+          (a, b) => Number((a.parentId ?? null) !== null) - Number((b.parentId ?? null) !== null),
+        );
         await insertRows(tx, spec.table, ordered.map((row) => toInsertRow(spec, row, map, householdId)));
       } else if (spec.key === 'statements') {
         // `paidTransactionId` só depois dos lançamentos.
         await insertRows(tx, spec.table, rows.map((row) => toInsertRow(spec, row, map, householdId, ['paidTransactionId'])));
       } else if (spec.key === 'transactions') {
         // A `reconciled` entra depois do `posted` que a cumpriu (FK RESTRICT e o CHECK do par).
-        const first = rows.filter((row) => row.reconciledByTransactionId === null);
-        const later = rows.filter((row) => row.reconciledByTransactionId !== null);
+        const first = rows.filter((row) => (row.reconciledByTransactionId ?? null) === null);
+        const later = rows.filter((row) => (row.reconciledByTransactionId ?? null) !== null);
         await insertRows(tx, spec.table, first.map((row) => toInsertRow(spec, row, map, householdId)));
         await insertRows(tx, spec.table, later.map((row) => toInsertRow(spec, row, map, householdId)));
       } else {
@@ -617,7 +678,7 @@ export async function restoreHousehold(
     }
 
     for (const row of file.tables.statements ?? []) {
-      if (row.paidTransactionId === null) continue;
+      if ((row.paidTransactionId ?? null) === null) continue;
       await tx
         .update(statements)
         .set({ paidTransactionId: map.get(String(row.paidTransactionId)) })
@@ -635,10 +696,11 @@ export async function dryRunRestore(
   input: unknown,
   fallbackMemberId: string,
 ): Promise<{ tables: Record<string, number>; warnings: string[]; targetHasData: string[] }> {
-  const file = validateBackup(input, await currentSchemaMigration());
+  const current = await currentSchemaMigration();
+  const file = validateBackup(input);
   return {
     tables: backupCounts(file),
-    warnings: await restoreWarnings(file, householdId, fallbackMemberId),
+    warnings: await restoreWarnings(file, householdId, fallbackMemberId, current),
     targetHasData: await nonEmptyDataTables(householdId),
   };
 }
