@@ -755,6 +755,45 @@ export const investmentScenarios = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// investment_snapshots — posicao real registrada a mao (T-404, decisao D2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Uma "posicao" e o TOTAL investido numa data (decisao D1): um numero por data,
+ * nao carteira por ativo — o planejador so usa o total.
+ *
+ * `portfolio_cents >= 0` e garantido pelo banco (posicao negativa nao existe).
+ * `(household_id, as_of)` e unico: registrar de novo no mesmo dia e **editar** a
+ * posicao, nao criar uma segunda linha (decisao D2).
+ */
+export const investmentSnapshots = pgTable(
+  'investment_snapshots',
+  {
+    id: id(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    /** Data da posicao — fato financeiro, sem hora (CONVENTIONS §4). */
+    asOf: date('as_of').notNull(),
+    /** Total investido, em centavos. Nao-negativo. */
+    portfolioCents: cents('portfolio_cents').notNull(),
+    note: text('note'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check(
+      'investment_snapshots_portfolio_cents_non_negative',
+      sql`${t.portfolioCents} >= 0`,
+    ),
+    // Um registro por dia: registrar de novo no mesmo dia = editar (D2).
+    uniqueIndex('investment_snapshots_household_id_as_of_unique').on(
+      t.householdId,
+      t.asOf,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // household_settings
 // ---------------------------------------------------------------------------
 
