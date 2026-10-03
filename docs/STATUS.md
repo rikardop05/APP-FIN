@@ -438,41 +438,62 @@ plausível e errado na tela da família.
 
 ---
 
-# RETOMADA — leia isto primeiro (2026-10-01)
+# RETOMADA — leia isto primeiro (2026-10-03)
 
 ## Onde o projeto está
 
-**Fase 1 aceita.** As três faturas reais importam e fecham no centavo com o total que elas mesmas
-imprimem. O gate humano (T-116) achou **oito defeitos** que 591 testes verdes não achavam.
+**Fase 1 aceita.** **Fase 2 vista de verdade em 2026-10-02** (o "vista" de 10-01 estava errado: as
+agentes nunca tinham renderizado /orcamento nem /fluxo). Abrir as telas achou a categoria da despesa
+fixa sempre vazia, jargão de código nos formulários e um diálogo de exclusão que mentia.
 
-**Fase 2 completa e vista pelo Ricardo.** Recorrentes, orçamento, fluxo de caixa e painel completo.
-Previsão de recorrência é **linha no banco** (`status='planned'`), não cálculo de tela.
+**Decisão nº 7 resolvida (opção b):** previsão cumprida vira `status = 'reconciled'`, com
+`reconciled_by_transaction_id` (FK RESTRICT). A importação concilia (10 %, 5 dias; receita pela
+conta). Contrato em `CONTRACTS` §9.
 
-**Fase 3 não começou.** `/investimentos` e `/metas` são stubs do T-005, por desenho.
+**Fase 3 completa e com gate humano aprovado** (2026-10-02): motor de investimento (T-301, Opus,
+tabela de cenários conferida pelo Ricardo em planilha), API, planejador, "cabe na sua sobra?",
+metas/reserva e card no painel. O Ricardo criou o plano real.
 
-891 testes, `tsc` e lint em zero. Migrations 0002, 0003 e 0004 **aplicadas**.
+**Fase 4 em andamento:** T-402 backup (feito), T-403 PWA (feito, verificado em build de produção),
+T-404 posições reais (em andamento; contrato em `.notas/contrato-t404.md`, decisões do Orquestrador
+pendentes de ratificação).
+
+1.229 testes, `tsc` e lint em zero. Migrations até **0008 aplicadas**.
+
+## Decisões de 2026-10-02/03 que valem para todo código novo
+
+- **Status que contam como dinheiro:** `COUNTED_STATUSES = ['posted','planned']`
+  (`lib/db/queries/counted-statuses.ts`), lista POSITIVA: status novo fica fora por omissão.
+- **Médias de histórico (sobra real, despesa essencial):** só `posted`, 3 meses fechados antes do
+  corrente, mês sem lançamento não entra no divisor.
+- **Saldo de abertura da conta é de INÍCIO do dia:** movimento `>= opening_date` entra; anterior fica fora.
+- **Sinal:** Despesa e Receita digitadas positivas, o sinal vem do tipo (`manual-sign.ts`).
+- **Um plano de investimento e uma reserva de emergência por household** (índices 0007, 0008).
 
 ## O que fazer ao retomar, em ordem
 
-1. **Ler `.notas/decisoes-para-o-ricardo.md`** — 11 decisões de produto acumuladas, cada uma com as
-   opções e o que custa. A nº 7 (como marcar que uma previsão foi cumprida) **bloqueia o RF-ORC-03**
-   e é a única com consequência de schema difícil de reverter.
-2. **Conferir quem está vivo:** `maestri check "<nome>"`. Em 2026-10-01 só **Prisma** e **Trena**
-   (Claude Code) respondiam; os cinco do OpenCode Go estavam sem saldo.
-3. **Fase 3** (T-301 a T-306) é o próximo bloco de trabalho, se o Ricardo quiser seguir.
+1. Ler `.notas/RETOMAR-AQUI.md` (o mapa curto do último dia).
+2. **Conferir quem está vivo:** `maestri list` e um "Responda apenas: vivo." em cada um.
+   Esquadro e Prisma rodam **Opus**; Trena Sonnet; os outros OpenCode (DeepSeek).
+3. Delegar SEMPRE pelas agentes do canvas (decisão do Ricardo), com briefing em arquivo.
+
+## Produção (ainda não existe)
+
+`next build` passa. Para subir de verdade falta **SMTP real** (`EMAIL_SERVER`, `EMAIL_FROM`): sem
+ele o Auth.js recusa subir em produção, por desenho (T-004), e toda rota com sessão responde 500.
 
 ## O que NÃO redescobrir
 
 | Armadilha | Onde está escrito |
 |---|---|
-| Gate verde não prova que funciona — **quatro** entregas passaram com `tsc` e testes limpos e estavam quebradas na tela | abaixo |
+| Gate verde não prova que funciona — **seis** entregas passaram com `tsc` e testes limpos e estavam quebradas na tela | abaixo |
 | `next dev` briga com `next build`, com o `.next`, e **com o humano usando a tela** | `ORCHESTRATION` §4.2 |
 | Agente não escreve no banco da casa | `ORCHESTRATION` §4.2b |
 | `git stash` com agente escrevendo apaga trabalho | `ORCHESTRATION` §4.2c |
 | Espelho de enum só onde a camada proíbe o import | `CONVENTIONS` §5 |
 | Medir árvore em movimento produz conclusão errada — **aconteceu sete vezes** | abaixo |
 
-## As quatro vezes que um gate verde escondeu uma tela quebrada
+## As vezes que um gate verde escondeu uma tela quebrada
 
 | # | Passou verde com | Estava quebrado |
 |---|---|---|
@@ -480,6 +501,8 @@ Previsão de recorrência é **linha no banco** (`status='planned'`), não cálc
 | G-01 | 591 testes | nenhum PDF importava: o worker do pdfjs não era emitido |
 | `f2c9f02` | 703 testes | o corpo da requisição não batia com o schema da rota |
 | aviso de vencimento | 837 testes | o Zod do cliente **descartava** o campo: o aviso nunca dispararia |
+| `6ae4eda` | 891 testes | a categoria da despesa fixa vinha **sempre vazia**: a página filtrava como lista o que a query devolve como árvore |
+| `8067aca` | 1.171 testes | o planejador gravava, mas não dizia; o Ricardo leu "não salvou" |
 
 As três primeiras são duas pontas de um contrato que nenhuma ferramenta compara. A quarta é pior:
 nem quebra, só some. A defesa que existe hoje são os **testes de fronteira**

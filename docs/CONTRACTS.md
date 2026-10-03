@@ -336,6 +336,33 @@ sinal**.
 por `lib/date` (nunca aritmética de `Date`). `dayWindow` é **inclusivo**: `dayWindow: 3` aceita até 3
 dias de distância, para mais ou para menos.
 
+### Onde o par é gravado, e com que parâmetros — decisão nº 7, 2026-10-02
+
+O Ricardo escolheu a opção (b): a previsão cumprida muda de status. Contrato completo em
+`.notas/decisao-7-reconciled.md`; o que todo consumidor precisa saber:
+
+- `transaction_status` ganhou **`reconciled`**: previsão já cumprida por um `posted`. A linha guarda o
+  par em `reconciled_by_transaction_id` (FK **RESTRICT**: apagar o real exige reabrir a previsão antes;
+  o CHECK garante `reconciled ⇔ par não nulo`).
+- **Certo por omissão:** todo leitor de dinheiro usa a lista POSITIVA `COUNTED_STATUSES =
+  ['posted','planned']` (`lib/db/queries/counted-statuses.ts`). `reconciled` não entra em KPI, fluxo,
+  orçamento, comprometimento, lista de lançamentos nem total de fatura.
+- Os índices únicos de previsão (recorrência e receita por competência) cobrem `planned` **e**
+  `reconciled`; sem isso o `topUpPlanned` regeneraria o mês já cumprido.
+- **Quem concilia:** o commit da importação (`lib/db/queries/import-reconcile.ts`), na mesma transação.
+  Lançamento manual não concilia (fora de escopo).
+- **Parâmetros (decididos pelo Ricardo em 2026-10-02), em constante:** `toleranceBp = 1000` (10 %),
+  `dayWindow = 5`.
+- **Chave de "mesma categoria":** despesa casa por `categoryId`. **Receita casa pela CONTA onde cai**
+  (a previsão de receita não tem categoria por construção): a camada de banco passa
+  `'account:<id>'` no lugar do `categoryId`, nos dois lados. `matchPlannedToPosted` não muda.
+- **Desfazer:** apagar o real reabre a previsão (`reopens_planned`); desfazer a importação reabre as
+  previsões que o lote cumpriu.
+
+> A frase acima sobre `toleranceBp` "daquela despesa configurada mais larga" descreve uma
+> configuração por despesa que **não existe**: o parâmetro é global. Se a conta de luz precisar de
+> folga maior, é coluna nova em `recurring_expenses`, decisão de produto.
+
 ## 10. Orçamento — `/lib/finance/budget.ts`
 
 > **As três faixas, fixadas em 2026-09-30 na triagem da auditoria.** O contrato publicava
