@@ -2,8 +2,9 @@ import Link from 'next/link';
 import { AlertCircle, AlertTriangle, CheckCircle2, Inbox } from 'lucide-react';
 
 import { EmptyState, Money } from '@/components/ui-kit';
+import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 import { formatDateBR } from '@/lib/date';
-import { basisPoints, type BasisPoints, type Cents } from '@/lib/money';
+import type { BasisPoints, Cents } from '@/lib/money';
 
 export type UncategorizedItem = {
   id: string;
@@ -239,7 +240,7 @@ export function PendenciasList({
                     </span>
                   </div>
                   <span className="shrink-0 text-sm font-semibold tabular text-red-700">
-                    {item.usageBp === null ? 'sem valor planejado' : formatUsage(item.usageBp)}
+                    {item.usageBp === null ? 'sem valor planejado' : formatBasisPoints(item.usageBp)}
                   </span>
                 </li>
               ))}
@@ -304,10 +305,4 @@ export function PendenciasList({
       </div>
     </section>
   );
-}
-
-/** `basisPoints` em percentual pt-BR (apresentação; a decisão de "estourado" não é daqui). */
-function formatUsage(value: BasisPoints): string {
-  const bp = basisPoints(value);
-  return `${Math.floor(bp / 100)},${String(bp % 100).padStart(2, '0')}%`;
 }

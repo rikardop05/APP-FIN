@@ -10,11 +10,9 @@ import { basisPoints, type BasisPoints } from '@/lib/money';
  * string, e o resultado era `0,50%` — o menos sumia entre -1 e -99 bp. Zero
  * nunca recebe sinal (`-0,00%` não existe).
  *
- * É o formatador de bp do sistema; quem precisa de "X,YY%" importa daqui.
- * `components/dashboard/pendencias-list.tsx` ainda tem uma cópia local
- * (`formatUsage`), que só recebe uso de orçamento (>= 0) e por isso não
- * erra hoje. A variação de gastos (`spending-by-category.tsx`) tem formato
- * próprio, com `+`/`−` e tom de cor, e não é cópia deste.
+ * É o formatador de bp do sistema; quem precisa de "X,YY%" importa daqui. Não
+ * restam cópias locais. A variação de gastos (`spending-by-category.tsx`) tem
+ * formato próprio, com `+`/`−` e tom de cor, e não é cópia deste.
  */
 export function formatBasisPoints(value: BasisPoints): string {
   const bp = basisPoints(value);
