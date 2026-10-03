@@ -9,6 +9,9 @@ import { AccumulationChart } from './accumulation-chart';
 import { FeasibilityLine, SurplusSummary } from './feasibility/feasibility';
 import {
   feasibleText,
+  saveButtonHint,
+  visibleConfirmation,
+  type SaveEvent,
   formatMonthsToTarget,
   SCENARIO_ORDER,
   scenarioName,
@@ -16,7 +19,8 @@ import {
 } from './display';
 import {
   emptyPlanValues,
-  parsePlanForm,
+  buildCreateBody,
+  buildUpdateBody,
   planToValues,
   valuesEqual,
   type FormErrors,
@@ -110,6 +114,31 @@ function PlanFields({ values, errors, onChange }: PlanFieldsProps) {
   );
 }
 
+/**
+ * Falha de validação do formulário: o resumo vai para o texto que fica PERTO DO BOTÃO (a
+ * mensagem junto do campo pode estar fora da vista, ou dentro de "Outras premissas", fechada),
+ * abre o grupo recolhido se o campo está nele e leva a pessoa ao primeiro campo com erro.
+ */
+function revealInvalidField(focusId: string | null, errors: FormErrors) {
+  // Inflação e imposto moram em "Outras premissas" (recolhido): com erro lá, abre o grupo
+  // mesmo que o primeiro campo a focar seja outro, senão a mensagem do campo fica invisível.
+  if (errors.inflation !== undefined || errors.tax !== undefined) {
+    const group = document.getElementById('plan-inflation')?.closest('details');
+    if (group) group.open = true;
+  }
+  if (focusId === null) return;
+  const element = document.getElementById(focusId);
+  if (element === null) return;
+  const details = element.closest('details');
+  if (details !== null) details.open = true;
+  element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  element.focus({ preventScroll: true });
+}
+
+function summaryText(messages: string[]): string {
+  return `Confira os campos antes de salvar. ${messages.join(' · ')}`;
+}
+
 function CreatePlan({ onCreated }: { onCreated: (data: InvestmentData) => void }) {
   const [values, setValues] = useState<PlanFormValues>(() => emptyPlanValues());
   const [errors, setErrors] = useState<FormErrors>({});
@@ -118,9 +147,11 @@ function CreatePlan({ onCreated }: { onCreated: (data: InvestmentData) => void }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const parsed = parsePlanForm(values);
-    if (!parsed.ok) {
-      setErrors(parsed.errors);
+    const built = buildCreateBody(values);
+    if (!built.ok) {
+      setErrors(built.errors);
+      setFailure(summaryText(built.messages));
+      revealInvalidField(built.focusId, built.errors);
       return;
     }
     setErrors({});
@@ -130,7 +161,7 @@ function CreatePlan({ onCreated }: { onCreated: (data: InvestmentData) => void }
       const response = await fetch('/api/investment', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(parsed.plan),
+        body: JSON.stringify(built.body),
       });
       onCreated(await readData(response));
     } catch (error) {
@@ -234,9 +265,13 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
   const [errors, setErrors] = useState<FormErrors>({});
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  /** O que acabou de acontecer (criar/salvar); a confirmação some assim que a pessoa edita. */
+  const [saveEvent, setSaveEvent] = useState<SaveEvent | null>(null);
 
   const saved = data.plan === null ? null : planToValues(data.plan, data.scenarios);
   const dirty = saved !== null && !valuesEqual(saved, values);
+  const confirmation = visibleConfirmation(saveEvent, dirty);
+  const idleHint = saveButtonHint({ dirty, saving });
   const maxYears = Math.max(0, ...data.horizonsYears);
   const byLabel = new Map(data.scenarios.map((scenario) => [scenario.label, scenario]));
   const ordered = SCENARIO_ORDER.flatMap((label: ScenarioLabel) => {
@@ -244,7 +279,8 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
     return scenario ? [scenario] : [];
   });
 
-  function accept(next: InvestmentData) {
+  function accept(next: InvestmentData, event: SaveEvent | null = null) {
+    setSaveEvent(event);
     setData(next);
     setValues(next.plan === null ? emptyPlanValues() : planToValues(next.plan, next.scenarios));
     setErrors({});
@@ -253,9 +289,11 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const parsed = parsePlanForm(values);
-    if (!parsed.ok) {
-      setErrors(parsed.errors);
+    const built = buildUpdateBody(values);
+    if (!built.ok) {
+      setErrors(built.errors);
+      setFailure(summaryText(built.messages));
+      revealInvalidField(built.focusId, built.errors);
       return;
     }
     setErrors({});
@@ -265,9 +303,9 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
       const response = await fetch('/api/investment', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...parsed.plan, scenarios: parsed.scenarios }),
+        body: JSON.stringify(built.body),
       });
-      accept(await readData(response));
+      accept(await readData(response), 'saved');
     } catch (error) {
       setFailure(error instanceof Error ? error.message : 'Não foi possível salvar o plano.');
     } finally {
@@ -284,9 +322,15 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
       <Notices />
 
       {data.plan === null ? (
-        <CreatePlan onCreated={accept} />
+        <CreatePlan onCreated={(created) => accept(created, 'created')} />
       ) : (
         <form className="mt-6 flex flex-col gap-6" onSubmit={(event) => void save(event)} noValidate>
+          {confirmation ? (
+            <p className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900" role="status">
+              {confirmation}
+            </p>
+          ) : null}
+
           <section aria-labelledby="plan-heading" className="rounded-lg border border-border bg-card p-4 sm:p-6">
             <h2 id="plan-heading" className="mb-4 font-semibold">Seu plano</h2>
             <PlanFields values={values} errors={errors} onChange={setValues} />
@@ -313,7 +357,8 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
           </section>
 
           {failure ? <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{failure}</p> : null}
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+            {idleHint ? <p className="text-sm text-muted-foreground sm:mr-2">{idleHint}</p> : null}
             <Button variant="outline" disabled={!dirty || saving} onClick={() => saved !== null && (setValues(saved), setErrors({}))}>Descartar alterações</Button>
             <Button type="submit" disabled={!dirty || saving}>{saving ? 'Salvando…' : 'Salvar e recalcular'}</Button>
           </div>

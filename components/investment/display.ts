@@ -99,3 +99,25 @@ export function yearTickLabel(month: number): string {
   const years = month / 12;
   return `${String(years)} ${years === 1 ? 'ano' : 'anos'}`;
 }
+
+export type SaveEvent = 'created' | 'saved';
+
+/** Confirmação curta depois do POST (criar) e do PUT (salvar). */
+export function confirmationText(event: SaveEvent): string {
+  return event === 'created' ? 'Plano criado.' : 'Alterações salvas.';
+}
+
+/**
+ * Texto ao lado do botão "Salvar e recalcular". O botão fica cinza quando não há mudança, e
+ * cinza sem explicação parece "não salvou": enquanto não há o que salvar, a tela diz isso.
+ * Durante o envio o botão já diz "Salvando…", então não há dica.
+ */
+export function saveButtonHint(state: { dirty: boolean; saving: boolean }): string | null {
+  if (state.saving || state.dirty) return null;
+  return 'Nada para salvar: altere algum valor acima.';
+}
+
+/** A confirmação só vale enquanto o formulário está igual ao que foi salvo: editar a apaga. */
+export function visibleConfirmation(event: SaveEvent | null, dirty: boolean): string | null {
+  return event === null || dirty ? null : confirmationText(event);
+}

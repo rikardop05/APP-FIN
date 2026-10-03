@@ -149,3 +149,100 @@ export function parsePlanForm(values: PlanFormValues): ParsedPlan {
     scenarios,
   };
 }
+
+/** Rótulo de cada campo, como a tela o chama (o resumo de erros fala a língua do formulário). */
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Nome do plano',
+  desiredIncome: 'Renda mensal desejada',
+  portfolio: 'Patrimônio atual',
+  contribution: 'Aporte mensal atual',
+  targetDate: 'Prazo desejado',
+  inflation: 'Inflação esperada ao ano',
+  tax: 'Imposto sobre o rendimento',
+};
+
+function fieldLabel(key: string): string {
+  const direct = FIELD_LABELS[key];
+  if (direct !== undefined) return direct;
+  const [label, field] = key.split('.');
+  const name = SCENARIO_ORDER.find((candidate) => candidate === label);
+  if (name === undefined) return key;
+  const scenario = { conservative: 'Conservador', moderate: 'Médio', optimistic: 'Otimista' }[name];
+  return `${scenario}: ${field === 'return' ? 'retorno real' : 'retirada'}`;
+}
+
+/** Ordem em que os campos aparecem na tela (para listar e focar o PRIMEIRO erro). */
+const FIELD_ORDER: readonly string[] = [
+  'name',
+  'desiredIncome',
+  'portfolio',
+  'contribution',
+  'targetDate',
+  'inflation',
+  'tax',
+  ...SCENARIO_ORDER.flatMap((label) => [`${label}.return`, `${label}.withdrawal`]),
+];
+
+/** Erros em ordem de tela, cada um com o rótulo do campo: "Aporte mensal atual: Informe...". */
+export function errorMessages(errors: FormErrors): string[] {
+  const keys = Object.keys(errors).sort((a, b) => FIELD_ORDER.indexOf(a) - FIELD_ORDER.indexOf(b));
+  return keys.map((key) => `${fieldLabel(key)}: ${errors[key] ?? ''}`);
+}
+
+/** `id` do input do primeiro campo com erro, para rolar até ele e focar. `null` sem erro. */
+export function firstErrorFieldId(errors: FormErrors): string | null {
+  const first = FIELD_ORDER.find((key) => errors[key] !== undefined) ?? Object.keys(errors)[0];
+  if (first === undefined) return null;
+  const ids: Record<string, string> = {
+    name: 'plan-name',
+    desiredIncome: 'plan-income',
+    portfolio: 'plan-portfolio',
+    contribution: 'plan-contribution',
+    targetDate: 'plan-date',
+    inflation: 'plan-inflation',
+    tax: 'plan-tax',
+  };
+  const direct = ids[first];
+  if (direct !== undefined) return direct;
+  const [label, field] = first.split('.');
+  return `${field === 'return' ? 'ret' : 'wd'}-${label ?? ''}`;
+}
+
+export type UpdateBodyResult =
+  | { ok: true; body: PlanUpdateRequestBody }
+  | { ok: false; errors: FormErrors; messages: string[]; focusId: string | null };
+
+/**
+ * O corpo EXATO do `PUT /api/investment` a partir do estado do formulário: o plano e os
+ * três cenários, cada rótulo uma vez (`planUpdateBodySchema`). Quando o formulário é
+ * inválido devolve também as mensagens por campo e o campo a focar: a tela mostra isso
+ * perto do botão, nunca só junto de um campo que pode estar fora da vista.
+ */
+export function buildUpdateBody(values: PlanFormValues): UpdateBodyResult {
+  const parsed = parsePlanForm(values);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      errors: parsed.errors,
+      messages: errorMessages(parsed.errors),
+      focusId: firstErrorFieldId(parsed.errors),
+    };
+  }
+  return { ok: true, body: { ...parsed.plan, scenarios: parsed.scenarios } };
+}
+
+/** Idem para o `POST` (criar): só o plano; os cenários nascem com os padrões no servidor. */
+export function buildCreateBody(values: PlanFormValues):
+  | { ok: true; body: PlanRequestBody }
+  | { ok: false; errors: FormErrors; messages: string[]; focusId: string | null } {
+  const parsed = parsePlanForm(values);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      errors: parsed.errors,
+      messages: errorMessages(parsed.errors),
+      focusId: firstErrorFieldId(parsed.errors),
+    };
+  }
+  return { ok: true, body: parsed.plan };
+}

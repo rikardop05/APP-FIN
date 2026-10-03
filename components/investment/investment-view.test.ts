@@ -4,13 +4,16 @@ import { cents } from '@/lib/money';
 
 import {
   bpToPercentInput,
+  confirmationText,
+  saveButtonHint,
+  visibleConfirmation,
   feasibleText,
   formatCompactBRL,
   formatMonthsToTarget,
   percentInputToBp,
   yearTickLabel,
 } from './display';
-import { emptyPlanValues, parsePlanForm, planToValues, valuesEqual } from './form';
+import { buildCreateBody, buildUpdateBody, emptyPlanValues, parsePlanForm, planToValues, valuesEqual } from './form';
 import type { InvestmentPlan } from './schemas';
 
 describe('formatMonthsToTarget: nunca NaN, nunca número absurdo', () => {
@@ -169,5 +172,128 @@ describe('formulário do plano', () => {
     expect(valuesEqual(a, b)).toBe(true);
     b.scenarios.conservative.returnPct = '2,5';
     expect(valuesEqual(a, b)).toBe(false);
+  });
+});
+
+describe('corpo do PUT a partir do formulário (bug do salvar do Ricardo)', () => {
+  // O plano EXATO que ele criou: renda R$ 2.000, patrimônio ZERO, aporte R$ 500, sem prazo.
+  const ricardo: InvestmentPlan = {
+    id: '11111111-1111-4111-8111-111111111111',
+    name: 'Meu plano',
+    desiredMonthlyIncomeCents: cents(200_000),
+    currentPortfolioCents: cents(0),
+    currentMonthlyContributionCents: cents(50_000),
+    inflationBp: 450 as never,
+    incomeTaxBp: 1500 as never,
+    targetDate: null,
+  };
+  const ricardoScenarios = [
+    { label: 'conservative' as const, realReturnBp: 300 as never, withdrawalBp: 300 as never },
+    { label: 'moderate' as const, realReturnBp: 500 as never, withdrawalBp: 400 as never },
+    { label: 'optimistic' as const, realReturnBp: 700 as never, withdrawalBp: 500 as never },
+  ];
+
+  it('plano sem prazo e patrimônio zero gera o corpo completo (targetDate null, não string vazia)', () => {
+    const values = planToValues(ricardo, ricardoScenarios);
+    values.contribution = 'R$ 600,00';
+    expect(buildUpdateBody(values)).toEqual({
+      ok: true,
+      body: {
+        name: 'Meu plano',
+        desiredMonthlyIncomeCents: 200_000,
+        currentPortfolioCents: 0,
+        currentMonthlyContributionCents: 60_000,
+        inflationBp: 450,
+        incomeTaxBp: 1500,
+        targetDate: null,
+        scenarios: [
+          { label: 'conservative', realReturnBp: 300, withdrawalBp: 300 },
+          { label: 'moderate', realReturnBp: 500, withdrawalBp: 400 },
+          { label: 'optimistic', realReturnBp: 700, withdrawalBp: 500 },
+        ],
+      },
+    });
+  });
+
+  it('o corpo tem os 3 cenários, cada rótulo uma vez, e nenhum campo com NaN', () => {
+    const result = buildUpdateBody(planToValues(ricardo, ricardoScenarios));
+    if (!result.ok) throw new Error('esperava ok');
+    expect(new Set(result.body.scenarios.map((s) => s.label)).size).toBe(3);
+    expect(JSON.stringify(result.body)).not.toMatch(/NaN|undefined/);
+  });
+
+  it('criar usa só o plano (sem cenários)', () => {
+    const values = planToValues(ricardo, ricardoScenarios);
+    const result = buildCreateBody(values);
+    expect(result.ok && 'scenarios' in result.body).toBe(false);
+  });
+
+  it('inválido: devolve as mensagens com o rótulo do campo, em ordem de tela, e o campo a focar', () => {
+    const values = planToValues(ricardo, ricardoScenarios);
+    values.scenarios.optimistic.returnPct = '7,555';
+    values.contribution = 'quinhentos';
+    values.tax = '150';
+    const result = buildUpdateBody(values);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.messages).toEqual([
+      'Aporte mensal atual: Informe o aporte mensal (zero ou mais).',
+      'Imposto sobre o rendimento: Informe o imposto entre 0 e 100 %.',
+      'Otimista: retorno real: Retorno real entre -99,99 % e 100 % ao ano.',
+    ]);
+    expect(result.focusId).toBe('plan-contribution');
+  });
+
+  it('erro só em "Outras premissas" (grupo recolhido) também aponta o campo certo', () => {
+    const values = planToValues(ricardo, ricardoScenarios);
+    values.inflation = 'abc';
+    const result = buildUpdateBody(values);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.focusId).toBe('plan-inflation');
+      expect(result.messages[0]).toMatch(/^Inflação esperada ao ano:/);
+    }
+  });
+
+  it('erro de cenário aponta o input do cenário (ret-/wd-)', () => {
+    const values = planToValues(ricardo, ricardoScenarios);
+    values.scenarios.moderate.withdrawalPct = '0';
+    const result = buildUpdateBody(values);
+    if (result.ok) throw new Error('esperava erro');
+    expect(result.focusId).toBe('wd-moderate');
+  });
+
+  it('digitações comuns do aporte e dos percentuais passam', () => {
+    for (const money of ['600', '600,00', 'R$ 600', 'R$ 600,00', '1.000,50', '0']) {
+      const values = planToValues(ricardo, ricardoScenarios);
+      values.contribution = money;
+      expect(buildUpdateBody(values).ok, money).toBe(true);
+    }
+    for (const pct of ['5', '5,5', '5.5', '5,50', '5 %', ' 5% ']) {
+      const values = planToValues(ricardo, ricardoScenarios);
+      values.scenarios.moderate.returnPct = pct;
+      expect(buildUpdateBody(values).ok, pct).toBe(true);
+    }
+  });
+});
+
+describe('confirmação e dica do botão salvar', () => {
+  it('textos curtos de criar e salvar', () => {
+    expect(confirmationText('created')).toBe('Plano criado.');
+    expect(confirmationText('saved')).toBe('Alterações salvas.');
+  });
+
+  it('botão cinza por falta de mudança explica o motivo; com mudança ou enviando, nada', () => {
+    expect(saveButtonHint({ dirty: false, saving: false })).toBe('Nada para salvar: altere algum valor acima.');
+    expect(saveButtonHint({ dirty: true, saving: false })).toBeNull();
+    expect(saveButtonHint({ dirty: false, saving: true })).toBeNull();
+    expect(saveButtonHint({ dirty: true, saving: true })).toBeNull();
+  });
+
+  it('a confirmação some quando a pessoa edita (dirty) e não existe sem evento', () => {
+    expect(visibleConfirmation('created', false)).toBe('Plano criado.');
+    expect(visibleConfirmation('saved', false)).toBe('Alterações salvas.');
+    expect(visibleConfirmation('saved', true)).toBeNull();
+    expect(visibleConfirmation(null, false)).toBeNull();
   });
 });
