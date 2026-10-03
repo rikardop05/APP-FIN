@@ -57,6 +57,13 @@
       "when": 1790988469287,
       "tag": "0007_illegal_marvel_zombies",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790991669210,
+      "tag": "0008_illegal_captain_marvel",
+      "breakpoints": true
     }
   ]
 }

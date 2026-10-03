@@ -695,25 +695,35 @@ export const goals = pgTable(
 // investment_plans
 // ---------------------------------------------------------------------------
 
-export const investmentPlans = pgTable('investment_plans', {
-  id: id(),
-  householdId: uuid('household_id')
-    .notNull()
-    .references(() => households.id, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  /** Em R$ de hoje. */
-  desiredMonthlyIncomeCents: cents('desired_monthly_income_cents').notNull(),
-  currentPortfolioCents: cents('current_portfolio_cents').notNull().default(0),
-  currentMonthlyContributionCents: cents('current_monthly_contribution_cents')
-    .notNull()
-    .default(0),
-  /** IPCA 4,50 % a.a. */
-  inflationBp: integer('inflation_bp').notNull().default(450),
-  /** 15 %. */
-  incomeTaxBp: integer('income_tax_bp').notNull().default(1500),
-  targetDate: date('target_date'),
-  createdAt: createdAt(),
-});
+export const investmentPlans = pgTable(
+  'investment_plans',
+  {
+    id: id(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** Em R$ de hoje. */
+    desiredMonthlyIncomeCents: cents('desired_monthly_income_cents').notNull(),
+    currentPortfolioCents: cents('current_portfolio_cents').notNull().default(0),
+    currentMonthlyContributionCents: cents('current_monthly_contribution_cents')
+      .notNull()
+      .default(0),
+    /** IPCA 4,50 % a.a. */
+    inflationBp: integer('inflation_bp').notNull().default(450),
+    /** 15 %. */
+    incomeTaxBp: integer('income_tax_bp').notNull().default(1500),
+    targetDate: date('target_date'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    // **Um plano por household** (regra de produto, achado A1 do T-302). Quem
+    // garante e o banco: criar o plano e um evento unico, e uma corrida entre
+    // duas requisicoes (ou um bug de UI) nao pode gerar o segundo. Sem
+    // `where`: todo plano conta.
+    uniqueIndex('investment_plans_household_id_unique').on(t.householdId),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // investment_scenarios
