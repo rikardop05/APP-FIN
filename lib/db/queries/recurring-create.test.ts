@@ -66,8 +66,18 @@ async function seedHousehold(m: Modules, options: { withSettings: boolean; proje
 
 async function cleanup(m: Modules, householdId: string) {
   const { db, schema } = m;
+  // FKs RESTRICT são imediatas: o pagamento de fatura e o par `reconciled` saem antes das linhas.
+  await db.execute(
+    sql`update statements set paid_transaction_id = null where credit_card_id in (select id from credit_cards where household_id = ${householdId})`,
+  );
+  await db.execute(
+    sql`update transactions set status = 'planned', reconciled_by_transaction_id = null where household_id = ${householdId} and status = 'reconciled'`,
+  );
   await db.delete(schema.transactions).where(eq(schema.transactions.householdId, householdId));
   await db.delete(schema.households).where(eq(schema.households.id, householdId));
+  // Barulhento: se o household ainda existe, a limpeza falhou e o teste tem de falhar.
+  const left = await db.select({ id: schema.households.id }).from(schema.households).where(eq(schema.households.id, householdId));
+  if (left.length > 0) throw new Error(`Limpeza falhou: o household de teste ${householdId} continua no banco.`);
 }
 
 const baseExpense = (categoryId: string) => ({

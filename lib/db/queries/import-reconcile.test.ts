@@ -119,6 +119,9 @@ async function cleanup(m: Modules, householdId: string) {
   await db.delete(schema.transactions).where(eq(schema.transactions.householdId, householdId));
   await db.delete(schema.importBatches).where(eq(schema.importBatches.householdId, householdId));
   await db.delete(schema.households).where(eq(schema.households.id, householdId));
+  // Barulhento: se o household ainda existe, a limpeza falhou e o teste tem de falhar.
+  const left = await db.select({ id: schema.households.id }).from(schema.households).where(eq(schema.households.id, householdId));
+  if (left.length > 0) throw new Error(`Limpeza falhou: o household de teste ${householdId} continua no banco.`);
 }
 
 describe.skipIf(process.env.DATABASE_URL === undefined)(
