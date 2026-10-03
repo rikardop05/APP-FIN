@@ -7,7 +7,6 @@ import { cents, type Cents } from '@/lib/money';
 import type { Competence, IsoDate } from '@/lib/date';
 import { accounts, categories, goals, transactions } from '@/lib/db/schema';
 
-import { COUNTED_STATUSES } from './counted-statuses';
 
 /**
  * Metas — T-305. Só seleção e gravação; toda conta (progresso, aporte, alvo da reserva,
@@ -186,11 +185,14 @@ export async function listGoals(householdId: string, today: IsoDate): Promise<Go
 
 /**
  * Dados da média de despesa ESSENCIAL (`categories.nature = 'essential'`, `kind =
- * 'expense'`) dos meses fechados da janela de `essentialAverageWindow`. Só `COUNTED_STATUSES`:
- * previsão cumprida (`reconciled`) é a mesma despesa que o `posted` já traz.
+ * 'expense'`) dos meses fechados da janela de `essentialAverageWindow`. Só `posted`
+ * (decisão de contrato de 2026-10-02): mês fechado é fato consumado, e a previsão
+ * (`planned`) que não se realizou não é despesa que existiu. `reconciled` também fica fora:
+ * é a mesma despesa que o `posted` que a cumpriu já traz.
  *
- * Devolve só os meses em que há ALGUM lançamento (qualquer tipo e categoria): é o que
- * separa "mês sem despesa essencial" (vale 0) de "mês sem histórico" (não entra na média).
+ * Devolve só os meses em que há ALGUM lançamento `posted` (qualquer tipo e categoria): é o
+ * que separa "mês sem despesa essencial" (vale 0) de "mês sem histórico" (não entra na
+ * média). Um mês só com previsão é mês sem histórico.
  */
 export async function getEssentialAverageData(
   householdId: string,
@@ -210,7 +212,7 @@ export async function getEssentialAverageData(
     .where(
       and(
         eq(transactions.householdId, householdId),
-        inArray(transactions.status, COUNTED_STATUSES),
+        eq(transactions.status, 'posted'),
         gte(transactions.competence, from),
         lte(transactions.competence, to),
       ),

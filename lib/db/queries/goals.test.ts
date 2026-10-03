@@ -75,6 +75,10 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('metas contra o banco re
         { ...row, description: 'Pagamento de fatura', categoryId: essential.id, occurredOn: '2026-09-07', competence: '2026-09', cashDate: '2026-09-07', amountCents: -999, kind: 'credit_card_payment', status: 'posted' },
         // Ago: só receita (mês COM histórico, essencial = 0). Jul: nada (mês sem histórico, fora da média).
         { ...row, description: 'Salário', occurredOn: '2026-08-05', competence: '2026-08', cashDate: '2026-08-05', amountCents: 300_000, kind: 'income', status: 'posted' },
+        // Previsão (planned) essencial em mês fechado que não se realizou: não é despesa que
+        // existiu. Em set soma zero à média; em jul (mês só com previsão) nem conta o mês.
+        { ...row, description: 'Previsto set', categoryId: essential.id, occurredOn: '2026-09-20', competence: '2026-09', cashDate: '2026-09-20', amountCents: -77_000, kind: 'expense', status: 'planned' },
+        { ...row, description: 'Previsto jul', categoryId: essential.id, occurredOn: '2026-07-20', competence: '2026-07', cashDate: '2026-07-20', amountCents: -55_000, kind: 'expense', status: 'planned' },
         // Mês corrente e anterior à janela: fora.
         { ...row, description: 'Corrente', categoryId: essential.id, occurredOn: '2026-10-01', competence: '2026-10', cashDate: '2026-10-01', amountCents: -777_777, kind: 'expense', status: 'posted' },
         { ...row, description: 'Antigo', categoryId: essential.id, occurredOn: '2026-06-01', competence: '2026-06', cashDate: '2026-06-01', amountCents: -555_555, kind: 'expense', status: 'posted' },
@@ -87,7 +91,8 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('metas contra o banco re
       const average = await queries.getEssentialAverageData(householdId, today);
       expect(average.from).toBe('2026-07');
       expect(average.to).toBe('2026-09');
-      // Ago (0) e set (-100.000 de aluguel). `reconciled`, lazer e pagamento de fatura ficam de fora.
+      // Ago (0) e set (-100.000 de aluguel). `planned` (set e jul), `reconciled`, lazer e
+      // pagamento de fatura ficam de fora; jul, só com previsão, nem entra como mês.
       expect(average.months).toEqual([
         { competence: '2026-08', expenseNetCents: 0 },
         { competence: '2026-09', expenseNetCents: -100_000 },
