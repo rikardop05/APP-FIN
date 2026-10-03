@@ -267,11 +267,10 @@ export function deleteQuestion(snapshot: Snapshot): string {
   return `Apagar o registro de ${formatDateBR(snapshot.asOf)} (${formatBRL(snapshot.portfolioCents, { sign: 'never' })})?`;
 }
 
-/** O registro já é o ponto de partida do plano? (mesmo valor e a mesma competência da âncora da curva) */
+/**
+ * O registro já é o ponto de partida do plano? Pela DATA EXATA da âncora (`current_portfolio_as_of`):
+ * há no máximo um registro por data, então dois do mesmo mês nunca casam os dois.
+ */
 export function isCurrentPortfolio(data: Pick<PositionsData, 'plan'>, snapshot: Snapshot): boolean {
-  return (
-    data.plan !== null &&
-    data.plan.currentPortfolioCents === snapshot.portfolioCents &&
-    data.plan.startCompetence === snapshot.asOf.slice(0, 7)
-  );
+  return data.plan !== null && snapshot.asOf === data.plan.currentPortfolioAsOf;
 }

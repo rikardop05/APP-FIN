@@ -52,6 +52,8 @@ export const positionsResponseSchema = z.object({
       plannedMonthlyCents: centsSchema,
       currentPortfolioCents: centsSchema,
       startCompetence: z.string(),
+      /** `YYYY-MM-DD`: a data exata do patrimônio atual do plano (âncora da curva, D7). */
+      currentPortfolioAsOf: z.string(),
     })
     .nullable(),
   snapshots: z.array(snapshotSchema),

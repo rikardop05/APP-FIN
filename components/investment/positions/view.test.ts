@@ -37,7 +37,7 @@ describe('linhas do aporte efetivo x planejado', () => {
   base[10] = { competence: '2026-08', actualCents: cents(30_000) };
   const data: Pick<PositionsData, 'contributions' | 'adherence' | 'plan' | 'currentCompetence'> = {
     currentCompetence: '2026-10',
-    plan: { plannedMonthlyCents: cents(50_000), currentPortfolioCents: cents(1_000_000), startCompetence: '2026-08' },
+    plan: { plannedMonthlyCents: cents(50_000), currentPortfolioCents: cents(1_000_000), startCompetence: '2026-08', currentPortfolioAsOf: '2026-08-31' },
     contributions: base,
     adherence: {
       months: [
@@ -242,11 +242,29 @@ describe('confirmações e avisos', () => {
     expect(deleteQuestion(snapshot)).toBe('Apagar o registro de 30/09/2026 (R$ 12.000,00)?');
   });
 
-  it('reconhece o registro que já é o ponto de partida do plano', () => {
-    const plan = { plannedMonthlyCents: cents(1), currentPortfolioCents: cents(1_200_000), startCompetence: '2026-09' };
+  it('reconhece o registro que já é o ponto de partida do plano: pela DATA exata da âncora', () => {
+    const plan = {
+      plannedMonthlyCents: cents(1),
+      currentPortfolioCents: cents(1_200_000),
+      startCompetence: '2026-09',
+      currentPortfolioAsOf: '2026-09-30',
+    };
     expect(isCurrentPortfolio({ plan }, snapshot)).toBe(true);
-    expect(isCurrentPortfolio({ plan: { ...plan, startCompetence: '2026-08' } }, snapshot)).toBe(false);
-    expect(isCurrentPortfolio({ plan: { ...plan, currentPortfolioCents: cents(5) } }, snapshot)).toBe(false);
+    expect(isCurrentPortfolio({ plan: { ...plan, currentPortfolioAsOf: '2026-08-31' } }, snapshot)).toBe(false);
     expect(isCurrentPortfolio({ plan: null }, snapshot)).toBe(false);
+  });
+
+  it('dois registros no mesmo mês com o mesmo valor: só o da data exata é o atual', () => {
+    const plan = {
+      plannedMonthlyCents: cents(1),
+      currentPortfolioCents: cents(1_200_000),
+      startCompetence: '2026-09',
+      currentPortfolioAsOf: '2026-09-30',
+    };
+    const make = (id: string, asOf: string): Snapshot => ({ id, asOf, portfolioCents: cents(1_200_000), note: null });
+    const midMonth = make('22222222-2222-4222-8222-222222222222', '2026-09-15');
+    const endOfMonth = make('11111111-1111-4111-8111-111111111111', '2026-09-30');
+    expect(isCurrentPortfolio({ plan }, endOfMonth)).toBe(true);
+    expect(isCurrentPortfolio({ plan }, midMonth)).toBe(false);
   });
 });
