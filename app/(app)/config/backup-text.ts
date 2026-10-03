@@ -20,6 +20,7 @@ const TABLE_LABELS: Record<string, [string, string]> = {
   goals: ['meta', 'metas'],
   investment_plans: ['plano de investimento', 'planos de investimento'],
   investment_scenarios: ['cenário de investimento', 'cenários de investimento'],
+  investment_snapshots: ['registro de posição', 'registros de posição'],
   statements: ['fatura', 'faturas'],
   import_batches: ['importação', 'importações'],
   skipped_occurrences: ['previsão dispensada', 'previsões dispensadas'],

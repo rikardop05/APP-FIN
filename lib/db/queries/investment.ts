@@ -51,7 +51,15 @@ export type InvestmentScenarioInput = {
   withdrawalBp: BasisPoints;
 };
 
-export type InvestmentPlanRow = InvestmentPlanInput & { id: string };
+export type InvestmentPlanRow = InvestmentPlanInput & {
+  id: string;
+  /**
+   * Data a que `currentPortfolioCents` se refere (D7 do T-404): âncora da curva de comparação
+   * com as posições reais. Gravada pelo servidor (criação, PUT que muda o patrimônio, D4);
+   * não vem do corpo.
+   */
+  currentPortfolioAsOf: IsoDate;
+};
 
 export type InvestmentScenarioRow = InvestmentScenarioInput & { id: string };
 
@@ -107,6 +115,7 @@ export async function getInvestmentPlan(
       inflationBp: basisPoints(plan.inflationBp),
       incomeTaxBp: basisPoints(plan.incomeTaxBp),
       targetDate: plan.targetDate,
+      currentPortfolioAsOf: plan.currentPortfolioAsOf,
     },
     scenarios: scenarios
       .map((row) => ({
@@ -119,10 +128,14 @@ export async function getInvestmentPlan(
   };
 }
 
-/** Cria o plano e os 3 cenários com os defaults, numa transação. Um por household. */
+/**
+ * Cria o plano e os 3 cenários com os defaults, numa transação. Um por household. O
+ * patrimônio informado vale em `today` (`current_portfolio_as_of`, D7 do T-404).
+ */
 export async function createInvestmentPlan(
   householdId: string,
   input: InvestmentPlanInput,
+  today: IsoDate,
 ): Promise<string> {
   return db.transaction(async (tx) => {
     // A trava serializa dois POSTs simultâneos: o segundo enxerga o primeiro e recusa.
@@ -136,7 +149,7 @@ export async function createInvestmentPlan(
 
     const [plan] = await tx
       .insert(investmentPlans)
-      .values({ householdId, ...input })
+      .values({ householdId, ...input, currentPortfolioAsOf: today })
       .returning({ id: investmentPlans.id });
     if (plan === undefined) throw new Error('Não foi possível criar o plano.');
     await tx
@@ -149,16 +162,28 @@ export async function createInvestmentPlan(
 /**
  * Substitui as premissas do plano e de cada cenário enviado (por `label`). Cenário ausente
  * no banco é recriado, para um plano antigo incompleto se curar na edição.
+ *
+ * D7 do T-404: se o patrimônio atual MUDOU, ele passa a valer em `today`
+ * (`current_portfolio_as_of`); se não mudou, a data fica (editar o nome não move a âncora).
  */
 export async function updateInvestmentPlan(
   householdId: string,
   input: InvestmentPlanInput,
   scenarios: readonly InvestmentScenarioInput[],
+  today: IsoDate,
 ): Promise<void> {
   await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ currentPortfolioCents: investmentPlans.currentPortfolioCents })
+      .from(investmentPlans)
+      .where(eq(investmentPlans.householdId, householdId))
+      .limit(1)
+      .for('update');
+    if (current === undefined) throw new InvestmentPlanNotFoundError();
+    const portfolioChanged = Number(current.currentPortfolioCents) !== input.currentPortfolioCents;
     const [plan] = await tx
       .update(investmentPlans)
-      .set(input)
+      .set(portfolioChanged ? { ...input, currentPortfolioAsOf: today } : input)
       .where(eq(investmentPlans.householdId, householdId))
       .returning({ id: investmentPlans.id });
     if (plan === undefined) throw new InvestmentPlanNotFoundError();

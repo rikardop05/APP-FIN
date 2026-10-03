@@ -71,7 +71,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('plano de investimento (
         surplus: { averageMonthlyCents: null, monthsWithData: 0, windowFrom: '2026-07', windowTo: '2026-09' },
       });
 
-      const error = await m.queries.updateInvestmentPlan(householdId, GATE_PLAN, []).catch((caught: unknown) => caught);
+      const error = await m.queries.updateInvestmentPlan(householdId, GATE_PLAN, [], TODAY).catch((caught: unknown) => caught);
       expect(error).toBeInstanceOf(m.queries.InvestmentPlanNotFoundError);
       expect(m.domainFailure(error)).toEqual({ status: 404, error: 'Ainda não há plano de investimento.' });
     } finally {
@@ -84,7 +84,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('plano de investimento (
     const householdId = await newHousehold(m, 'T-302 investimento test');
     const otherId = await newHousehold(m, 'T-302 investimento test (outra casa)');
     try {
-      await m.queries.createInvestmentPlan(householdId, GATE_PLAN);
+      await m.queries.createInvestmentPlan(householdId, GATE_PLAN, TODAY);
       const stored = await m.queries.getInvestmentPlan(householdId);
       expect(stored?.plan).toMatchObject(GATE_PLAN);
       expect(stored?.scenarios.map(({ label, realReturnBp, withdrawalBp }) => [label, realReturnBp, withdrawalBp])).toEqual([
@@ -94,7 +94,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('plano de investimento (
       ]);
 
       // Segundo plano: recusado, e nada novo gravado.
-      const error = await m.queries.createInvestmentPlan(householdId, GATE_PLAN).catch((caught: unknown) => caught);
+      const error = await m.queries.createInvestmentPlan(householdId, GATE_PLAN, TODAY).catch((caught: unknown) => caught);
       expect(error).toBeInstanceOf(m.queries.InvestmentPlanExistsError);
       expect(m.domainFailure(error)).toEqual({ status: 409, error: 'Já existe um plano de investimento.' });
       const plans = await m.db
@@ -115,7 +115,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('plano de investimento (
     const m = await modules();
     const householdId = await newHousehold(m, 'T-302 investimento test');
     try {
-      await m.queries.createInvestmentPlan(householdId, GATE_PLAN);
+      await m.queries.createInvestmentPlan(householdId, GATE_PLAN, TODAY);
       const response = await m.loadInvestmentResponse(householdId, TODAY);
       expect(response.fromCompetence).toBe('2026-10');
       expect(response.scenarios.map((scenario) => scenario.label)).toEqual(['conservative', 'moderate', 'optimistic']);
@@ -146,7 +146,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('plano de investimento (
     const m = await modules();
     const householdId = await newHousehold(m, 'T-302 investimento test');
     try {
-      await m.queries.createInvestmentPlan(householdId, GATE_PLAN);
+      await m.queries.createInvestmentPlan(householdId, GATE_PLAN, TODAY);
       const edited = {
         ...GATE_PLAN,
         name: 'Aposentadoria',
@@ -159,9 +159,15 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('plano de investimento (
         { label: 'conservative', realReturnBp: basisPoints(250), withdrawalBp: basisPoints(350) },
         { label: 'moderate', realReturnBp: basisPoints(450), withdrawalBp: basisPoints(400) },
         { label: 'optimistic', realReturnBp: basisPoints(-100), withdrawalBp: basisPoints(500) },
-      ]);
+      ], '2026-11-20');
       const stored = await m.queries.getInvestmentPlan(householdId);
       expect(stored?.plan).toMatchObject(edited);
+      // D7 (T-404): o patrimônio não mudou nesta edição, então a data dele fica a da criação.
+      expect(stored?.plan.currentPortfolioAsOf).toBe(TODAY);
+      // Mudou o patrimônio: ele passa a valer no dia da edição.
+      await m.queries.updateInvestmentPlan(householdId, { ...edited, currentPortfolioCents: cents(6_000_000) }, [], '2026-12-01');
+      expect((await m.queries.getInvestmentPlan(householdId))?.plan).toMatchObject({ currentPortfolioCents: 6_000_000, currentPortfolioAsOf: '2026-12-01' });
+      await m.queries.updateInvestmentPlan(householdId, edited, [], TODAY);
       expect(stored?.scenarios.map(({ label, realReturnBp, withdrawalBp }) => [label, realReturnBp, withdrawalBp])).toEqual([
         ['conservative', 250, 350],
         ['moderate', 450, 400],
@@ -226,7 +232,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('sobra real para o RF-IN
 
       // Média (0 + 400.000) / 2 = 200.000; com o plano do gate e prazo em 2046-10 (240 meses),
       // o médio exige 706.581: não cabe, faltam 506.581.
-      await m.queries.createInvestmentPlan(householdId, { ...GATE_PLAN, targetDate: '2046-10-01' });
+      await m.queries.createInvestmentPlan(householdId, { ...GATE_PLAN, targetDate: '2046-10-01' }, TODAY);
       const response = await m.loadInvestmentResponse(householdId, TODAY);
       expect(response.surplus).toEqual({ averageMonthlyCents: 200_000, monthsWithData: 2, windowFrom: '2026-07', windowTo: '2026-09' });
       const moderate = response.scenarios[1];

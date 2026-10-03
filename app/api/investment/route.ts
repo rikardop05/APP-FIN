@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     const today = todayInSaoPaulo();
     // Antes de gravar: o motor aceita estas premissas? (Recusa -> 400, nada gravado.)
     assertComputable(parsed.data, DEFAULT_SCENARIOS, toCompetence(today));
-    await createInvestmentPlan(householdId, parsed.data);
+    await createInvestmentPlan(householdId, parsed.data, today);
     return NextResponse.json(await loadInvestmentResponse(householdId, today), { status: 201 });
   } catch (error) {
     return failure(error, 'Não foi possível criar o plano de investimento.');
@@ -66,7 +66,7 @@ export async function PUT(request: Request) {
     const today = todayInSaoPaulo();
     const { scenarios, ...plan } = parsed.data;
     assertComputable(plan, scenarios, toCompetence(today));
-    await updateInvestmentPlan(householdId, plan, scenarios);
+    await updateInvestmentPlan(householdId, plan, scenarios, today);
     return NextResponse.json(await loadInvestmentResponse(householdId, today));
   } catch (error) {
     return failure(error, 'Não foi possível salvar o plano de investimento.');

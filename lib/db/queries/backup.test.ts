@@ -81,7 +81,8 @@ async function seedEverything(m: Modules, householdId: string, memberId: string)
   const income = await one(db.insert(schema.incomes).values({ householdId, memberId, accountId: account.id, description: 'Salário', kind: 'salary', expectedCents: 740_000, receiveDay: 5, startsOn: '2026-01-01' }).returning({ id: schema.incomes.id }));
   await db.insert(schema.budgets).values({ householdId, period: '2026-10', categoryId: leaf.id, plannedCents: 20_000 });
   await db.insert(schema.goals).values({ householdId, name: 'Reserva', targetCents: 3_000_000, currentCents: 0, accountId: account.id, isEmergencyFund: true });
-  const investment = await one(db.insert(schema.investmentPlans).values({ householdId, name: 'Independência', desiredMonthlyIncomeCents: 1_000_000, currentPortfolioCents: 5_000_000, currentMonthlyContributionCents: 200_000, targetDate: '2046-10-01' }).returning({ id: schema.investmentPlans.id }));
+  const investment = await one(db.insert(schema.investmentPlans).values({ householdId, name: 'Independência', desiredMonthlyIncomeCents: 1_000_000, currentPortfolioCents: 5_000_000, currentMonthlyContributionCents: 200_000, currentPortfolioAsOf: '2026-09-15', targetDate: '2046-10-01' }).returning({ id: schema.investmentPlans.id }));
+  await db.insert(schema.investmentSnapshots).values({ householdId, asOf: '2026-09-30', portfolioCents: 5_250_000, note: 'extrato da corretora' });
   await db.insert(schema.investmentScenarios).values([
     { investmentPlanId: investment.id, label: 'conservative', realReturnBp: 300, withdrawalBp: 300 },
     { investmentPlanId: investment.id, label: 'moderate', realReturnBp: 500, withdrawalBp: 400 },

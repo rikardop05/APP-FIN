@@ -23,6 +23,7 @@ import {
   installmentPlans,
   investmentPlans,
   investmentScenarios,
+  investmentSnapshots,
   members,
   recurringExpenses,
   skippedOccurrences,
@@ -127,6 +128,7 @@ const TABLES: readonly TableSpec[] = [
   { key: 'budgets', table: budgets, scope: 'household', fks: { categoryId: 'categories' } },
   { key: 'goals', table: goals, scope: 'household', fks: { accountId: 'accounts' } },
   { key: 'investment_plans', table: investmentPlans, scope: 'household', fks: {} },
+  { key: 'investment_snapshots', table: investmentSnapshots, scope: 'household', fks: {} },
   {
     key: 'investment_scenarios',
     table: investmentScenarios,
@@ -188,6 +190,7 @@ const DATA_TABLES: readonly { key: string; table: PgTable & { householdId: PgCol
   { key: 'budgets', table: budgets },
   { key: 'goals', table: goals },
   { key: 'investment_plans', table: investmentPlans },
+  { key: 'investment_snapshots', table: investmentSnapshots },
   { key: 'import_mappings', table: importMappings },
 ];
 
