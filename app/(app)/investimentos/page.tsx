@@ -1,24 +1,17 @@
-import { TrendingUp } from 'lucide-react';
-import { PageHeader, EmptyState } from '@/components/ui-kit';
+import { todayInSaoPaulo } from '@/app/_lib/today';
+import { loadInvestmentResponse } from '@/app/api/investment/load';
+import { InvestmentScreen } from '@/components/investment/investment-screen';
+import { requireSession } from '@/lib/auth/session';
+
+export const dynamic = 'force-dynamic';
 
 /**
- * Stub do T-005 (layout e navegação) — só PageHeader e EmptyState.
- * Substituída pelo T-303 (planejador de renda passiva: cenários, curvas,
- * aporte necessário por prazo).
+ * Planejador de renda passiva (T-303). Lê o plano no servidor (a mesma função da API) e
+ * entrega à tela; a tela só desenha o que o motor devolveu (`lib/finance/investment`),
+ * nunca calcula.
  */
-export default function InvestimentosPage() {
-  return (
-    <>
-      <PageHeader
-        title="Investimentos"
-        description="Planejador de renda passiva: cenários conservador, médio e otimista, curvas de acumulação e aporte necessário."
-      />
-      <EmptyState
-        icon={TrendingUp}
-        title="Nenhum plano criado"
-        description="Informe a renda passiva desejada, o patrimônio atual e o aporte mensal para ver os cenários."
-        action={{ label: 'Ver lançamentos', href: '/lancamentos' }}
-      />
-    </>
-  );
+export default async function InvestimentosPage() {
+  const { householdId } = await requireSession();
+  const initial = await loadInvestmentResponse(householdId, todayInSaoPaulo());
+  return <InvestmentScreen initial={initial} />;
 }
