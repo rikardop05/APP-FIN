@@ -367,6 +367,32 @@ export function allocate(total: Cents, parts: number): Cents[] {
   return result;
 }
 
+/**
+ * Divisao inteira exata com arredondamento para o inteiro mais proximo, meio se
+ * afastando do zero nos dois sinais: `7 / 2` -> 4, `-7 / 2` -> -4, `1 / 3` -> 0.
+ * A mesma regra de `applyRate`, para razoes que nao sao "valor x bp / 10.000"
+ * (aderencia, uso da sobra, patrimonio-alvo).
+ *
+ * Opera em `bigint` porque o empate exato `k + 0,5` as vezes vira
+ * `k + 0,4999...` em float e arredonda para baixo (laudo T-301, A2). Devolve
+ * `number`; quem chama aplica o brand (`cents`/`basisPoints`), que valida o
+ * safe integer.
+ *
+ * `denominator` tem de ser positivo: o sinal do resultado vem do numerador, e um
+ * denominador negativo o inverteria em silencio. Lanca em vez de adivinhar.
+ */
+export function divideRounded(numerator: bigint, denominator: bigint): number {
+  if (denominator <= 0n) {
+    throw new RangeError(
+      `Denominador deve ser positivo; recebido: ${String(denominator)}.`,
+    );
+  }
+  const negative = numerator < 0n;
+  const magnitude = negative ? -numerator : numerator;
+  const rounded = (2n * magnitude + denominator) / (2n * denominator);
+  return Number(negative ? -rounded : rounded);
+}
+
 /** Basis points para o decimal usado dentro do calculo: 500 bp -> 0.05. */
 export function bpToDecimal(bp: BasisPoints): number {
   return basisPoints(bp) / BP_SCALE;

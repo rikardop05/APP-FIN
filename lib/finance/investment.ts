@@ -46,7 +46,7 @@
  *    (1,5 -> 2; 4,5 -> 5; -1,5 -> -2). A mesma de `applyRate` em lib/money.
  *    Duas execucoes da MESMA regra, uma por natureza do numero:
  *    - razao exata entre inteiros (`targetPortfolio`, `projectedMonthlyIncome`,
- *      `surplusUsageBp`): divisao em `bigint` em `divideRounded`. Nada de
+ *      `surplusUsageBp`): divisao em `bigint` por `divideRounded` (lib/money). Nada de
  *      `bp / 10_000` em float aqui: o empate exato k + 0,5 as vezes vira
  *      k + 0,4999... em float e arredonda para baixo (laudo T-301, A2:
  *      R = 187 c, w = 1.408 bp da 15.937,5 exato).
@@ -104,7 +104,14 @@
  */
 
 import { addCompetence, type Competence } from '@/lib/date';
-import { basisPoints, bpToDecimal, cents, type BasisPoints, type Cents } from '@/lib/money';
+import {
+  basisPoints,
+  bpToDecimal,
+  cents,
+  divideRounded,
+  type BasisPoints,
+  type Cents,
+} from '@/lib/money';
 
 export interface ScenarioParams {
   label: 'conservative' | 'moderate' | 'optimistic';
@@ -141,18 +148,6 @@ const MAX_YEARS = MAX_MONTHS / MONTHS_PER_YEAR;
  */
 function roundFloat(value: number): number {
   return Math.sign(value) * Math.round(Math.abs(value));
-}
-
-/**
- * Regra de estado, execucao EXATA: `numerator / denominator` em `bigint`,
- * inteiro mais proximo, meio se afasta do zero — o mesmo algoritmo de
- * `applyRate`. `denominator` e sempre positivo aqui (quem chama garante).
- */
-function divideRounded(numerator: bigint, denominator: bigint): number {
-  const negative = numerator < 0n;
-  const magnitude = negative ? -numerator : numerator;
-  const rounded = (2n * magnitude + denominator) / (2n * denominator);
-  return Number(negative ? -rounded : rounded);
 }
 
 /** Meses: inteiro em [min, 1.200]. Fracao de mes nao existe num plano de aporte mensal. */

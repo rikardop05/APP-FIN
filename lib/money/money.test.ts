@@ -7,6 +7,7 @@ import {
   basisPoints,
   bpToDecimal,
   cents,
+  divideRounded,
   formatBRL,
   MINUS_DASH_CLASS,
   MINUS_DASH_CODE_POINTS,
@@ -418,5 +419,43 @@ describe('basisPoints', () => {
   it('recusa fracao de basis point', () => {
     expect(() => basisPoints(12.5)).toThrow(RangeError);
     expect(() => basisPoints(Number.NaN)).toThrow(RangeError);
+  });
+});
+
+describe('divideRounded', () => {
+  it('divisao exata nao arredonda', () => {
+    // 120 / 4 = 30; 0 / 7 = 0.
+    expect(divideRounded(120n, 4n)).toBe(30);
+    expect(divideRounded(0n, 7n)).toBe(0);
+  });
+
+  it('mais proximo: 1/3 -> 0, 2/3 -> 1', () => {
+    expect(divideRounded(1n, 3n)).toBe(0);
+    expect(divideRounded(2n, 3n)).toBe(1);
+  });
+
+  it('meio exato se afasta do zero, nos dois sinais', () => {
+    // 7/2 = 3,5 -> 4; -7/2 = -3,5 -> -4; 1/2 = 0,5 -> 1; -1/2 -> -1.
+    expect(divideRounded(7n, 2n)).toBe(4);
+    expect(divideRounded(-7n, 2n)).toBe(-4);
+    expect(divideRounded(1n, 2n)).toBe(1);
+    expect(divideRounded(-1n, 2n)).toBe(-1);
+  });
+
+  it('empates que o float erra (laudo T-301, A2)', () => {
+    // 187 * 12 * 10.000 / 1.408 = 22.440.000 / 1.408 = 15.937,5 -> 15.938.
+    expect(divideRounded(22_440_000n, 1_408n)).toBe(15_938);
+    // 50.000 * 6 / 120.000 = 300.000 / 120.000 = 2,5 -> 3.
+    expect(divideRounded(300_000n, 120_000n)).toBe(3);
+  });
+
+  it('negativo que nao e empate: mais proximo', () => {
+    // -50.000 * 10.000 / 5.300.000 = -94,34 -> -94.
+    expect(divideRounded(-500_000_000n, 5_300_000n)).toBe(-94);
+  });
+
+  it('denominador zero ou negativo lanca', () => {
+    expect(() => divideRounded(1n, 0n)).toThrow(RangeError);
+    expect(() => divideRounded(1n, -2n)).toThrow(RangeError);
   });
 });

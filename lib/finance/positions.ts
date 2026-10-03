@@ -24,35 +24,27 @@
  * ## Arredondamento
  *
  * Razoes em bp (`adherenceBp`, `averageAdherenceBp`, `diffBp`) sao divisoes de
- * inteiros, feitas em `bigint` por `divideRounded`: bp mais proximo, meio se
+ * inteiros, feitas em `bigint` por `divideRounded` (lib/money): bp mais proximo, meio se
  * afasta do zero (a regra de `applyRate` e de `lib/finance/investment`). Os
  * centavos nao sao arredondados: sao somas e diferencas de inteiros.
  */
 
 import { diffMonths, toCompetence, type Competence, type IsoDate } from '@/lib/date';
 import type { accumulationCurve, ScenarioParams } from '@/lib/finance/investment';
-import { addCents, basisPoints, cents, type BasisPoints, type Cents } from '@/lib/money';
+import {
+  addCents,
+  basisPoints,
+  cents,
+  divideRounded,
+  type BasisPoints,
+  type Cents,
+} from '@/lib/money';
 
 /** Basis points em 100 %. */
 const BP_SCALE = 10_000n;
 
 /** Um ponto da saida de `accumulationCurve` (CONTRACTS §12). */
 export type CurvePoint = ReturnType<typeof accumulationCurve>[number];
-
-/**
- * `numerator / denominator` em `bigint`, inteiro mais proximo, meio se afasta
- * do zero. `denominator > 0` (quem chama garante).
- *
- * Copia do helper privado de `lib/finance/investment.ts`: a posse deste T-404 e
- * so `positions*`, e o helper la nao e exportado. Se um terceiro modulo
- * precisar, o lugar dele e `lib/money`.
- */
-function divideRounded(numerator: bigint, denominator: bigint): number {
-  const negative = numerator < 0n;
-  const magnitude = negative ? -numerator : numerator;
-  const rounded = (2n * magnitude + denominator) / (2n * denominator);
-  return Number(negative ? -rounded : rounded);
-}
 
 function assertNonNegative(value: Cents, name: string): void {
   if (cents(value) < 0) {

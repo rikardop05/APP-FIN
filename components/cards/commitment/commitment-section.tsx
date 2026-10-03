@@ -3,8 +3,9 @@
 import { BarChart3, CreditCard } from 'lucide-react';
 import { toCompetence, type Competence } from '@/lib/date';
 import { futureCommitment, type CommitmentInput } from '@/lib/finance/commitment';
-import type { BasisPoints, Cents } from '@/lib/money';
+import type { Cents } from '@/lib/money';
 import { Badge, EmptyState, Money } from '@/components/ui-kit';
+import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 import type { CardList } from '../schemas';
 
 type CommitmentSectionProps = {
@@ -25,12 +26,6 @@ type CommitmentSectionProps = {
 
 function competenceLabel(competence: Competence): string {
   return `${competence.slice(5)}/${competence.slice(0, 4)}`;
-}
-
-function formatBasisPoints(value: BasisPoints): string {
-  const whole = Math.floor(value / 100);
-  const fraction = value % 100;
-  return `${whole},${String(fraction).padStart(2, '0')}%`;
 }
 
 function magnitude(value: Cents): number {
