@@ -8,6 +8,8 @@ import { CommitmentSummary } from './commitment-summary';
 import { IncomeExpenseChart } from './income-expense-chart';
 import type { IncomeExpenseMonth } from './income-expense-series';
 import { KpisRow } from './kpis-row';
+import { PassiveIncomeCard } from './passive-income/passive-income-card';
+import type { PassiveIncomeState } from './passive-income/passive-income';
 import {
   PendenciasList,
   type DivergentStatementItem,
@@ -56,6 +58,8 @@ type DashboardScreenProps = {
   incomeExpense: IncomeExpenseMonth[];
   /** Gráfico 3: a MESMA projeção de `/fluxo` (`loadProjectedCashflow`). */
   projected: ProjectedState;
+  /** Gráfico 5: renda passiva (T-306). `none` = sem plano; `unavailable` = o planejador falhou. */
+  passiveIncome: PassiveIncomeState;
   pendencias: {
     uncategorizedCount: number;
     uncategorizedItems: UncategorizedItem[];
@@ -98,6 +102,7 @@ export function DashboardScreen({
   commitment,
   incomeExpense,
   projected,
+  passiveIncome,
   pendencias,
 }: DashboardScreenProps) {
   return (
@@ -126,7 +131,7 @@ export function DashboardScreen({
         uncategorizedCount={kpis.uncategorizedCount}
       />
 
-      {/* Linha 2 (SPEC §5.8): os quatro gráficos desta fase. O 5 (renda passiva) é Fase 3. */}
+      {/* Linha 2 (SPEC §5.8): os gráficos 1 a 4, mais o 5 (renda passiva, T-306) logo abaixo. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <IncomeExpenseChart months={incomeExpense} currentCompetence={competence} />
         <SpendingByCategory items={spending} competence={competence} />
@@ -142,6 +147,8 @@ export function DashboardScreen({
           />
         </div>
       </div>
+
+      <PassiveIncomeCard state={passiveIncome} />
 
       <PendenciasList
         uncategorizedCount={pendencias.uncategorizedCount}

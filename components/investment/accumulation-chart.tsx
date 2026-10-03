@@ -2,16 +2,24 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { cents, formatBRL } from '@/lib/money';
+import { cents, formatBRL, type Cents } from '@/lib/money';
 
 import { formatCompactBRL, scenarioName, yearTickLabel, type ScenarioLabel } from './display';
 import type { InvestmentScenario } from './schemas';
 
 type AccumulationChartProps = {
   scenarios: readonly Pick<InvestmentScenario, 'label' | 'curve'>[];
+  /**
+   * Variante compacta (painel, T-306): mais baixa, só o eixo do zero e do pico, sem os nomes
+   * na ponta das linhas. A legenda com o traço de cada cenário continua (distinguir sem cor).
+   */
+  compact?: boolean;
+  /** Linha horizontal de referência (ex.: o alvo do cenário médio). Entra na escala do eixo Y. */
+  reference?: { label: string; valueCents: Cents } | null;
 };
 
 const HEIGHT = 280;
+const COMPACT_HEIGHT = 190;
 // `left` cabe o maior rótulo do eixo Y ("R$ 350 mil"); `right` cabe meio rótulo do último
 // ponto do eixo X ("20 anos").
 const PAD = { top: 24, right: 20, bottom: 30, left: 62 };
@@ -38,7 +46,8 @@ const TEXT_FILL: Record<ScenarioLabel, string> = {
   optimistic: 'fill-emerald-800',
 };
 
-export function AccumulationChart({ scenarios }: AccumulationChartProps) {
+export function AccumulationChart({ scenarios, compact = false, reference = null }: AccumulationChartProps) {
+  const HEIGHT_NOW = compact ? COMPACT_HEIGHT : HEIGHT;
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(720);
 
@@ -53,16 +62,20 @@ export function AccumulationChart({ scenarios }: AccumulationChartProps) {
   }, []);
 
   const lastMonth = Math.max(1, ...scenarios.map((s) => s.curve.at(-1)?.month ?? 0));
-  const peak = Math.max(1, ...scenarios.flatMap((s) => s.curve.map((p) => p.portfolioCents as number)));
+  const peak = Math.max(
+    1,
+    reference?.valueCents ?? 0,
+    ...scenarios.flatMap((s) => s.curve.map((p) => p.portfolioCents as number)),
+  );
   const plotW = width - PAD.left - PAD.right;
-  const plotH = HEIGHT - PAD.top - PAD.bottom;
+  const plotH = HEIGHT_NOW - PAD.top - PAD.bottom;
   const x = (month: number) => PAD.left + (plotW * month) / lastMonth;
   const y = (value: number) => PAD.top + plotH * (1 - value / peak);
 
   const xTicks: number[] = [];
   const tickEvery = width < 420 ? 120 : 60;
   for (let month = 0; month <= lastMonth; month += tickEvery) xTicks.push(month);
-  const yTicks = [0, peak / 2, peak];
+  const yTicks = compact ? [0, peak] : [0, peak / 2, peak];
 
   // Rótulos junto da ponta: ordena de cima para baixo e empurra os que colidem.
   const ends = scenarios
@@ -96,7 +109,7 @@ export function AccumulationChart({ scenarios }: AccumulationChartProps) {
           </li>
         ))}
       </ul>
-      <svg role="img" aria-label={summary} viewBox={`0 0 ${width} ${HEIGHT}`} width={width} height={HEIGHT} className="block max-w-full">
+      <svg role="img" aria-label={summary} viewBox={`0 0 ${width} ${HEIGHT_NOW}`} width={width} height={HEIGHT_NOW} className="block max-w-full">
         {yTicks.map((value) => (
           <g key={value}>
             <line x1={PAD.left} x2={width - PAD.right} y1={y(value)} y2={y(value)} className="stroke-border" strokeWidth={1} />
@@ -110,7 +123,7 @@ export function AccumulationChart({ scenarios }: AccumulationChartProps) {
           <text
             key={month}
             x={x(month)}
-            y={HEIGHT - 8}
+            y={HEIGHT_NOW - 8}
             textAnchor={month === 0 ? 'start' : month === lastMonth ? 'end' : 'middle'}
             fontSize={11}
             className="fill-muted-foreground"
@@ -137,7 +150,16 @@ export function AccumulationChart({ scenarios }: AccumulationChartProps) {
           );
         })}
 
-        {width >= END_LABEL_MIN_WIDTH ? scenarios.map((scenario) => (
+        {reference ? (
+          <g>
+            <line x1={PAD.left} x2={width - PAD.right} y1={y(reference.valueCents)} y2={y(reference.valueCents)} className="stroke-amber-600" strokeWidth={1.5} strokeDasharray="1 5" strokeLinecap="round" />
+            <text x={PAD.left + 4} y={y(reference.valueCents) - 5} fontSize={11} fontWeight={600} className="fill-amber-800">
+              {`${reference.label}: ${formatCompactBRL(reference.valueCents)}`}
+            </text>
+          </g>
+        ) : null}
+
+        {!compact && width >= END_LABEL_MIN_WIDTH ? scenarios.map((scenario) => (
           <text
             key={`label-${scenario.label}`}
             x={width - PAD.right - 6}

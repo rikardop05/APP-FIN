@@ -1,4 +1,5 @@
 import { loadProjectedCashflow } from '@/app/_lib/load-cashflow';
+import { loadInvestmentResponse } from '@/app/api/investment/load';
 import { todayInSaoPaulo } from '@/app/_lib/today';
 import { addCompetence, toCompetence } from '@/lib/date';
 import { futureCommitment } from '@/lib/finance/commitment';
@@ -6,6 +7,10 @@ import { divergentStatements, monthlyKpis, spendingByCategory } from '@/lib/fina
 import { cents, type Cents } from '@/lib/money';
 
 import { DashboardScreen } from '@/components/dashboard/dashboard-screen';
+import {
+  buildPassiveIncomeState,
+  type PassiveIncomeState,
+} from '@/components/dashboard/passive-income/passive-income';
 import { buildIncomeExpenseSeries } from '@/components/dashboard/income-expense-series';
 import type { ProjectedState } from '@/components/dashboard/projected-balance';
 import { type DivergentStatementItem, type UncategorizedItem } from '@/components/dashboard/pendencias-list';
@@ -72,6 +77,17 @@ export default async function DashboardPage() {
   } catch (error) {
     console.error('[dashboard] saldo projetado indisponivel:', error);
     projected = { kind: 'unavailable' };
+  }
+
+  // Renda passiva (gráfico 5, T-306): o MESMO `loadInvestmentResponse` de `/investimentos`.
+  // Falha NÃO derruba o painel nem some: vira `unavailable`, que o card escreve, e o erro
+  // vai para o log (mesmo padrão do saldo projetado). Sem plano é `none` (o convite).
+  let passiveIncome: PassiveIncomeState;
+  try {
+    passiveIncome = buildPassiveIncomeState(await loadInvestmentResponse(householdId, today), today);
+  } catch (error) {
+    console.error('[dashboard] renda passiva indisponivel:', error);
+    passiveIncome = { kind: 'unavailable' };
   }
 
   const settings = await getSettings(householdId);
@@ -179,6 +195,7 @@ export default async function DashboardPage() {
       }}
       incomeExpense={incomeExpense}
       projected={projected}
+      passiveIncome={passiveIncome}
       pendencias={{
         uncategorizedCount: dashboard.uncategorizedCount,
         uncategorizedItems: pendenciaItems,
