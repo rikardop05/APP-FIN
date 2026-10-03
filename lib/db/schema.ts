@@ -661,22 +661,35 @@ export const budgets = pgTable(
 // goals
 // ---------------------------------------------------------------------------
 
-export const goals = pgTable('goals', {
-  id: id(),
-  householdId: uuid('household_id')
-    .notNull()
-    .references(() => households.id, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  targetCents: cents('target_cents').notNull(),
-  targetDate: date('target_date'),
-  currentCents: cents('current_cents').notNull().default(0),
-  /** Se vinculada, `current_cents` vem do saldo. */
-  accountId: uuid('account_id').references(() => accounts.id),
-  priority: integer('priority').notNull().default(100),
-  status: goalStatus('status').notNull().default('active'),
-  /** Alvo calculado, nao digitado. */
-  isEmergencyFund: boolean('is_emergency_fund').notNull().default(false),
-});
+export const goals = pgTable(
+  'goals',
+  {
+    id: id(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    targetCents: cents('target_cents').notNull(),
+    targetDate: date('target_date'),
+    currentCents: cents('current_cents').notNull().default(0),
+    /** Se vinculada, `current_cents` vem do saldo. */
+    accountId: uuid('account_id').references(() => accounts.id),
+    priority: integer('priority').notNull().default(100),
+    status: goalStatus('status').notNull().default('active'),
+    /** Alvo calculado, nao digitado. */
+    isEmergencyFund: boolean('is_emergency_fund').notNull().default(false),
+  },
+  (t) => [
+    // No maximo UMA reserva de emergencia viva por household (achado A1 do
+    // T-305). Quem garante e o banco, nao o codigo de aplicacao: um bug de UI
+    // nao cria duas. `status <> 'cancelled'` e deliberado — cancelar libera
+    // criar outra depois; `paused` e `achieved` ainda CONTAM (a reserva
+    // existe, so nao esta ativa), entao nao entram na isencao.
+    uniqueIndex('goals_household_emergency_fund_unique')
+      .on(t.householdId)
+      .where(sql`${t.isEmergencyFund} and ${t.status} <> 'cancelled'`),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // investment_plans
