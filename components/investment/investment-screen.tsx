@@ -6,6 +6,7 @@ import { TrendingUp } from 'lucide-react';
 import { Badge, Button, Money, PageHeader } from '@/components/ui-kit';
 
 import { AccumulationChart } from './accumulation-chart';
+import { FeasibilityLine, SurplusSummary } from './feasibility/feasibility';
 import {
   feasibleText,
   formatMonthsToTarget,
@@ -21,7 +22,12 @@ import {
   type FormErrors,
   type PlanFormValues,
 } from './form';
-import { investmentResponseSchema, type InvestmentData, type InvestmentScenario } from './schemas';
+import {
+  investmentResponseSchema,
+  type InvestmentData,
+  type InvestmentScenario,
+  type InvestmentSurplus,
+} from './schemas';
 
 const inputClass =
   'h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-ring';
@@ -158,13 +164,14 @@ function CreatePlan({ onCreated }: { onCreated: (data: InvestmentData) => void }
 
 type ScenarioCardProps = {
   scenario: InvestmentScenario;
+  surplus: InvestmentSurplus;
   maxYears: number;
   values: PlanFormValues;
   errors: FormErrors;
   onChange: (next: PlanFormValues) => void;
 };
 
-function ScenarioCard({ scenario, maxYears, values, errors, onChange }: ScenarioCardProps) {
+function ScenarioCard({ scenario, surplus, maxYears, values, errors, onChange }: ScenarioCardProps) {
   const label = scenario.label;
   const row = values.scenarios[label];
   const months = formatMonthsToTarget(scenario.result.monthsWithCurrentContribution);
@@ -213,6 +220,7 @@ function ScenarioCard({ scenario, maxYears, values, errors, onChange }: Scenario
           </dd>
         </div>
       </dl>
+      <FeasibilityLine scenario={scenario} surplus={surplus} />
       <p className="text-xs text-muted-foreground">{feasibleText(scenario.result.feasible, maxYears)}</p>
     </article>
   );
@@ -296,9 +304,10 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
                 Você alterou o plano. Os resultados abaixo ainda são os da versão salva: salve para recalcular.
               </p>
             ) : null}
+            <SurplusSummary scenarios={ordered} surplus={data.surplus} />
             <div className="grid gap-4 md:grid-cols-3">
               {ordered.map((scenario) => (
-                <ScenarioCard key={scenario.label} scenario={scenario} maxYears={maxYears} values={values} errors={errors} onChange={setValues} />
+                <ScenarioCard key={scenario.label} scenario={scenario} surplus={data.surplus} maxYears={maxYears} values={values} errors={errors} onChange={setValues} />
               ))}
             </div>
           </section>

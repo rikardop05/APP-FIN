@@ -1,8 +1,13 @@
-import { getInvestmentPlan, type InvestmentPlanRow } from '@/lib/db/queries/investment';
+import {
+  getInvestmentPlan,
+  getSurplusData,
+  type InvestmentPlanRow,
+} from '@/lib/db/queries/investment';
 import { toCompetence, type Competence } from '@/lib/date';
 import { DEFAULT_HORIZONS_YEARS } from '@/lib/finance/investment';
+import type { Cents } from '@/lib/money';
 
-import { computeScenarios, type ScenarioView } from './compute';
+import { averageMonthlySurplus, computeScenarios, type ScenarioView } from './compute';
 
 /**
  * Resposta de `GET /api/investment` (e de POST/PUT, que devolvem o estado novo).
@@ -16,6 +21,14 @@ export type InvestmentResponse = {
   plan: InvestmentPlanRow | null;
   /** conservative, moderate, optimistic. */
   scenarios: ScenarioView[];
+  /** Sobra real (RF-INV-05): receita − despesa dos meses fechados da janela. */
+  surplus: {
+    /** `null` = nenhum mês com lançamento na janela ("sem histórico de sobra"). */
+    averageMonthlyCents: Cents | null;
+    monthsWithData: number;
+    windowFrom: Competence;
+    windowTo: Competence;
+  };
 };
 
 /** Lê o plano e entrega tudo já calculado pelo motor. A tela não faz conta. */
@@ -25,12 +38,28 @@ export async function loadInvestmentResponse(
 ): Promise<InvestmentResponse> {
   const fromCompetence = toCompetence(today);
   const horizonsYears = [...DEFAULT_HORIZONS_YEARS];
-  const stored = await getInvestmentPlan(householdId);
-  if (stored === null) return { fromCompetence, horizonsYears, plan: null, scenarios: [] };
+  const [stored, surplusData] = await Promise.all([
+    getInvestmentPlan(householdId),
+    getSurplusData(householdId, today),
+  ]);
+  const surplus = {
+    averageMonthlyCents: averageMonthlySurplus(surplusData.months),
+    monthsWithData: surplusData.months.length,
+    windowFrom: surplusData.from,
+    windowTo: surplusData.to,
+  };
+  if (stored === null) return { fromCompetence, horizonsYears, plan: null, scenarios: [], surplus };
   return {
     fromCompetence,
     horizonsYears,
     plan: stored.plan,
-    scenarios: computeScenarios(stored.plan, stored.scenarios, fromCompetence, horizonsYears),
+    scenarios: computeScenarios(
+      stored.plan,
+      stored.scenarios,
+      fromCompetence,
+      horizonsYears,
+      surplus.averageMonthlyCents,
+    ),
+    surplus,
   };
 }

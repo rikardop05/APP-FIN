@@ -1,9 +1,10 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, gte, lte, sql } from 'drizzle-orm';
 
 import { db } from '@/lib/db';
 import type { ScenarioLabel } from '@/lib/db';
-import { investmentPlans, investmentScenarios } from '@/lib/db/schema';
-import type { IsoDate } from '@/lib/date';
+import { investmentPlans, investmentScenarios, transactions } from '@/lib/db/schema';
+import type { Competence, IsoDate } from '@/lib/date';
+import { essentialAverageWindow } from '@/lib/finance/goals';
 import { basisPoints, cents, type BasisPoints, type Cents } from '@/lib/money';
 
 import { lockHousehold } from './recurring-planned-write';
@@ -177,4 +178,53 @@ export async function updateInvestmentPlan(
       }
     }
   });
+}
+
+// ---------------------------------------------------------------------------
+// Sobra real (T-304, RF-INV-05)
+// ---------------------------------------------------------------------------
+
+export type SurplusData = {
+  from: Competence;
+  to: Competence;
+  /** Uma entrada por mês da janela com ALGUM lançamento; `surplusCents` = receita − despesa. */
+  months: { competence: Competence; surplusCents: Cents }[];
+};
+
+/**
+ * Sobra (receita − despesa) de cada mês FECHADO da janela, a mesma da média essencial do
+ * T-305 (`essentialAverageWindow`: os 3 meses antes do corrente). Só `posted` (decisão do
+ * Orquestrador, 2026-10-02): previsão (`planned`) de mês fechado que não se realizou não é
+ * sobra que existiu, e `reconciled` é a mesma despesa que o `posted` já traz. NÃO usa
+ * `COUNTED_STATUSES`, que inclui `planned`. Entram só `income` e `expense`:
+ * aporte (`investment_contribution`) é PARA ONDE a sobra vai, e transferência e pagamento de
+ * fatura só movem dinheiro entre contas (a compra no cartão já é `expense`).
+ *
+ * Como na média essencial, só aparecem os meses com ALGUM lançamento `posted` (de qualquer tipo): é o
+ * que separa "sobra zero" de "mês sem histórico", que não entra na média. A média em si é
+ * `averageMonthlySurplus` (`app/api/investment/compute.ts`, pura).
+ */
+export async function getSurplusData(householdId: string, today: IsoDate): Promise<SurplusData> {
+  const { from, to } = essentialAverageWindow(today);
+  const rows = await db
+    .select({
+      competence: transactions.competence,
+      surplus: sql<string>`coalesce(sum(case when ${transactions.kind} in ('income', 'expense') then ${transactions.amountCents} else 0 end), 0)`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.householdId, householdId),
+        eq(transactions.status, 'posted'),
+        gte(transactions.competence, from),
+        lte(transactions.competence, to),
+      ),
+    )
+    .groupBy(transactions.competence)
+    .orderBy(asc(transactions.competence));
+  return {
+    from,
+    to,
+    months: rows.map((row) => ({ competence: row.competence, surplusCents: safeCents(row.surplus) })),
+  };
 }

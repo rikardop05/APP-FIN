@@ -63,7 +63,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('plano de investimento (
     const householdId = await newHousehold(m, 'T-302 investimento test');
     try {
       const response = await m.loadInvestmentResponse(householdId, TODAY);
-      expect(response).toEqual({ fromCompetence: '2026-10', horizonsYears: [5, 10, 15, 20], plan: null, scenarios: [] });
+      expect(response).toEqual({
+        fromCompetence: '2026-10',
+        horizonsYears: [5, 10, 15, 20],
+        plan: null,
+        scenarios: [],
+        surplus: { averageMonthlyCents: null, monthsWithData: 0, windowFrom: '2026-07', windowTo: '2026-09' },
+      });
 
       const error = await m.queries.updateInvestmentPlan(householdId, GATE_PLAN, []).catch((caught: unknown) => caught);
       expect(error).toBeInstanceOf(m.queries.InvestmentPlanNotFoundError);
@@ -166,6 +172,78 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('plano de investimento (
       expect(response.scenarios[0]?.result.targetPortfolioCents).toBe(342_857_143);
       expect(response.scenarios[2]?.realReturnBp).toBe(-100);
     } finally {
+      await cleanup(m, householdId);
+    }
+  });
+});
+
+describe.skipIf(process.env.DATABASE_URL === undefined)('sobra real para o RF-INV-05 (banco real)', () => {
+  it('só receita e despesa contam; aporte, transferência, reconciled e o mês corrente não; mês sem lançamento fica fora', async () => {
+    const m = await modules();
+    const householdId = await newHousehold(m, 'T-304 sobra test');
+    try {
+      const [account] = await m.db
+        .insert(m.schema.accounts)
+        .values({ householdId, name: 'Conta', kind: 'checking', openingDate: '2026-01-01' })
+        .returning({ id: m.schema.accounts.id });
+      if (account === undefined) throw new Error('Conta não foi criada.');
+      const base = { householdId, rawDescription: '', accountId: account.id, description: 'x' } as const;
+      const day = (competence: string) => ({ competence, occurredOn: `${competence}-10`, cashDate: `${competence}-10` });
+      const [real] = await m.db
+        .insert(m.schema.transactions)
+        .values({ ...base, ...day('2026-09'), amountCents: -100_000, kind: 'expense', status: 'posted' })
+        .returning({ id: m.schema.transactions.id });
+      if (real === undefined) throw new Error('Lançamento não foi criado.');
+      await m.db.insert(m.schema.transactions).values([
+        // Setembro: receita 500.000, despesa -100.000 (acima) -> sobra 400.000.
+        { ...base, ...day('2026-09'), amountCents: 500_000, kind: 'income', status: 'posted' },
+        // Não contam: aporte, transferência, pagamento de fatura, a previsão já cumprida e a
+        // previsão que não se realizou (planned em mês fechado não é sobra que existiu).
+        { ...base, ...day('2026-09'), amountCents: 700_000, kind: 'income', status: 'planned' },
+        { ...base, ...day('2026-09'), amountCents: -40_000, kind: 'expense', status: 'planned' },
+        // Julho: só previsão -> continua mês SEM histórico (fora da média).
+        { ...base, ...day('2026-07'), amountCents: 123_456, kind: 'income', status: 'planned' },
+        { ...base, ...day('2026-09'), amountCents: -200_000, kind: 'investment_contribution', status: 'posted' },
+        { ...base, ...day('2026-09'), amountCents: -70_000, kind: 'transfer', status: 'posted' },
+        { ...base, ...day('2026-09'), amountCents: -30_000, kind: 'credit_card_payment', status: 'posted' },
+        { ...base, ...day('2026-09'), amountCents: -100_000, kind: 'expense', status: 'reconciled', reconciledByTransactionId: real.id },
+        // Agosto: só um aporte -> mês COM histórico, sobra 0.
+        { ...base, ...day('2026-08'), amountCents: -50_000, kind: 'investment_contribution', status: 'posted' },
+        // Julho: nada (fora da média). Outubro (corrente) e junho (antes da janela): fora.
+        { ...base, ...day('2026-10'), amountCents: -999_999, kind: 'expense', status: 'posted' },
+        { ...base, ...day('2026-06'), amountCents: 888_888, kind: 'income', status: 'posted' },
+      ]);
+
+      const data = await m.queries.getSurplusData(householdId, TODAY);
+      expect(data).toEqual({
+        from: '2026-07',
+        to: '2026-09',
+        months: [
+          { competence: '2026-08', surplusCents: 0 },
+          { competence: '2026-09', surplusCents: 400_000 },
+        ],
+      });
+
+      // Média (0 + 400.000) / 2 = 200.000; com o plano do gate e prazo em 2046-10 (240 meses),
+      // o médio exige 706.581: não cabe, faltam 506.581.
+      await m.queries.createInvestmentPlan(householdId, { ...GATE_PLAN, targetDate: '2046-10-01' });
+      const response = await m.loadInvestmentResponse(householdId, TODAY);
+      expect(response.surplus).toEqual({ averageMonthlyCents: 200_000, monthsWithData: 2, windowFrom: '2026-07', windowTo: '2026-09' });
+      const moderate = response.scenarios[1];
+      expect(moderate?.requiredForTargetDate).toEqual({ months: 240, contributionCents: 706_581 });
+      expect(moderate?.feasibility).toMatchObject({
+        basis: { kind: 'targetDate', months: 240 },
+        requiredCents: 706_581,
+        gapCents: 506_581,
+        feasible: false,
+      });
+    } finally {
+      // `reconciled_by_transaction_id` é RESTRICT: reabre antes de o household levar tudo.
+      await m.db
+        .update(m.schema.transactions)
+        .set({ status: 'planned', reconciledByTransactionId: null })
+        .where(eq(m.schema.transactions.householdId, householdId));
+      await m.db.delete(m.schema.transactions).where(eq(m.schema.transactions.householdId, householdId));
       await cleanup(m, householdId);
     }
   });

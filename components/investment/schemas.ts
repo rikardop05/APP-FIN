@@ -35,6 +35,19 @@ const scenarioSchema = z.object({
     projectedIncomeWithCurrentPlanCents: centsSchema,
     feasible: z.boolean(),
   }),
+  requiredForTargetDate: z.object({ months: z.number().int(), contributionCents: centsSchema }).nullable(),
+  feasibility: z
+    .object({
+      basis: z.discriminatedUnion('kind', [
+        z.object({ kind: z.literal('targetDate'), months: z.number().int() }),
+        z.object({ kind: z.literal('horizon'), years: z.number().int() }),
+      ]),
+      requiredCents: centsSchema,
+      gapCents: centsSchema,
+      feasible: z.boolean(),
+      surplusUsageBp: bpSchema.nullable(),
+    })
+    .nullable(),
   curve: z.array(
     z.object({
       month: z.number().int(),
@@ -52,8 +65,15 @@ export const investmentResponseSchema = z.object({
   horizonsYears: z.array(z.number().int()),
   plan: planSchema.nullable(),
   scenarios: z.array(scenarioSchema),
+  surplus: z.object({
+    averageMonthlyCents: centsSchema.nullable(),
+    monthsWithData: z.number().int(),
+    windowFrom: z.string(),
+    windowTo: z.string(),
+  }),
 });
 
 export type InvestmentData = z.infer<typeof investmentResponseSchema>;
 export type InvestmentPlan = z.infer<typeof planSchema>;
 export type InvestmentScenario = z.infer<typeof scenarioSchema>;
+export type InvestmentSurplus = InvestmentData['surplus'];
