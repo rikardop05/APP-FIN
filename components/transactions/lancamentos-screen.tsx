@@ -20,6 +20,7 @@ import {
   type TransactionResponse,
 } from './schemas';
 import { TransactionList, type TransactionEditValues } from './transaction-list';
+import { listContentState } from './list-presentation';
 
 const emptyFilters: TransactionFilterValues = {
   from: '',
@@ -92,10 +93,15 @@ export function LancamentosScreen({ today }: { today: string }) {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // `error` e compartilhado por carga E acoes (criar regra, categorizar, excluir).
+  // O estado vazio enganoso so nasce da FALHA DE CARGA, entao ela tem flag
+  // propria: uma acao que falha mostra o alerta sem esconder a lista carregada.
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const load = useCallback(async (nextFilters: TransactionFilterValues) => {
     setLoading(true);
     setError(null);
+    setLoadFailed(false);
     try {
       const response = await fetch(`/api/transactions${queryString(nextFilters)}`, { cache: 'no-store' });
       const result = await readJson(response, transactionResponseSchema);
@@ -103,6 +109,7 @@ export function LancamentosScreen({ today }: { today: string }) {
       setSelectedIds((previous) => previous.filter((id) => result.transactions.some((row) => row.id === id)));
       setEditingId(null);
     } catch (loadError) {
+      setLoadFailed(true);
       setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar os lançamentos.');
     } finally {
       setLoading(false);
@@ -113,6 +120,9 @@ export function LancamentosScreen({ today }: { today: string }) {
 
   const rows = data?.transactions ?? [];
   const options = data?.options ?? emptyOptions;
+  // Com erro de CARGA, nao mostrar o vazio (ha lancamentos, so nao carregaram):
+  // a decisao esta na funcao pura listContentState. Erro de acao nao entra aqui.
+  const contentState = listContentState({ loading, failed: loadFailed, rowCount: rows.length });
 
   function toggleSelection(id: string) {
     setSelectedIds((previous) => previous.includes(id) ? previous.filter((item) => item !== id) : [...previous, id]);
@@ -240,7 +250,7 @@ export function LancamentosScreen({ today }: { today: string }) {
         actions={<Button onClick={() => setDialog({ kind: 'manual' })}><Plus className="mr-2 h-4 w-4" aria-hidden="true" />Novo lançamento</Button>}
       />
 
-      {error ? <div role="alert" className="flex flex-col gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 sm:flex-row sm:items-center sm:justify-between"><span>{error}</span><Button variant="outline" size="sm" onClick={() => void load(appliedFilters)}>Tentar novamente</Button></div> : null}
+      {error ? <div role="alert" className="flex flex-col gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 sm:flex-row sm:items-center sm:justify-between"><span>{error}</span>{loadFailed ? <Button variant="outline" size="sm" onClick={() => void load(appliedFilters)}>Tentar novamente</Button> : null}</div> : null}
 
       <TransactionFilters value={filters} options={options} busy={loading} onChange={(value) => setFilters((previous) => ({ ...previous, ...value }))} onSubmit={submitFilters} onClear={clearFilters} />
 
@@ -251,18 +261,18 @@ export function LancamentosScreen({ today }: { today: string }) {
         </div>
       ) : null}
 
-      {loading ? <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">Carregando lançamentos…</div> : rows.length === 0 ? (
+      {contentState === 'loading' ? <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">Carregando lançamentos…</div> : contentState === 'empty' ? (
         <EmptyState
           title={hasFilters(appliedFilters) ? 'Nenhum lançamento encontrado' : 'Nenhum lançamento ainda'}
           description={hasFilters(appliedFilters) ? 'Ajuste os filtros ou limpe a busca para ver outros lançamentos.' : 'Registre um lançamento manual ou importe uma fatura ou extrato para começar.'}
           action={hasFilters(appliedFilters) ? { label: 'Limpar filtros', onClick: clearFilters } : { label: 'Novo lançamento', onClick: () => setDialog({ kind: 'manual' }) }}
         />
-      ) : (
+      ) : contentState === 'list' ? (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">{rows.length} lançamento{rows.length === 1 ? '' : 's'} encontrado{rows.length === 1 ? '' : 's'}</p>
           <TransactionList rows={rows} options={options} selectedIds={selectedIds} onToggle={toggleSelection} onToggleAll={toggleAll} onEdit={setEditingId} onRule={openRule} onDelete={(id) => setDialog({ kind: 'delete', transactionId: id })} editingId={editingId} onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} />
         </div>
-      )}
+      ) : null}
 
       {dialog?.kind === 'manual' ? <ManualTransactionDialog today={today} options={options} busy={busy} onClose={() => setDialog(null)} onSubmit={createManual} /> : null}
       {dialog?.kind === 'batch' ? <BatchCategorizationDialog count={selectedIds.length} options={options} busy={busy} onClose={() => setDialog(null)} onSubmit={categorizeBatch} /> : null}
