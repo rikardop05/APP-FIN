@@ -74,6 +74,25 @@ export class EmergencyFundExistsError extends Error {
   }
 }
 
+const EMERGENCY_FUND_INDEX = 'goals_household_emergency_fund_unique';
+
+/**
+ * O índice único parcial `goals_household_emergency_fund_unique` (no máximo uma reserva
+ * viva por household) é quem GARANTE a regra; `assertSingleEmergencyFund` só dá a
+ * mensagem boa no caso comum. Duas requisições concorrentes passam as duas no SELECT, e a
+ * segunda bate no índice: 23505 com este nome de constraint. O drizzle embrulha o erro do
+ * driver (`cause`), então a busca desce a cadeia.
+ */
+export function isEmergencyFundConflict(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && typeof current === 'object' && current !== null; depth += 1) {
+    const candidate = current as { code?: unknown; constraint_name?: unknown; cause?: unknown };
+    if (candidate.code === '23505' && candidate.constraint_name === EMERGENCY_FUND_INDEX) return true;
+    current = candidate.cause;
+  }
+  return false;
+}
+
 function safeCents(value: string | number | null | undefined): Cents {
   const numeric = typeof value === 'number' ? value : Number(value ?? 0);
   if (!Number.isSafeInteger(numeric)) {
@@ -238,12 +257,17 @@ async function assertSingleEmergencyFund(
 export async function createGoal(householdId: string, input: GoalInput): Promise<string> {
   await assertAccount(householdId, input.accountId);
   if (input.isEmergencyFund) await assertSingleEmergencyFund(householdId, null);
-  const [created] = await db
-    .insert(goals)
-    .values({ householdId, ...input })
-    .returning({ id: goals.id });
-  if (!created) throw new Error('Não foi possível criar a meta.');
-  return created.id;
+  try {
+    const [created] = await db
+      .insert(goals)
+      .values({ householdId, ...input })
+      .returning({ id: goals.id });
+    if (!created) throw new Error('Não foi possível criar a meta.');
+    return created.id;
+  } catch (error) {
+    if (isEmergencyFundConflict(error)) throw new EmergencyFundExistsError();
+    throw error;
+  }
 }
 
 export async function updateGoal(
@@ -253,11 +277,17 @@ export async function updateGoal(
 ): Promise<void> {
   await assertAccount(householdId, input.accountId);
   if (input.isEmergencyFund) await assertSingleEmergencyFund(householdId, id);
-  const updated = await db
-    .update(goals)
-    .set(input)
-    .where(and(eq(goals.id, id), eq(goals.householdId, householdId)))
-    .returning({ id: goals.id });
+  let updated: { id: string }[];
+  try {
+    updated = await db
+      .update(goals)
+      .set(input)
+      .where(and(eq(goals.id, id), eq(goals.householdId, householdId)))
+      .returning({ id: goals.id });
+  } catch (error) {
+    if (isEmergencyFundConflict(error)) throw new EmergencyFundExistsError();
+    throw error;
+  }
   if (updated.length === 0) throw new GoalNotFoundError();
 }
 

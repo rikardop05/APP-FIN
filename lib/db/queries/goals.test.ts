@@ -228,6 +228,72 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('metas contra o banco re
     }
   });
 
+  it('índice único da reserva: o 23505 do banco vira EmergencyFundExistsError (409), nunca 500', async () => {
+    const [{ db }, schema, queries, { domainFailure }] = await Promise.all([
+      import('@/lib/db'),
+      import('@/lib/db/schema'),
+      import('./goals'),
+      import('@/app/api/goals/domain-errors'),
+    ]);
+    const [household] = await db
+      .insert(schema.households)
+      .values({ name: 'T-305 reserva concorrente test' })
+      .returning({ id: schema.households.id });
+    if (household === undefined) throw new Error('Household não foi criado.');
+    const reserve = (name: string) => ({
+      name,
+      targetCents: 0 as never,
+      targetDate: null,
+      currentCents: 0 as never,
+      accountId: null,
+      priority: 1,
+      status: 'active' as const,
+      isEmergencyFund: true,
+    });
+    try {
+      await db.insert(schema.householdSettings).values({ householdId: household.id });
+
+      // 1) O erro CRU do índice (sem passar pelo guard) é reconhecido, embrulhado ou não.
+      await db.insert(schema.goals).values({ householdId: household.id, name: 'Reserva A', targetCents: 0, isEmergencyFund: true });
+      const raw: unknown = await db
+        .insert(schema.goals)
+        .values({ householdId: household.id, name: 'Reserva B', targetCents: 0, isEmergencyFund: true })
+        .then(() => null, (error: unknown) => error);
+      expect(raw).not.toBeNull();
+      expect(queries.isEmergencyFundConflict(raw)).toBe(true);
+      expect(queries.isEmergencyFundConflict(new Error('outro erro'))).toBe(false);
+      expect(queries.isEmergencyFundConflict(null)).toBe(false);
+      await db.delete(schema.goals).where(eq(schema.goals.householdId, household.id));
+
+      // 2) Duas criações concorrentes: exatamente uma vence, a outra recebe
+      //    EmergencyFundExistsError (pelo guard OU pelo índice) e a API a traduz em 409.
+      const results = await Promise.allSettled([
+        queries.createGoal(household.id, reserve('Reserva 1')),
+        queries.createGoal(household.id, reserve('Reserva 2')),
+      ]);
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      const rejected = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0]?.reason).toBeInstanceOf(queries.EmergencyFundExistsError);
+      expect(domainFailure(rejected[0]?.reason)).toEqual({
+        status: 409,
+        error: 'Já existe uma meta de reserva de emergência.',
+      });
+
+      // 3) Update que vira reserva com outra já viva: também 409, não 500.
+      const [plain] = await db
+        .insert(schema.goals)
+        .values({ householdId: household.id, name: 'Comum', targetCents: 1_000 })
+        .returning({ id: schema.goals.id });
+      if (plain === undefined) throw new Error('Fixture não foi criada.');
+      await expect(queries.updateGoal(household.id, plain.id, reserve('Comum virou reserva'))).rejects.toBeInstanceOf(
+        queries.EmergencyFundExistsError,
+      );
+    } finally {
+      await db.delete(schema.households).where(eq(schema.households.id, household.id));
+    }
+  });
+
   it('sem histórico: a reserva não tem alvo (null), nunca R$ 0,00 de mentira', async () => {
     const [{ db }, schema, queries, { loadGoalsResponse }] = await Promise.all([
       import('@/lib/db'),
