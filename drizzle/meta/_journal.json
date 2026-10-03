@@ -71,6 +71,13 @@
       "when": 1791010530871,
       "tag": "0009_large_red_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791011181228,
+      "tag": "0010_many_shadowcat",
+      "breakpoints": true
     }
   ]
 }

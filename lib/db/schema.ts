@@ -706,6 +706,13 @@ export const investmentPlans = pgTable(
     /** Em R$ de hoje. */
     desiredMonthlyIncomeCents: cents('desired_monthly_income_cents').notNull(),
     currentPortfolioCents: cents('current_portfolio_cents').notNull().default(0),
+    /**
+     * Data (fuso America/Sao_Paulo) a que se refere `current_portfolio_cents` —
+     * ancora da curva de comparacao (decisao D7). Gravada na criacao, no PUT
+     * quando o patrimonio atual muda, e no botao "usar como patrimonio atual"
+     * (D4). `planStartCompetence = toCompetence(current_portfolio_as_of)`.
+     */
+    currentPortfolioAsOf: date('current_portfolio_as_of').notNull(),
     currentMonthlyContributionCents: cents('current_monthly_contribution_cents')
       .notNull()
       .default(0),
