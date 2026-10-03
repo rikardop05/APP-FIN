@@ -60,8 +60,16 @@ function assertNonNegative(value: Cents, name: string): void {
   }
 }
 
-/** `part / whole` em bp; `null` quando `whole` e 0 (razao sem sentido). */
+/**
+ * `part / whole` em bp; `null` quando `whole` e 0 (razao sem sentido). Base
+ * negativa LANCA: `divideRounded` exige denominador positivo, e uma base
+ * negativa inverteria o sinal do resultado em silencio. Os chamadores ja
+ * validam as bases; esta guarda e a ultima defesa (laudo Corvo B1).
+ */
 function ratioBp(part: number, whole: number): BasisPoints | null {
+  if (whole < 0) {
+    throw new RangeError(`Base de razao negativa: ${String(whole)} centavos.`);
+  }
   if (whole === 0) return null;
   return basisPoints(divideRounded(BigInt(part) * BP_SCALE, BigInt(whole)));
 }
@@ -101,6 +109,8 @@ export function contributionAdherence(input: {
 } {
   assertNonNegative(input.plannedMonthlyCents, 'Aporte planejado');
   const planned = cents(input.plannedMonthlyCents);
+  // Valida o formato fora do laco: com `months` vazio ele nao rodaria (laudo Corvo B2).
+  diffMonths(input.currentCompetence, input.currentCompetence);
 
   const seen = new Set<Competence>();
   for (const month of input.months) {
@@ -156,7 +166,8 @@ export function contributionAdherence(input: {
  * - `diffBp` = (real - projetado) / projetado em bp.
  * - Toda curva tem de comecar em `planStartCompetence` (D3) e todas tem de ter
  *   o mesmo comprimento — saem do mesmo plano; divergir e erro de montagem e
- *   lanca. Label repetido lanca. `byScenario` segue a ordem de `curves`.
+ *   lanca. Label repetido lanca. `curves` vazio lanca, e ponto com patrimonio
+ *   projetado negativo tambem. `byScenario` segue a ordem de `curves`.
  * - Saida ordenada por `asOf`. Data repetida lanca (o banco tem
  *   `unique (household_id, as_of)`).
  */
@@ -176,9 +187,23 @@ export function portfolioVsProjection(input: {
     diffBp: BasisPoints | null;
   }[];
 }[] {
+  // "Sem curva" nao e "alem da curva": sem cenario nao ha o que comparar, e o
+  // plano sempre tem pelo menos um (laudo Corvo B3).
+  if (input.curves.length === 0) {
+    throw new RangeError('Nenhuma curva de cenario: o plano precisa de pelo menos um cenario.');
+  }
   const labels = new Set<string>();
   let curveLength: number | null = null;
   for (const curve of input.curves) {
+    for (const point of curve.points) {
+      // Patrimonio projetado e >= 0 pelo dominio de `accumulationCurve`; ponto
+      // negativo e curva montada errada (laudo Corvo B1).
+      if (point.portfolioCents < 0) {
+        throw new RangeError(
+          `Curva ${curve.label} com patrimonio projetado negativo em ${point.competence}: ${String(point.portfolioCents)} centavos.`,
+        );
+      }
+    }
     if (labels.has(curve.label)) {
       throw new RangeError(`Cenario repetido nas curvas: ${curve.label}.`);
     }

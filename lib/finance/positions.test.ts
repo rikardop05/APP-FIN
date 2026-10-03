@@ -121,6 +121,16 @@ describe('contributionAdherence', () => {
     ).toThrow('Competencia repetida na janela de aportes: 2026-09.');
     expect(() => contributionAdherence({ ...base, months: [month('2026-9', 1)] })).toThrow(RangeError);
   });
+
+  it('mes corrente malformado lanca mesmo com a janela vazia (laudo Corvo B2)', () => {
+    expect(() =>
+      contributionAdherence({ months: [], plannedMonthlyCents: c(200_000), currentCompetence: '2026-13' }),
+    ).toThrow(RangeError);
+    // Lado valido da fronteira: 2026-12 com janela vazia passa.
+    expect(
+      contributionAdherence({ months: [], plannedMonthlyCents: c(200_000), currentCompetence: '2026-12' }).summary,
+    ).toEqual({ closedMonths: 0, averageAdherenceBp: null, monthsBelowPlan: 0 });
+  });
 });
 
 /** Curva escrita a mao: competencias consecutivas a partir de `from`. */
@@ -239,6 +249,36 @@ describe('portfolioVsProjection', () => {
       planStartCompetence: '2026-10',
     });
     expect(row?.byScenario).toEqual([{ label: 'conservative', projectedCents: 120_000, diffCents: -5_000, diffBp: -417 }]);
+  });
+
+  it('ponto de curva negativo lanca: nao vira diffBp de sinal trocado (laudo Corvo B1)', () => {
+    // Sem a guarda: (5.000 - (-10.000)) * 10.000 / -10.000 = -15.000 bp, "atras" estando a frente.
+    expect(() =>
+      portfolioVsProjection({
+        snapshots: [{ asOf: '2026-10-15', portfolioCents: c(5_000) }],
+        curves: [{ label: 'moderate', points: curve('2026-10', [-10_000]) }],
+        planStartCompetence: '2026-10',
+      }),
+    ).toThrow('Curva moderate com patrimonio projetado negativo em 2026-10: -10000 centavos.');
+    // A guarda vale mesmo sem registro algum (a curva e validada antes).
+    expect(() =>
+      portfolioVsProjection({
+        snapshots: [],
+        curves: [{ label: 'moderate', points: curve('2026-10', [0, -1]) }],
+        planStartCompetence: '2026-10',
+      }),
+    ).toThrow(RangeError);
+    // Lado valido: ponto 0 e aceito (ja coberto em "projetado 0 da diffBp null").
+  });
+
+  it('sem curva nenhuma lanca, em vez de marcar tudo como beyond_curve (laudo Corvo B3)', () => {
+    expect(() =>
+      portfolioVsProjection({
+        snapshots: [{ asOf: '2026-10-15', portfolioCents: c(1) }],
+        curves: [],
+        planStartCompetence: '2026-10',
+      }),
+    ).toThrow('Nenhuma curva de cenario: o plano precisa de pelo menos um cenario.');
   });
 
   it('sem registros devolve lista vazia', () => {
