@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { TrendingUp } from 'lucide-react';
 
@@ -318,6 +319,7 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
       <PageHeader
         title="Investimentos"
         description="Planejador de renda passiva: quanto juntar, em quanto tempo e quanto aportar por mês, em três cenários."
+        actions={<Link href="/investimentos/posicoes" className="text-sm font-medium underline underline-offset-2">Posição real e aportes</Link>}
       />
       <Notices />
 
