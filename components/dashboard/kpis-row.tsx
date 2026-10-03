@@ -1,7 +1,8 @@
 import { ArrowDownRight, ArrowUpRight, PiggyBank, Receipt, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 
 import { Money } from '@/components/ui-kit';
-import { basisPoints, type BasisPoints, type Cents } from '@/lib/money';
+import { formatBasisPoints } from '@/components/ui-kit/format-bp';
+import type { BasisPoints, Cents } from '@/lib/money';
 
 type KpisRowProps = {
   incomeCents: Cents;
@@ -175,16 +176,4 @@ function KpiCard({
       {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
     </article>
   );
-}
-
-/**
- * `basisPoints` em percentual pt-BR. Apresentação apenas — a regra (RC-03,
- * RC-04, sinal com piso) está em `monthlyKpis`. Recebe o `BasisPoints` do
- * motor e devolve string "X,YY%".
- */
-function formatBasisPoints(value: BasisPoints): string {
-  const bp = basisPoints(value);
-  const whole = Math.floor(bp / 100);
-  const fraction = Math.abs(bp % 100);
-  return `${whole},${String(fraction).padStart(2, '0')}%`;
 }
