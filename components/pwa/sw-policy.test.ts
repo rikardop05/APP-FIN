@@ -11,6 +11,8 @@ type Policy = {
   VERSION: string;
   MAX_ENTRIES: { pages: number; api: number; static: number };
   MAX_AGE_MS: number;
+  MAX_PREWARM_ASSETS: number;
+  extractStaticAssets: (html: string, origin: string) => string[];
   isFreshEnough: (cachedAtIso: string | null, nowMs: number) => boolean;
   cacheNames: (version?: string) => { pages: string; api: string; static: string };
   isAppCache: (name: string) => boolean;
@@ -198,5 +200,66 @@ describe('offline: sem rede e sem cache', () => {
   it('tela vira HTML explicativo, API vira JSON', () => {
     expect(policy.fallbackKind('page')).toBe('html');
     expect(policy.fallbackKind('api')).toBe('json');
+  });
+});
+
+describe('pré-aquecimento: arquivos que o HTML guardado precisa', () => {
+  const html = [
+    '<link rel="stylesheet" href="/_next/static/css/f00149e360c19ce5.css" data-precedence="next"/>',
+    '<link rel="preload" as="script" href="/_next/static/chunks/webpack-9366327b51607efd.js"/>',
+    '<link rel="modulepreload" href="/_next/static/chunks/1255-7316b50163a428e6.js"/>',
+    '<script src="/_next/static/chunks/app/(app)/lancamentos/page-abc123.js" async=""></script>',
+    '<script src="/_next/static/chunks/app/%28app%29/layout-31bf24d59f5b6f8f.js" async=""></script>',
+    '<script src="/_next/static/chunks/main-app-a1e283fd9b403568.js" async=""></script>',
+    '<script>self.__next_f.push([1,"I[3456,[\\"static/chunks/874-aef8d232670fa393.js\\",\\"static/chunks/app/(app)/page-ff00.js\\"],\\"default\\"]"])</script>',
+    // Repetido, de outra origem, fora de static/ e que não é JS/CSS: ficam de fora.
+    '<script src="/_next/static/chunks/main-app-a1e283fd9b403568.js" async=""></script>',
+    '<script src="https://cdn.outro.example/_next/static/chunks/estranho-111.js"></script>',
+    '<img src="/_next/static/media/logo.png"/>',
+    '<script src="/outro/script.js"></script>',
+  ].join(String.fromCharCode(10));
+  const O = ORIGIN;
+
+  it('extrai JS e CSS de script src, link (stylesheet/preload/modulepreload) e do payload RSC', () => {
+    expect(policy.extractStaticAssets(html, O)).toEqual([
+      `${O}/_next/static/css/f00149e360c19ce5.css`,
+      `${O}/_next/static/chunks/webpack-9366327b51607efd.js`,
+      `${O}/_next/static/chunks/1255-7316b50163a428e6.js`,
+      `${O}/_next/static/chunks/app/(app)/lancamentos/page-abc123.js`,
+      `${O}/_next/static/chunks/app/%28app%29/layout-31bf24d59f5b6f8f.js`,
+      `${O}/_next/static/chunks/main-app-a1e283fd9b403568.js`,
+      `${O}/_next/static/chunks/874-aef8d232670fa393.js`,
+      `${O}/_next/static/chunks/app/(app)/page-ff00.js`,
+    ]);
+  });
+
+  it('só o próprio domínio: URL absoluta do mesmo origin entra, de outro não', () => {
+    const same = `<script src="${O}/_next/static/chunks/a-1.js"></script><script src="https://x.example/_next/static/chunks/b-2.js"></script>`;
+    expect(policy.extractStaticAssets(same, O)).toEqual([`${O}/_next/static/chunks/a-1.js`]);
+  });
+
+  it('sem duplicata, e entrada vazia ou inválida devolve lista vazia', () => {
+    const twice = '<script src="/_next/static/chunks/a-1.js"></script><script src="/_next/static/chunks/a-1.js"></script>';
+    expect(policy.extractStaticAssets(twice, O)).toHaveLength(1);
+    expect(policy.extractStaticAssets('', O)).toEqual([]);
+    expect(policy.extractStaticAssets('<html>sem arquivos</html>', O)).toEqual([]);
+    expect(policy.extractStaticAssets(null as unknown as string, O)).toEqual([]);
+  });
+
+  it('texto solto de usuário e caminho com // não são buscados (só valor de atributo ou do payload)', () => {
+    const text = '<p>veja static/chunks/x-1.js e /_next/static/chunks/y-2.js na nota</p><script src="//outro.example/_next/static/chunks/z-3.js"></script>';
+    expect(policy.extractStaticAssets(text, O)).toEqual([]);
+    const quoted = '<script src="/_next/static/chunks/ok-4.js"></script>';
+    expect(policy.extractStaticAssets(quoted, O)).toEqual([`${O}/_next/static/chunks/ok-4.js`]);
+  });
+
+  it('tem teto por página (HTML estranho não enche o cache)', () => {
+    const many = Array.from({ length: 200 }, (_, i) => `<script src="/_next/static/chunks/c${i}-aa.js"></script>`).join('');
+    expect(policy.extractStaticAssets(many, O)).toHaveLength(policy.MAX_PREWARM_ASSETS);
+  });
+
+  it('o nome do arquivo não vaza para o que vem depois (aspas, query, espaço)', () => {
+    const odd = '<script src="/_next/static/chunks/a-1.js?v=2"></script><link href="/_next/static/chunks/b-2.js"/>';
+    expect(policy.extractStaticAssets(odd, O)).toEqual([`${O}/_next/static/chunks/a-1.js`, `${O}/_next/static/chunks/b-2.js`]);
   });
 });

@@ -138,6 +138,45 @@
     return finalPath === LOGIN_PATH && requestPathname !== LOGIN_PATH;
   }
 
+  /**
+   * Arquivos de /_next/static que uma pagina precisa para rodar (JS e CSS), extraidos do HTML. O
+   * worker os pre-aquece junto com o HTML guardado: tela com HTML em cache mas sem o chunk da
+   * rota cairia no "Application error" do Next ao abrir offline.
+   *
+   * Pega os tres lugares onde eles aparecem: <script src>, <link href> (stylesheet, modulepreload,
+   * preload) e os caminhos que aparecem so no payload RSC embutido ("static/chunks/..."; o runtime
+   * do webpack antepoe /_next/). Tudo vira URL absoluta do proprio dominio; URL de outra origem,
+   * duplicata e arquivo fora de static/ ficam de fora.
+   */
+  var STATIC_ASSET_PATTERN =
+    /(https?:\/\/[^\s"'<>\/\\]+)?((?:\/_next\/)?static\/(?:chunks|css|media)\/[A-Za-z0-9_\-.\/()%\[\]@~]+?\.(?:js|css))(?![A-Za-z0-9_\-])/g;
+  /** Teto por pagina: protege o cache e a rede de um HTML estranho. */
+  var MAX_PREWARM_ASSETS = 80;
+
+  function extractStaticAssets(html, origin) {
+    if (typeof html !== 'string' || html === '') return [];
+    var found = [];
+    var seen = {};
+    var match;
+    var pattern = new RegExp(STATIC_ASSET_PATTERN.source, 'g');
+    while ((match = pattern.exec(html)) !== null) {
+      // So conta o que COMECA um valor (aspas, "=" de atributo ou "(" de url()): texto solto de
+      // usuario com "static/chunks/x.js" no meio de uma frase, ou "//_next/..." (outro host), nao.
+      var prev = match.index > 0 ? html.charAt(match.index - 1) : '';
+      if (prev === '' || ['"', "'", '=', '('].indexOf(prev) === -1) continue;
+      var host = match[1];
+      if (host && host !== origin) continue;
+      var path = match[2];
+      if (path.indexOf('/_next/') !== 0) path = '/_next/' + path;
+      var url = origin + path;
+      if (seen[url]) continue;
+      seen[url] = true;
+      found.push(url);
+      if (found.length >= MAX_PREWARM_ASSETS) break;
+    }
+    return found;
+  }
+
   /** Chaves a remover para o cache nao passar de `max`: as mais antigas (a lista vem em ordem de insercao). */
   function keysToTrim(keys, max) {
     return keys.length <= max ? [] : keys.slice(0, keys.length - max);
@@ -166,6 +205,8 @@
     isCacheableResponse: isCacheableResponse,
     isSessionEnded: isSessionEnded,
     keysToTrim: keysToTrim,
+    extractStaticAssets: extractStaticAssets,
+    MAX_PREWARM_ASSETS: MAX_PREWARM_ASSETS,
     fallbackKind: fallbackKind,
   };
 

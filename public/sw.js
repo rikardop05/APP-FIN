@@ -69,6 +69,34 @@ async function cacheFirst(request) {
   return response;
 }
 
+/** Pre-aquece no cache estatico os arquivos de /_next/static que o HTML referencia (melhor esforco). */
+async function prewarmAssets(htmlResponse) {
+  try {
+    var html = await htmlResponse.text();
+    var urls = P.extractStaticAssets(html, self.location.origin);
+    var cache = await caches.open(NAMES.static);
+    var missing = [];
+    for (var i = 0; i < urls.length; i += 1) {
+      if (!(await cache.match(urls[i]))) missing.push(urls[i]);
+    }
+    // Poucos de cada vez: nao disputa a banda da propria tela que esta abrindo.
+    for (var j = 0; j < missing.length; j += 4) {
+      await Promise.all(
+        missing.slice(j, j + 4).map(async function (url) {
+          try {
+            var response = await fetch(url);
+            if (P.isCacheableResponse(response)) await store(NAMES.static, url, response, P.MAX_ENTRIES.static);
+          } catch {
+            // Um arquivo que nao veio nao derruba os outros.
+          }
+        }),
+      );
+    }
+  } catch {
+    // Pre-aquecimento e so um bonus.
+  }
+}
+
 function fallbackResponse(kind) {
   if (P.fallbackKind(kind) === 'json') {
     return new Response(JSON.stringify({ error: 'Sem conexão e sem dados guardados desta consulta.' }), {
@@ -134,6 +162,11 @@ async function networkFirst(event, request, kind) {
     }
     if (P.isCacheableResponse(response)) {
       event.waitUntil(store(cacheName, key, response.clone(), max));
+      // HTML guardado precisa dos arquivos da rota tambem, senao offline cai em "Application
+      // error". Em segundo plano e sem travar a resposta: se falhar, so perde o pre-aquecimento.
+      if (kind === 'page' && !rsc && (response.headers.get('content-type') || '').indexOf('text/html') === 0) {
+        event.waitUntil(prewarmAssets(response.clone()));
+      }
     }
     return response;
   } catch {
