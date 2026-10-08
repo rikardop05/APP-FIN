@@ -60,7 +60,7 @@ const suggestionResponseSchema = z.object({
 });
 
 type DialogState =
-  | { kind: 'manual' }
+  | { kind: 'manual'; initial?: ManualValues }
   | { kind: 'reconcile'; values: ManualValues; suggestion: ReconcileSuggestion }
   | { kind: 'batch' }
   | { kind: 'rule'; transactionId: string }
@@ -193,6 +193,9 @@ export function LancamentosScreen({ today }: { today: string }) {
    * Decisão 16a: antes de gravar, pergunta ao servidor se o lançamento cumpre uma previsão.
    * Havendo, a pessoa decide no diálogo seguinte; não havendo, grava direto. O servidor nunca
    * concilia sem o `reconcilePlannedId` que só a resposta "sim" envia.
+   *
+   * A sugestão é ajuda, não condição: se a procura falhar (rede, servidor), o lançamento é
+   * gravado normal, sem conciliar, em vez de travar a entrada manual (D1 do Corvo).
    */
   async function createManual(values: ManualValues) {
     setBusy(true);
@@ -207,6 +210,8 @@ export function LancamentosScreen({ today }: { today: string }) {
         setDialog({ kind: 'reconcile', values, suggestion: { ...suggestion, amountCents: cents(suggestion.amountCents) } });
         return;
       }
+    } catch {
+      // Sem sugestão: segue para a gravação normal abaixo.
     } finally {
       setBusy(false);
     }
@@ -379,12 +384,12 @@ export function LancamentosScreen({ today }: { today: string }) {
         </div>
       ) : null}
 
-      {dialog?.kind === 'manual' ? <ManualTransactionDialog today={today} options={options} busy={busy} onClose={() => setDialog(null)} onSubmit={createManual} /> : null}
+      {dialog?.kind === 'manual' ? <ManualTransactionDialog today={today} options={options} busy={busy} initial={dialog.initial} onClose={() => setDialog(null)} onSubmit={createManual} /> : null}
       {dialog?.kind === 'reconcile' ? (
         <ReconcileQuestionDialog
           suggestion={dialog.suggestion}
           busy={busy}
-          onClose={() => setDialog(null)}
+          onBack={() => setDialog({ kind: 'manual', initial: dialog.values })}
           onAnswer={(fulfills) => saveManual(dialog.values, fulfills ? dialog.suggestion.plannedId : null)}
         />
       ) : null}

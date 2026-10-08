@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { parseBRL } from '@/lib/money';
+import { cents, formatBRL, parseBRL } from '@/lib/money';
 import { competenceLabel } from '@/components/budget/labels';
 import { isSimpleDelete, reimportNotice, reopensPlannedNotice, withFutureOptionLabel } from './delete-presentation';
-import { signedAmountCents } from './manual-sign';
+import { amountForInput, signedAmountCents } from './manual-sign';
 import { RECONCILE_EXPLANATION, reconcileQuestion, type ReconcileSuggestion } from './reconcile-question';
 import { Button, DateText, Input, Money, Select } from '@/components/ui-kit';
 import {
@@ -66,17 +66,17 @@ function readTransactionKind(value: string): ManualValues['kind'] {
 /**
  * Decisão 16a: o lançamento manual combina com uma previsão de recorrência. A pessoa decide:
  * "cumpre" (a previsão vira cumprida e o valor conta uma vez) ou "à parte" (grava normal).
- * Fechar não grava nada.
+ * Voltar (ou fechar) reabre o formulário com o que foi digitado, sem gravar nada.
  */
 export function ReconcileQuestionDialog({
   suggestion,
   busy,
-  onClose,
+  onBack,
   onAnswer,
 }: {
   suggestion: ReconcileSuggestion;
   busy: boolean;
-  onClose: () => void;
+  onBack: () => void;
   onAnswer: (fulfills: boolean) => Promise<void>;
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -89,12 +89,12 @@ export function ReconcileQuestionDialog({
     }
   }
   return (
-    <DialogShell title="Este lançamento cumpre uma previsão?" description={RECONCILE_EXPLANATION} onClose={onClose}>
+    <DialogShell title="Este lançamento cumpre uma previsão?" description={RECONCILE_EXPLANATION} onClose={onBack}>
       <div className="flex flex-col gap-4">
         <p className="text-sm font-medium text-foreground">{reconcileQuestion(suggestion)}</p>
         {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancelar</Button>
+          <Button type="button" variant="ghost" onClick={onBack} disabled={busy}>Voltar ao formulário</Button>
           <Button type="button" variant="outline" onClick={() => void answer(false)} disabled={busy}>Não, lançar à parte</Button>
           <Button type="button" onClick={() => void answer(true)} disabled={busy}>{busy ? 'Gravando…' : 'Sim, cumpre'}</Button>
         </div>
@@ -107,24 +107,27 @@ export function ManualTransactionDialog({
   today,
   options,
   busy,
+  initial,
   onClose,
   onSubmit,
 }: {
   today: string;
   options: TransactionOptions;
   busy: boolean;
+  /** O que já foi digitado (volta da pergunta de previsão, decisão 16a). */
+  initial?: ManualValues;
   onClose: () => void;
   onSubmit: (values: ManualValues) => Promise<void>;
 }) {
-  const [occurredOn, setOccurredOn] = useState(today);
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [kind, setKind] = useState<ManualValues['kind']>('expense');
-  const [categoryId, setCategoryId] = useState('');
-  const [memberId, setMemberId] = useState('');
-  const [accountId, setAccountId] = useState(options.accounts[0]?.id ?? '');
-  const [creditCardId, setCreditCardId] = useState('');
-  const [note, setNote] = useState('');
+  const [occurredOn, setOccurredOn] = useState(initial?.occurredOn ?? today);
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [amount, setAmount] = useState(initial ? formatBRL(amountForInput(cents(initial.amountCents), initial.kind)) : '');
+  const [kind, setKind] = useState<ManualValues['kind']>(initial?.kind ?? 'expense');
+  const [categoryId, setCategoryId] = useState(initial?.categoryId ?? '');
+  const [memberId, setMemberId] = useState(initial?.memberId ?? '');
+  const [accountId, setAccountId] = useState(initial ? (initial.accountId ?? '') : (options.accounts[0]?.id ?? ''));
+  const [creditCardId, setCreditCardId] = useState(initial?.creditCardId ?? '');
+  const [note, setNote] = useState(initial?.note ?? '');
   const [error, setError] = useState<string | null>(null);
 
   // Despesa e Receita: o sinal vem do tipo, entao o valor e digitado positivo e
