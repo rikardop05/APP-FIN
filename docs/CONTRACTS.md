@@ -187,6 +187,37 @@ function groupUncategorized(rows: CategorizationRow[], rules: Rule[]): Uncategor
 function previewRule(rule: Rule, rows: CategorizationRow[]): string[]
 ```
 
+### 6.2 Escrita no banco — `/lib/db/queries/auto-categorization.ts` (adendo de 2026-10-07, F2)
+
+Schema (migration `0011`): `transactions.category_rule_id uuid null → categorization_rules(id) ON DELETE SET NULL`
+(regra que deu a categoria atual; null = à mão, do parcelamento ou sem categoria; apagar a regra apaga só o
+rastro) e `categorization_rules.created_at timestamptz not null default now()` (regras anteriores à
+migration recebem a data dela). O backup remapeia `category_rule_id` como as demais FKs.
+
+```ts
+/** Executor: `db` ou a transação de quem chama — a importação incrementa hits dentro do lote. */
+type Executor = typeof db | Tx
+
+/**
+ * Soma n ao hits de cada regra ({ [ruleId]: n }), no banco (hits = hits + n), nunca ler-somar-gravar.
+ * n ≤ 0 é ignorado; regra de outro household não é tocada. Devolve quantas regras mudaram.
+ */
+function incrementRuleHits(householdId: string, hitsByRuleId: Record<string, number>, executor?: Executor): Promise<number>
+
+/**
+ * Grava installment_plans.category_id e propaga para TODAS as parcelas, de qualquer status (inclusive planned).
+ * Parcela ACOMPANHA o plano quando sua categoria é null ou igual à que o plano tinha ANTES da chamada; só essas mudam,
+ * e perdem category_rule_id. Parcela com outra categoria (à mão, ou regra que caiu noutra) fica como está.
+ * categoryId null limpa o plano e as parcelas que o acompanhavam. Categoria precisa ser folha do household.
+ * Lança InstallmentPlanNotFoundError / InvalidPlanCategoryError. Plano travado (FOR UPDATE) numa transação.
+ * Devolve quantas parcelas mudaram.
+ */
+function setInstallmentPlanCategory(householdId: string, planId: string, categoryId: string | null, executor?: Executor): Promise<number>
+```
+
+> Limite da regra de propagação: parcela posta à mão na MESMA categoria do plano é indistinguível de uma que o
+> acompanhava, e passa a acompanhá-lo. Sem perda — no momento ela concordava com o plano.
+
 ## 7. Deduplicação — `/lib/finance/dedupe.ts`
 
 ```ts
