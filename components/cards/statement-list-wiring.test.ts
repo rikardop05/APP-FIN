@@ -11,15 +11,15 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 describe('aviso de vencimento na tela de cartões', () => {
-  it('a tela passa o fecha/vence ATUAL de cada cartão à lista de faturas', () => {
-    expect(read('components/cards/cartoes-screen.tsx')).toContain(
-      'cycle={{ closingDay: card.closingDay, dueDay: card.dueDay }}',
-    );
+  it('a tela passa o fecha/vence ATUAL de cada cartão e o dia de hoje à lista de faturas', () => {
+    const screen = read('components/cards/cartoes-screen.tsx');
+    expect(screen).toContain('cycle={{ closingDay: card.closingDay, dueDay: card.dueDay }}');
+    expect(screen).toContain('today={today} />');
   });
 
   it('a lista calcula os avisos com a regra pura e mostra o aviso e o selo, nas duas visões', () => {
     const list = read('components/cards/statement-list.tsx');
-    expect(list).toContain('dueDateWarnings(statements, cycle)');
+    expect(list).toContain('dueDateWarnings(statements, cycle, today)');
     expect(list).toContain('Vencimento diferente do ciclo atual do cartão');
     // Selo na tabela (desktop) e no cartão (celular).
     expect(list.match(/Vencimento desatualizado/g)).toHaveLength(2);

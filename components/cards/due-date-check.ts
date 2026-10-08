@@ -1,3 +1,4 @@
+import { competenceLong } from '@/components/cashflow/labels';
 import { formatDateBR, type Competence, type IsoDate } from '@/lib/date';
 import { statementWindow, type CardCycleConfig } from '@/lib/finance/billing';
 
@@ -11,14 +12,16 @@ import { statementWindow, type CardCycleConfig } from '@/lib/finance/billing';
  * certo é a pessoa. A data esperada vem do motor de faturas (`statementWindow`, CONTRACTS §3), a
  * mesma regra que gravou a fatura: nenhuma conta de calendário é refeita aqui.
  *
- * Só fatura em ABERTO: fechada e paga são história, e o ciclo antigo era o correto naquela época.
+ * O recorte é por DATA, não por `status`: o app nunca tira a fatura de "aberta" (`statements.status`
+ * só nasce `open`), então filtrar por status avisaria faturas pagas há meses. Só avisa fatura cujo
+ * vencimento gravado AINDA NÃO PASSOU (`dueDate >= today`): depois do vencimento ela é história, o
+ * ciclo antigo era o correto naquela época, e o aviso some sozinho.
  */
 
 export type CheckedStatement = {
   id: string;
   period: Competence;
   dueDate: IsoDate;
-  status: 'open' | 'closed' | 'paid';
 };
 
 export type DueDateWarning = {
@@ -42,9 +45,12 @@ function expectedDueDate(period: Competence, cycle: CardCycleConfig): IsoDate | 
 export function dueDateWarnings(
   statements: readonly CheckedStatement[],
   cycle: CardCycleConfig,
+  /** Hoje (`YYYY-MM-DD`): o relógio só se lê em `app/`, aqui chega por parâmetro. */
+  today: IsoDate,
 ): DueDateWarning[] {
   return statements.flatMap((statement) => {
-    if (statement.status !== 'open') return [];
+    // Comparação de string: 'YYYY-MM-DD' ordena como as datas.
+    if (statement.dueDate < today) return [];
     const expected = expectedDueDate(statement.period, cycle);
     if (expected === null || expected === statement.dueDate) return [];
     return [
@@ -53,9 +59,11 @@ export function dueDateWarnings(
         period: statement.period,
         storedDueDate: statement.dueDate,
         expectedDueDate: expected,
+        // As duas datas completas, sem "vence dia N": quando só o fechamento muda, o esperado pode
+        // cair no mês seguinte e "vence dia 7" não diria isso.
         message:
-          `O vencimento gravado desta fatura (${formatDateBR(statement.dueDate)}) não bate com o ciclo atual ` +
-          `do cartão (vence dia ${String(cycle.dueDay)}, o que daria ${formatDateBR(expected)}). ` +
+          `A fatura de ${competenceLong(statement.period)} está gravada com vencimento em ` +
+          `${formatDateBR(statement.dueDate)}, mas o ciclo atual do cartão daria ${formatDateBR(expected)}. ` +
           'Nada foi alterado: confira a data na fatura.',
       },
     ];

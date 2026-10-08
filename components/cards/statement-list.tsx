@@ -20,10 +20,12 @@ type StatementListProps = {
   statements: StatementRecord[];
   /** Ciclo ATUAL do cartão (fecha/vence): base do aviso de vencimento desatualizado (decisão 11c). */
   cycle?: CardCycleConfig;
+  /** Hoje (`YYYY-MM-DD`): o aviso só vale para fatura que ainda não venceu. */
+  today: string;
 };
 
-export function StatementList({ statements, cycle }: StatementListProps) {
-  const warnings = cycle === undefined ? [] : dueDateWarnings(statements, cycle);
+export function StatementList({ statements, cycle, today }: StatementListProps) {
+  const warnings = cycle === undefined ? [] : dueDateWarnings(statements, cycle, today);
   const staleIds = new Set(warnings.map((warning) => warning.statementId));
 
   if (statements.length === 0) {
@@ -44,9 +46,7 @@ export function StatementList({ statements, cycle }: StatementListProps) {
           <p className="font-medium">Vencimento diferente do ciclo atual do cartão</p>
           <ul className="mt-1 flex flex-col gap-1">
             {warnings.map((warning) => (
-              <li key={warning.statementId}>
-                <span className="font-medium">Competência {warning.period}:</span> {warning.message}
-              </li>
+              <li key={warning.statementId}>{warning.message}</li>
             ))}
           </ul>
         </div>
