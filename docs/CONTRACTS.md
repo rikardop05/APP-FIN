@@ -202,6 +202,8 @@ interface RuleOfferSource { id: string; description: string; kind: TransactionKi
  */
 function ruleOfferFor(input: {
   rules: Rule[]; sources: RuleOfferSource[]; categoryNature: CategoryNature; candidates: CategorizationRow[]
+  pattern?: string   // padrão editado pelo usuário: substitui o sugerido (normalizado), recalcula matchingIds e precisa
+                     // casar TODAS as fontes, senão null (sem regra pega-tudo de efeito não mostrado)
 }): { pattern: string; matchingIds: string[] } | null
 
 /**

@@ -21,17 +21,23 @@ describe('shouldOfferAfterEdit', () => {
 
 describe('ruleOfferDescription', () => {
   it('sem outras linhas: so o efeito nas proximas importacoes', () => {
-    expect(ruleOfferDescription({ pattern: 'irmaos boa', categoryId: CAT, categoryName: 'Mercado', matchingIds: [] })).toBe(
+    expect(ruleOfferDescription({ pattern: 'irmaos boa', categoryId: CAT, categoryName: 'Mercado', matchingIds: [], total: 0 })).toBe(
       'Os próximos lançamentos com “irmaos boa” na descrição vão para Mercado sozinhos.',
     );
   });
 
   it('com outras linhas sem categoria, singular e plural', () => {
-    expect(ruleOfferDescription({ pattern: 'kabum', categoryId: CAT, categoryName: 'Casa', matchingIds: [T1] })).toBe(
+    expect(ruleOfferDescription({ pattern: 'kabum', categoryId: CAT, categoryName: 'Casa', matchingIds: [T1], total: 1 })).toBe(
       'Os próximos lançamentos com “kabum” na descrição vão para Casa sozinhos. Agora, também 1 lançamento sem categoria vai para Casa.',
     );
-    expect(ruleOfferDescription({ pattern: 'kabum', categoryId: CAT, categoryName: 'Casa', matchingIds: [T1, T2] })).toBe(
+    expect(ruleOfferDescription({ pattern: 'kabum', categoryId: CAT, categoryName: 'Casa', matchingIds: [T1, T2], total: 2 })).toBe(
       'Os próximos lançamentos com “kabum” na descrição vão para Casa sozinhos. Agora, também 2 lançamentos sem categoria vão para Casa.',
+    );
+  });
+
+  it('lista cortada no limite: diz quantos ficam para Aplicar regras', () => {
+    expect(ruleOfferDescription({ pattern: 'kabum', categoryId: CAT, categoryName: 'Casa', matchingIds: [T1, T2], total: 5 })).toBe(
+      'Os próximos lançamentos com “kabum” na descrição vão para Casa sozinhos. Agora, também 2 lançamentos sem categoria vão para Casa. 3 outros ficam para “Aplicar regras aos não categorizados”.',
     );
   });
 });

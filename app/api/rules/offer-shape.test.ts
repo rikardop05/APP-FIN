@@ -9,7 +9,7 @@ const B = '22222222-2222-4222-8222-222222222222';
 
 describe('fronteira servidor -> tela da oferta de regra', () => {
   it('oferta e aceite tipados pelo servidor passam pelos schemas da tela', () => {
-    const offer: RuleOffer = { pattern: 'irmaos boa', categoryId: A, categoryName: 'Mercado', matchingIds: [B] };
+    const offer: RuleOffer = { pattern: 'irmaos boa', categoryId: A, categoryName: 'Mercado', matchingIds: [B], total: 1 };
     expect(ruleOfferResponseSchema.parse({ offer })).toEqual({ offer });
     expect(ruleOfferResponseSchema.parse({ offer: null })).toEqual({ offer: null });
     const accepted: RuleApplicationResult & { ruleId: string } = { ruleId: A, applied: 1, skipped: 0, propagated: 0 };
@@ -18,6 +18,14 @@ describe('fronteira servidor -> tela da oferta de regra', () => {
 });
 
 describe('ruleOfferSchema', () => {
+  it('previa aceita o trecho editado, aparado', () => {
+    expect(ruleOfferSchema.parse({ dryRun: true, transactionIds: [A], pattern: ' irmaos ' })).toEqual({
+      dryRun: true,
+      transactionIds: [A],
+      pattern: 'irmaos',
+    });
+  });
+
   it('previa exige ao menos uma linha', () => {
     expect(ruleOfferSchema.safeParse({ dryRun: true, transactionIds: [] }).success).toBe(false);
     expect(ruleOfferSchema.parse({ dryRun: true, transactionIds: [A] })).toEqual({ dryRun: true, transactionIds: [A] });

@@ -2,7 +2,8 @@ import { and, eq, inArray, min } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import type { MatchType } from '@/lib/db';
 import { categories, categorizationRules, members, transactions } from '@/lib/db/schema';
-import { ruleOfferFor } from '@/lib/finance/categorization';
+import { matchRule, ruleOfferFor } from '@/lib/finance/categorization';
+import { APPLY_RULES_LIMIT } from './apply-rules-limit';
 import {
   applyRuleProposals,
   listRulesWithCategory,
@@ -40,6 +41,14 @@ export class InvalidUserRuleError extends Error {
   constructor() {
     super('Escolha uma categoria sem subcategorias e um responsável da família.');
     this.name = 'InvalidUserRuleError';
+  }
+}
+
+/** O padrao (editado) nao casa as linhas que o usuario categorizou. */
+export class RuleOfferPatternError extends Error {
+  constructor() {
+    super('O trecho precisa aparecer na descrição dos lançamentos que você categorizou.');
+    this.name = 'RuleOfferPatternError';
   }
 }
 
@@ -99,8 +108,10 @@ export type RuleOffer = {
   pattern: string;
   categoryId: string;
   categoryName: string;
-  /** Outras linhas sem categoria que a regra pegaria; o aceite grava exatamente estas. */
+  /** Outras linhas sem categoria que a regra pegaria (ate o limite); o aceite grava exatamente estas. */
   matchingIds: string[];
+  /** Quantas linhas a regra pegaria ao todo (pode passar do limite). */
+  total: number;
 };
 
 async function readSources(executor: Executor, householdId: string, transactionIds: readonly string[]) {
@@ -123,8 +134,16 @@ async function readSources(executor: Executor, householdId: string, transactionI
  * Oferta de regra para as linhas que o usuario acabou de categorizar a mao, ou
  * `null` (ver `ruleOfferFor` no motor). Linha sem categoria ou de outro
  * household nao conta como fonte: se faltar alguma, nao ha oferta.
+ *
+ * `pattern` = padrao editado no dialogo: o efeito e recalculado para ele, e
+ * padrao que nao casa as linhas de origem da `null`. `limit` corta a lista
+ * (o aceite grava no maximo isso); `total` diz quantas seriam.
  */
-export async function getRuleOffer(householdId: string, transactionIds: readonly string[]): Promise<RuleOffer | null> {
+export async function getRuleOffer(
+  householdId: string,
+  transactionIds: readonly string[],
+  options: { pattern?: string; limit?: number } = {},
+): Promise<RuleOffer | null> {
   const ids = [...new Set(transactionIds)];
   const [sources, rules, candidates] = await Promise.all([
     readSources(db, householdId, ids),
@@ -146,9 +165,16 @@ export async function getRuleOffer(householdId: string, transactionIds: readonly
     })),
     categoryNature: first.categoryNature,
     candidates: candidates.map(toCategorizationRow),
+    ...(options.pattern === undefined ? {} : { pattern: options.pattern }),
   });
   if (offer === null || first.categoryId === null) return null;
-  return { pattern: offer.pattern, categoryId: first.categoryId, categoryName: first.categoryName, matchingIds: offer.matchingIds };
+  return {
+    pattern: offer.pattern,
+    categoryId: first.categoryId,
+    categoryName: first.categoryName,
+    matchingIds: offer.matchingIds.slice(0, options.limit ?? APPLY_RULES_LIMIT),
+    total: offer.matchingIds.length,
+  };
 }
 
 /**
@@ -157,7 +183,8 @@ export async function getRuleOffer(householdId: string, transactionIds: readonly
  * regras, que confere cada uma de novo e pula o que mudou.
  *
  * Lanca `RuleOfferNoLongerValidError` se as linhas de origem nao estiverem
- * mais todas categorizadas na mesma categoria; nada e gravado.
+ * mais todas categorizadas na mesma categoria, e `RuleOfferPatternError` se o
+ * padrao (editado) nao casar todas elas; nada e gravado.
  */
 export async function acceptRuleOffer(
   householdId: string,
@@ -172,11 +199,15 @@ export async function acceptRuleOffer(
       throw new RuleOfferNoLongerValidError();
     }
 
-    const ruleId = await createUserRule(
-      householdId,
-      { pattern: input.pattern.trim(), matchType: 'contains', categoryId, memberId: null },
-      tx,
-    );
+    const rule = { pattern: input.pattern.trim(), matchType: 'contains' as const, categoryId, memberId: null };
+    // O padrao pode ter sido editado no dialogo: tem de casar as linhas que o
+    // usuario categorizou, senao a regra nao representa a decisao dele.
+    const probe = { ...rule, id: 'probe', priority: 0, active: true };
+    if (rule.pattern === '' || sources.some((source) => matchRule([probe], source.description) === null)) {
+      throw new RuleOfferPatternError();
+    }
+
+    const ruleId = await createUserRule(householdId, rule, tx);
     const result = await applyRuleProposals(
       householdId,
       input.matchingIds.map((transactionId) => ({ transactionId, ruleId, categoryId })),

@@ -199,22 +199,32 @@ export function LancamentosScreen({ today }: { today: string }) {
     }
   }
 
-  async function acceptOffer(pattern: string) {
-    if (dialog?.kind !== 'offer') return;
+  /** Recalcula a oferta para o trecho editado no dialogo. */
+  const previewOffer = useCallback(async (transactionIds: string[], pattern: string) => {
+    const response = await fetch('/api/rules/offer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dryRun: true, transactionIds, pattern }),
+    });
+    return (await readJson(response, ruleOfferResponseSchema)).offer;
+  }, []);
+
+  /** Aceite: devolve a mensagem de erro (o dialogo fica aberto) ou null. */
+  async function acceptOffer(transactionIds: string[], offer: RuleOffer): Promise<string | null> {
     setBusy(true);
     try {
       const response = await fetch('/api/rules/offer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dryRun: false, transactionIds: dialog.transactionIds, pattern, matchingIds: dialog.offer.matchingIds }),
+        body: JSON.stringify({ dryRun: false, transactionIds, pattern: offer.pattern, matchingIds: offer.matchingIds }),
       });
       const result = await readJson(response, ruleOfferAcceptedSchema);
       setDialog(null);
       setNotice(ruleOfferAcceptedMessage(result));
       await load(appliedFilters);
+      return null;
     } catch (offerError) {
-      setDialog(null);
-      setError(offerError instanceof Error ? offerError.message : 'Não foi possível criar a regra.');
+      return offerError instanceof Error ? offerError.message : 'Não foi possível criar a regra.';
     } finally {
       setBusy(false);
     }
@@ -459,7 +469,20 @@ export function LancamentosScreen({ today }: { today: string }) {
           );
         })()
       ) : null}
-      {dialog?.kind === 'offer' ? <RuleOfferDialog offer={dialog.offer} busy={busy} onClose={() => setDialog(null)} onAccept={acceptOffer} /> : null}
+      {dialog?.kind === 'offer' ? (
+        (() => {
+          const transactionIds = dialog.transactionIds;
+          return (
+            <RuleOfferDialog
+              initialOffer={dialog.offer}
+              busy={busy}
+              onClose={() => setDialog(null)}
+              onPreview={(pattern) => previewOffer(transactionIds, pattern)}
+              onAccept={(offer) => acceptOffer(transactionIds, offer)}
+            />
+          );
+        })()
+      ) : null}
       {dialog?.kind === 'apply' ? <ApplyRulesDialog title={dialog.title} proposals={dialog.preview.proposals} total={dialog.preview.total} busy={busy} onClose={() => setDialog(null)} onConfirm={applyRules} /> : null}
       {dialog?.kind === 'rule' ? <RuleDialog suggestion={ruleSuggestion} options={options} busy={busy} loading={loadingRule} onClose={() => setDialog(null)} onSubmit={createRule} /> : null}
     </>

@@ -99,6 +99,8 @@ export const ruleOfferSchema = z.discriminatedUnion('dryRun', [
   z.object({
     dryRun: z.literal(true),
     transactionIds: z.array(z.string().uuid()).min(1).max(APPLY_RULES_LIMIT),
+    /** Padrao editado no dialogo: a previa recalcula o efeito para ele. */
+    pattern: z.string().trim().min(1).max(120).optional(),
   }),
   z.object({
     dryRun: z.literal(false),

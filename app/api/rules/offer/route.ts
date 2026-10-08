@@ -5,6 +5,7 @@ import {
   getRuleOffer,
   InvalidUserRuleError,
   RuleOfferNoLongerValidError,
+  RuleOfferPatternError,
 } from '@/lib/db/queries/user-rules';
 import { ruleOfferSchema } from '../schemas';
 
@@ -22,7 +23,8 @@ export async function POST(request: Request) {
     }
     const body = result.data;
     if (body.dryRun) {
-      return NextResponse.json({ offer: await getRuleOffer(householdId, body.transactionIds) });
+      const options = body.pattern === undefined ? {} : { pattern: body.pattern };
+      return NextResponse.json({ offer: await getRuleOffer(householdId, body.transactionIds, options) });
     }
     const accepted = await acceptRuleOffer(householdId, {
       transactionIds: body.transactionIds,
@@ -33,6 +35,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof SessionMissingError) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
+    }
+    if (error instanceof RuleOfferPatternError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (error instanceof InvalidUserRuleError || error instanceof RuleOfferNoLongerValidError) {
       return NextResponse.json({ error: error.message }, { status: 409 });

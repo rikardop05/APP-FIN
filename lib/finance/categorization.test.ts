@@ -691,3 +691,26 @@ describe('ruleOfferFor', () => {
     });
   });
 });
+
+describe('ruleOfferFor com padrao editado pelo usuario', () => {
+  const fonte = { id: 'src', description: '[final 4239] IRMAOS BOA', kind: 'expense' as const, categoryId: 'cat-mercado' };
+  const candidatas = [
+    row({ id: 'c1', description: 'IRMAOS BOA' }),
+    row({ id: 'c2', description: 'IRMAOS LTDA' }),
+    row({ id: 'c3', description: 'OUTRA LOJA' }),
+  ];
+
+  it('o efeito e recalculado para o padrao editado', () => {
+    expect(
+      ruleOfferFor({ rules: [], sources: [fonte], categoryNature: 'essential', candidates: candidatas, pattern: ' IRMAOS ' }),
+    ).toEqual({ pattern: 'irmaos', matchingIds: ['c1', 'c2'] });
+  });
+
+  it('padrao que nao casa as linhas categorizadas nao vira oferta', () => {
+    // Uma regra que nao pega nem a linha que a originou nao representa a decisao.
+    expect(
+      ruleOfferFor({ rules: [], sources: [fonte], categoryNature: 'essential', candidates: candidatas, pattern: 'outra loja' }),
+    ).toBeNull();
+    expect(ruleOfferFor({ rules: [], sources: [fonte], categoryNature: 'essential', candidates: candidatas, pattern: '   ' })).toBeNull();
+  });
+});

@@ -370,12 +370,19 @@ export interface RuleOfferSource {
  * - toda linha ja e coberta: a regra ativa vencedora, entre as que cabem no
  *   tipo, ja da essa categoria. Se a vencedora da OUTRA categoria, o usuario
  *   acabou de corrigi-la, e a oferta vale (a regra nova entra no topo).
+ *
+ * `pattern` informado = padrao editado pelo usuario: substitui o sugerido
+ * (normalizado), o efeito e recalculado para ele, e ele precisa casar TODAS as
+ * linhas de origem — senao `null`. Um padrao que nao pega nem a linha que o
+ * originou nao representa a decisao, e um trecho solto ("a") viraria regra
+ * pega-tudo no topo sem que o efeito tivesse sido mostrado.
  */
 export function ruleOfferFor(input: {
   rules: Rule[];
   sources: RuleOfferSource[];
   categoryNature: CategoryNature;
   candidates: CategorizationRow[];
+  pattern?: string;
 }): { pattern: string; matchingIds: string[] } | null {
   const [first] = input.sources;
   if (first === undefined) return null;
@@ -383,8 +390,10 @@ export function ruleOfferFor(input: {
   if (input.sources.some((source) => !categoryFitsKind(input.categoryNature, source.kind))) return null;
 
   const patterns = new Set(input.sources.map((source) => suggestRulePattern(source.description).pattern));
-  const [pattern] = [...patterns];
-  if (patterns.size !== 1 || pattern === undefined || pattern === '') return null;
+  const [suggested] = [...patterns];
+  if (patterns.size !== 1 || suggested === undefined || suggested === '') return null;
+  const pattern = input.pattern === undefined ? suggested : normalizeDescription(input.pattern);
+  if (pattern === '') return null;
 
   const covered = input.sources.every((source) => {
     const fitting = input.rules.filter(
@@ -394,7 +403,6 @@ export function ruleOfferFor(input: {
   });
   if (covered) return null;
 
-  const sourceIds = new Set(input.sources.map((source) => source.id));
   const offered: Rule = {
     id: 'offer',
     pattern,
@@ -405,6 +413,9 @@ export function ruleOfferFor(input: {
     active: true,
     categoryNature: input.categoryNature,
   };
+  if (input.sources.some((source) => !ruleMatches(offered, normalizeDescription(source.description)))) return null;
+
+  const sourceIds = new Set(input.sources.map((source) => source.id));
   const others = input.candidates.filter(
     (row) => !sourceIds.has(row.id) && categoryFitsKind(input.categoryNature, row.kind),
   );

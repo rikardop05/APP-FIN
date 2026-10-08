@@ -185,6 +185,8 @@ export const ruleOfferSchema = z.object({
   categoryId: z.string().uuid(),
   categoryName: z.string(),
   matchingIds: z.array(z.string().uuid()),
+  /** Quantas a regra pegaria ao todo; `matchingIds` vem cortada no limite. */
+  total: z.number().int().nonnegative(),
 });
 
 export const ruleOfferResponseSchema = z.object({ offer: ruleOfferSchema.nullable() });

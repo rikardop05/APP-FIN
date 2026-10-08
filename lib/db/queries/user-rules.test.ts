@@ -171,7 +171,38 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('getRuleOffer / acceptRu
         categoryId: f.mercadoId,
         categoryName: 'Mercado',
         matchingIds: [outra],
+        total: 1,
       });
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it('padrao editado: efeito recalculado; padrao que nao casa a origem = sem oferta', async () => {
+    const f = await createFixture('oferta-editada');
+    try {
+      const { getRuleOffer } = await import('./user-rules');
+      const fonte = await f.tx('IRMAOS BOA', { categoryId: f.mercadoId });
+      const boa = await f.tx('IRMAOS BOA');
+      const ltda = await f.tx('IRMAOS LTDA');
+
+      expect((await getRuleOffer(f.householdId, [fonte], { pattern: 'irmaos' }))?.matchingIds).toEqual([boa, ltda]);
+      expect(await getRuleOffer(f.householdId, [fonte], { pattern: 'outra coisa' })).toBeNull();
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it('oferta grande: lista cortada no limite, total completo', async () => {
+    const f = await createFixture('oferta-limite');
+    try {
+      const { getRuleOffer } = await import('./user-rules');
+      const fonte = await f.tx('IRMAOS BOA', { categoryId: f.mercadoId });
+      for (let n = 0; n < 3; n += 1) await f.tx('IRMAOS BOA');
+
+      const offer = await getRuleOffer(f.householdId, [fonte], { limit: 2 });
+      expect(offer?.matchingIds).toHaveLength(2);
+      expect(offer?.total).toBe(3);
     } finally {
       await f.cleanup();
     }
@@ -219,6 +250,21 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('getRuleOffer / acceptRu
       expect(await f.read(naoOfertada)).toEqual({ categoryId: null, categoryRuleId: null });
       // A linha de origem foi categorizada a mao e continua assim.
       expect(await f.read(fonte)).toEqual({ categoryId: f.mercadoId, categoryRuleId: null });
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it('aceite com padrao que nao casa as linhas categorizadas: recusado, nenhuma regra criada', async () => {
+    const f = await createFixture('aceite-padrao');
+    try {
+      const { acceptRuleOffer, RuleOfferPatternError } = await import('./user-rules');
+      const fonte = await f.tx('IRMAOS BOA', { categoryId: f.mercadoId });
+
+      await expect(
+        acceptRuleOffer(f.householdId, { transactionIds: [fonte], pattern: 'outra loja', matchingIds: [] }),
+      ).rejects.toThrow(RuleOfferPatternError);
+      expect(await f.rules()).toEqual([]);
     } finally {
       await f.cleanup();
     }

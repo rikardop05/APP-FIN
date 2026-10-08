@@ -13,11 +13,18 @@ export function shouldOfferAfterEdit(previousCategoryId: string | null | undefin
   return nextCategoryId !== null && nextCategoryId !== previousCategoryId;
 }
 
-/** Texto da oferta: o que a regra faz agora e nas proximas importacoes. */
+/**
+ * Texto da oferta: o que a regra faz agora e nas proximas importacoes. Quando a
+ * lista veio cortada no limite, diz quantas entram agora e quantas ficam para
+ * "Aplicar regras".
+ */
 export function ruleOfferDescription(offer: RuleOffer): string {
   const future = `Os próximos lançamentos com “${offer.pattern}” na descrição vão para ${offer.categoryName} sozinhos.`;
   if (offer.matchingIds.length === 0) return future;
-  return `${future} Agora, também ${count(offer.matchingIds.length, 'lançamento sem categoria vai', 'lançamentos sem categoria vão')} para ${offer.categoryName}.`;
+  const now = `${future} Agora, também ${count(offer.matchingIds.length, 'lançamento sem categoria vai', 'lançamentos sem categoria vão')} para ${offer.categoryName}.`;
+  const rest = offer.total - offer.matchingIds.length;
+  if (rest <= 0) return now;
+  return `${now} ${count(rest, 'outro fica', 'outros ficam')} para “Aplicar regras aos não categorizados”.`;
 }
 
 /** Frase depois do aceite. */
