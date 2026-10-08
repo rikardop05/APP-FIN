@@ -80,7 +80,12 @@ export interface ImportPreviewRow {
     | 'duplicate'
     | 'installment_first'
     | 'installment_part'
-    | 'credit_card_payment';
+    | 'credit_card_payment'
+    /**
+     * Valor zero lido (decisao 8, ex.: anuidade de R$ 0,00): nao e despesa nem receita.
+     * Chega desmarcada, com o rotulo "Informativa"; so entra se o usuario corrigir o valor.
+     */
+    | 'informational';
   installment: PreviewInstallment | null;
 }
 
@@ -307,11 +312,13 @@ export function buildImportPreview(
       ? 'duplicate'
       : isCreditCardPayment
         ? 'credit_card_payment'
-        : installment === null || informational
-          ? 'new'
-          : installment.current === 1
-            ? 'installment_first'
-            : 'installment_part';
+        : informational
+          ? 'informational'
+          : installment === null
+            ? 'new'
+            : installment.current === 1
+              ? 'installment_first'
+              : 'installment_part';
 
     const rule = matchRule(input.rules, description);
 

@@ -596,9 +596,9 @@ describe('linha de valor zero e informativa (decisao 8)', () => {
     informational: true,
   });
 
-  it('no preview, nao conta plano nem vira estado de parcela', () => {
+  it('no preview, nao conta plano nem vira estado de parcela: e a linha informativa', () => {
     const result = preview([anuidade]);
-    expect(result.rows[0]?.state).toBe('new');
+    expect(result.rows[0]?.state).toBe('informational');
     expect(result.summary.installmentPlansDetected).toBe(0);
   });
 

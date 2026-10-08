@@ -9,6 +9,7 @@ import type { Cents } from '@/lib/money';
 import type { RecalculateBody } from '@/app/api/import/recalculate/schema';
 import { Badge, Button, Checkbox, Input, Money, Select } from '@/components/ui-kit';
 import { CompetenceWarningBanner } from './competence-warning-banner';
+import { defaultInclude, includedByDefaultCount, stateLabel } from './preview-state';
 import {
   apiErrorSchema,
   recalculateResponseSchema,
@@ -109,7 +110,7 @@ function initialDrafts(rows: ImportPreviewRow[]): DraftRow[] {
     // (RF-CC-04): pertence ao extrato da CONTA bancária, não ao cartão.
     // Importá-la aqui contaria duas vezes quando o extrato da conta entrar.
     // O usuário só marca se quiser registrar manualmente uma exceção.
-    include: row.state !== 'duplicate' && row.state !== 'credit_card_payment',
+    include: defaultInclude(row.state),
     forceDuplicate: false,
     occurredOnText: row.occurredOn ?? '',
     amountText: row.amountCents === null ? '' : formatBRL(row.amountCents),
@@ -208,12 +209,7 @@ function countLabel(includedRowsCount: number, plannedRowsCount: number): string
 }
 
 function rowStatus(row: DraftRow): string {
-  if (row.state === 'duplicate') return 'Duplicada';
-  if (row.state === 'credit_card_payment') return 'Pagamento';
-  if (row.state === 'installment_first' || row.state === 'installment_part') {
-    return 'Parcelada';
-  }
-  return 'Nova';
+  return stateLabel(row.state);
 }
 
 export function ImportConfirmation({
@@ -240,11 +236,9 @@ export function ImportConfirmation({
   const categoryOptions = useMemo(() => flattenCategories(categories), [categories]);
   const [calculation, setCalculation] = useState<Calculation>(() => ({
     totalCents: preview.preview.summary.totalCents,
-    // Inicial coerente com `initialDrafts`: o parser marca 'duplicate' e
-    // 'credit_card_payment' como desmarcadas; tudo o mais entra incluído.
-    includedRowsCount: preview.preview.rows.filter(
-      (row) => row.state !== 'duplicate' && row.state !== 'credit_card_payment',
-    ).length,
+    // Inicial coerente com `initialDrafts`: a MESMA regra (`defaultInclude`): duplicada, pagamento
+    // de fatura e linha informativa chegam desmarcadas; tudo o mais entra incluído.
+    includedRowsCount: includedByDefaultCount(preview.preview.rows),
     // Sem parcelamento detectado no preview inicial, futuras = 0. Atualiza
     // no recalculate.
     plannedRowsCount: 0,
@@ -466,7 +460,8 @@ export function ImportConfirmation({
           const invalid = invalidIncluded.some((row) => row.index === draft.index);
           const isDuplicate = draft.state === 'duplicate';
           const isPayment = draft.state === 'credit_card_payment';
-          const needsAttention = isDuplicate || isPayment;
+          const isInformational = draft.state === 'informational';
+          const needsAttention = isDuplicate || isPayment || isInformational;
           return (
             <article
               key={draft.index}
@@ -507,6 +502,15 @@ export function ImportConfirmation({
                 <div className="mt-3 rounded-md border border-amber-300 bg-amber-100/70 p-3 text-sm text-amber-950">
                   <p className="font-medium">Baixa confiança: confira o texto original</p>
                   <p className="mt-1 break-words">{draft.rawDescription || 'Texto original não reconhecido.'}</p>
+                </div>
+              ) : null}
+
+              {isInformational ? (
+                <div className="mt-3 rounded-md border border-amber-300 bg-amber-100/70 p-3 text-sm text-amber-950">
+                  <p className="font-medium">Linha informativa — valor R$ 0,00, nem despesa nem receita.</p>
+                  <p className="mt-1">
+                    Não é importada. Se o valor estiver errado, corrija-o abaixo e marque a linha.
+                  </p>
                 </div>
               ) : null}
 
