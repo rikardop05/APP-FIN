@@ -24,6 +24,8 @@ import {
 import type { Rule } from '@/lib/finance/categorization';
 import type { Cents } from '@/lib/money';
 import { reconcileImportedPostings } from './import-reconcile';
+import { importedRowsCount } from './import-counts';
+import { kindForAmount } from './import-kind';
 import { listTransactionDedupeHashes } from './transactions';
 
 export type ImportSourceContext = {
@@ -417,8 +419,8 @@ export async function commitImport(
     }
     if (options.failAfter === 'plans') throw new Error('Falha de teste após os parcelamentos.');
 
-    const importedRows = input.confirmedRows.filter((row) => row.include).length -
-      result.skipped.filter((row) => row.reason === 'duplicate').length;
+    // Todo o `skipped` sai da conta (desmarcada, duplicata e informativa), nao so as duplicatas.
+    const importedRows = importedRowsCount(input.confirmedRows.length, result.skipped);
     let plannedReconciled = 0;
     if (result.transactions.length > 0) {
       // Ids gerados aqui (não lidos do `returning`): a conciliação não depende da
@@ -427,7 +429,8 @@ export async function commitImport(
       await tx.insert(transactions).values(
         result.transactions.map((row, index) => {
           const projected = row.rawDescription === '';
-          const kind: TransactionKind = row.amountCents < 0 ? 'expense' : 'income';
+          // Zero lanca (decisao 8): linha informativa nunca chega aqui.
+          const kind: TransactionKind = kindForAmount(row.amountCents);
           const status: TransactionStatus = projected ? 'planned' : 'posted';
           return {
             id: ids[index],
@@ -464,7 +467,7 @@ export async function commitImport(
             occurredOn: row.occurredOn,
             amountCents: row.amountCents,
             categoryId: row.categoryId,
-            kind: row.amountCents < 0 ? ('expense' as const) : ('income' as const),
+            kind: kindForAmount(row.amountCents),
             accountId: source.accountId,
           },
         ];

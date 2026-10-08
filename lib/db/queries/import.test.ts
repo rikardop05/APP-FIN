@@ -569,3 +569,65 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('import dedupe and rever
     }
   });
 });
+
+describe.skipIf(process.env.DATABASE_URL === undefined)('importacao: linha informativa (decisao 8)', () => {
+  it('rowsImported subtrai TODO o skipped (duplicata, informativa e desmarcada), e o zero nao vira lancamento', async () => {
+    const fixture = await createImportFixture('informational');
+    const { commitImport } = await import('./import');
+    const row = (index: number, overrides: Record<string, unknown>) => ({
+      index,
+      include: true,
+      occurredOn: '2026-09-05',
+      description: `Linha ${String(index)}`,
+      rawDescription: `Linha ${String(index)}`,
+      amountCents: cents(-1500 - index),
+      categoryId: null,
+      memberId: null,
+      installment: null,
+      ...overrides,
+    });
+    const base = {
+      fileName: 'informativa.txt',
+      fileHash: 'c'.repeat(64),
+      bankKey: null,
+      format: 'text' as const,
+      sourceKind: 'credit_card' as const,
+      sourceId: fixture.cardId,
+      reportedTotalCents: null,
+      allowReimport: false,
+      statementCompetence: '2026-09' as const,
+    };
+
+    try {
+      const result = await commitImport(fixture.householdId, {
+        ...base,
+        confirmedRows: [
+          row(0, {}),
+          row(1, {}),
+          // Informativa: valor CONFIRMADO zero, com parcela impressa ao lado.
+          row(2, { description: 'ANUIDADE DIFERENCIADA', rawDescription: 'ANUIDADE DIFERENCIADA 01/12', amountCents: cents(0), installment: { current: 1, total: 12 } }),
+          // Desmarcada pelo usuario.
+          row(3, { include: false }),
+          // Duplicata da linha 0 (mesmo dia, valor e descricao).
+          row(4, { description: 'Linha 0', rawDescription: 'Linha 0', amountCents: cents(-1500) }),
+        ],
+      });
+      const rows = await fixture.db
+        .select({ amountCents: fixture.schema.transactions.amountCents, kind: fixture.schema.transactions.kind })
+        .from(fixture.schema.transactions)
+        .where(eq(fixture.schema.transactions.householdId, fixture.householdId));
+      const plans = await fixture.db
+        .select({ id: fixture.schema.installmentPlans.id })
+        .from(fixture.schema.installmentPlans)
+        .where(eq(fixture.schema.installmentPlans.householdId, fixture.householdId));
+
+      // 5 linhas lidas: 2 importadas (0 e 1); a informativa, a desmarcada e a duplicata ficam de fora.
+      expect(result.rowsImported).toBe(2);
+      expect(rows).toHaveLength(2);
+      expect(rows.every((r) => Number(r.amountCents) !== 0 && r.kind === 'expense')).toBe(true);
+      expect(plans).toHaveLength(0);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+});
