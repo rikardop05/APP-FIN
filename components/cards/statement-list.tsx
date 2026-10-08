@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { Badge, DateText, EmptyState, Money } from '@/components/ui-kit';
+import type { CardCycleConfig } from '@/lib/finance/billing';
+import { dueDateWarnings } from './due-date-check';
 import type { StatementRecord } from './schemas';
 
 const statusLabel: Record<StatementRecord['status'], string> = {
@@ -16,9 +18,14 @@ const statusVariant: Record<StatementRecord['status'], 'neutral' | 'success' | '
 
 type StatementListProps = {
   statements: StatementRecord[];
+  /** Ciclo ATUAL do cartão (fecha/vence): base do aviso de vencimento desatualizado (decisão 11c). */
+  cycle?: CardCycleConfig;
 };
 
-export function StatementList({ statements }: StatementListProps) {
+export function StatementList({ statements, cycle }: StatementListProps) {
+  const warnings = cycle === undefined ? [] : dueDateWarnings(statements, cycle);
+  const staleIds = new Set(warnings.map((warning) => warning.statementId));
+
   if (statements.length === 0) {
     return (
       <EmptyState
@@ -32,6 +39,18 @@ export function StatementList({ statements }: StatementListProps) {
 
   return (
     <>
+      {warnings.length > 0 ? (
+        <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+          <p className="font-medium">Vencimento diferente do ciclo atual do cartão</p>
+          <ul className="mt-1 flex flex-col gap-1">
+            {warnings.map((warning) => (
+              <li key={warning.statementId}>
+                <span className="font-medium">Competência {warning.period}:</span> {warning.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full border-collapse text-sm">
           <thead>
@@ -45,21 +64,21 @@ export function StatementList({ statements }: StatementListProps) {
           </thead>
           <tbody>
             {statements.map((statement) => (
-              <StatementTableRow key={statement.id} statement={statement} />
+              <StatementTableRow key={statement.id} statement={statement} staleDueDate={staleIds.has(statement.id)} />
             ))}
           </tbody>
         </table>
       </div>
       <div className="flex flex-col gap-2 md:hidden">
         {statements.map((statement) => (
-          <StatementCard key={statement.id} statement={statement} />
+          <StatementCard key={statement.id} statement={statement} staleDueDate={staleIds.has(statement.id)} />
         ))}
       </div>
     </>
   );
 }
 
-function StatementTableRow({ statement }: { statement: StatementRecord }) {
+function StatementTableRow({ statement, staleDueDate }: { statement: StatementRecord; staleDueDate: boolean }) {
   const mismatch = statement.differenceCents !== null && statement.differenceCents !== 0;
 
   return (
@@ -74,13 +93,14 @@ function StatementTableRow({ statement }: { statement: StatementRecord }) {
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={statusVariant[statement.status]}>{statusLabel[statement.status]}</Badge>
           {mismatch ? <Badge variant="danger">Divergência</Badge> : null}
+          {staleDueDate ? <Badge variant="warning">Vencimento desatualizado</Badge> : null}
         </div>
       </td>
     </tr>
   );
 }
 
-function StatementCard({ statement }: { statement: StatementRecord }) {
+function StatementCard({ statement, staleDueDate }: { statement: StatementRecord; staleDueDate: boolean }) {
   const mismatch = statement.differenceCents !== null && statement.differenceCents !== 0;
 
   return (
@@ -95,6 +115,7 @@ function StatementCard({ statement }: { statement: StatementRecord }) {
         <div className="flex flex-wrap gap-2">
           <Badge variant={statusVariant[statement.status]}>{statusLabel[statement.status]}</Badge>
           {mismatch ? <Badge variant="danger">Divergência</Badge> : null}
+          {staleDueDate ? <Badge variant="warning">Vencimento desatualizado</Badge> : null}
         </div>
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
