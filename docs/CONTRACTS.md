@@ -936,6 +936,7 @@ function buildImportPreview(input: {
   rules: Rule[]
   existingHashes: Set<string>
   today: IsoDate
+  cardHolders?: ReadonlyMap<string, string>  // final -> memberId (decisão 20); só vale com sourceKind 'credit_card'
 }): {
   rows: {
     index: number
@@ -1037,6 +1038,35 @@ não é despesa nem receita: o `FinalizeResult` a coloca em `skipped` com `reaso
 receita de R$ 0,00 inventada.
 
 **Invariante de teste obrigatória:** editar a data de uma linha muda sua `competence` e seu `dedupeHash`; editar o valor muda o hash e o total do lote; excluir uma linha a remove de `transactions` e a lista em `skipped`.
+
+### 16.1 Final do cartão → membro — `/lib/db/queries/card-holders.ts` (decisão 20, 2026-10-08)
+
+Tabela `credit_card_holders` (migration `0012`): `(credit_card_id, last4)` único, `last4` com
+CHECK `^[0-9]{4}$`, cascade de household, cartão e membro. O backup leva a tabela e remapeia
+`creditCardId` e `memberId`.
+
+```ts
+type CardHolderItem = { id: string; last4: string; memberId: string }
+
+listCardHolders(householdId): Promise<Map<creditCardId, CardHolderItem[]>>  // cada lista por last4 asc
+cardHoldersByLast4(householdId, creditCardId): Promise<Map<last4, memberId>>
+upsertCardHolder(householdId, creditCardId, { last4, memberId }): Promise<void>
+  // upsert por (cartão, final). CardNotFoundError: cartão de outro household.
+  // InvalidCardHolderError: final fora de 4 dígitos, ou membro de outro household.
+deleteCardHolder(householdId, creditCardId, holderId): Promise<void>
+  // CardHolderNotFoundError: não é do cartão ou do household.
+```
+
+`prepareImport` devolve `cardHolders: Map<last4, memberId>` do cartão da importação (conta:
+mapa vazio), e `POST /api/import/upload` o repassa a `buildImportPreview`.
+
+HTTP (forma usada pela tela de cartões; erros como `{ error: string }` em pt-BR):
+
+| rota | sucesso | erros |
+|---|---|---|
+| `GET /api/cards` | cada cartão ganha `holders: CardHolderItem[]`, por `last4` | |
+| `PUT /api/cards/[id]/holders` corpo `{ last4, memberId }` | 200 `{ cards, members }` | 400 final inválido ou membro de outro household; 404 cartão de outro household |
+| `DELETE /api/cards/[id]/holders/[holderId]` | 200 `{ cards, members }` | 404 se não for do cartão/household |
 
 ## 17. Sessão e contexto de household — `/lib/auth/session.ts`
 

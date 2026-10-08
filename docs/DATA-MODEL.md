@@ -71,6 +71,19 @@ import_format     : ofx | csv | xlsx | pdf | text
 
 > `closing_day`/`due_day` > último dia do mês são ajustados para o último dia (regra em `/lib/finance/billing`).
 
+### credit_card_holders
+Final do cartão → membro que o usa (decisão 20, migration 0012). A importação sugere o membro pelo final da compra.
+
+| coluna | tipo | notas |
+|---|---|---|
+| household_id | uuid not null references households(id) on delete cascade | |
+| credit_card_id | uuid not null references credit_cards(id) on delete cascade | |
+| last4 | text not null | `check (last4 ~ '^[0-9]{4}$')` |
+| member_id | uuid not null references members(id) on delete cascade | |
+| created_at / updated_at | timestamptz not null default now() | |
+
+`unique (credit_card_id, last4)` — no mesmo cartão, um final tem um dono só.
+
 ### statements
 | coluna | tipo | notas |
 |---|---|---|

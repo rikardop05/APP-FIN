@@ -22,4 +22,14 @@ export const cardBodySchema = z.object({
 
 export const cardIdSchema = z.string().uuid();
 
+/** Corpo do PUT /api/cards/[id]/holders: upsert por (cartao, final). Decisao 20. */
+export const cardHolderBodySchema = z
+  .object({
+    last4: z.string().trim().regex(/^[0-9]{4}$/),
+    memberId: z.string().uuid(),
+  })
+  .strict();
+
+export const cardHolderIdSchema = z.string().uuid();
+
 export type CardBody = z.infer<typeof cardBodySchema>;
