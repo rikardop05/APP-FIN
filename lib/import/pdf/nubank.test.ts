@@ -470,3 +470,17 @@ describe('parseNubankPdf — data do documento com o seu significado', () => {
     expect(result.documentDate).toBeNull();
   });
 });
+
+describe('parseNubankPdf — linha de valor zero e informativa (decisao 8)', () => {
+  const header = makeRow(782, [{ x: 327, y: 782, text: 'Fatura 15 SET 2026' }]);
+
+  it('marca R$ 0,00 como informativa, e a compra ao lado nao', () => {
+    const result = parseNubankPdf([
+      header,
+      transactionRow(700, { date: '07 SET', description: 'IOF ISENTO', value: 'R$ 0,00' }),
+      transactionRow(680, { date: '08 SET', description: 'PADARIA', value: 'R$ 10,00' }),
+    ]);
+    expect(result.rows[0]?.informational).toBe(true);
+    expect(result.rows[1]?.informational).toBeUndefined();
+  });
+});

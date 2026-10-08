@@ -56,6 +56,7 @@ import { cents, parseBRL, type Cents } from '@/lib/money';
 import {
   PDF_MONEY_TOKEN,
   isCreditCardPaymentDescription,
+  isInformationalAmount,
   yearForDateWithoutYear,
   type ReferenceDate,
 } from '@/lib/import/pdf/shared';
@@ -392,17 +393,20 @@ export function parseSantanderPdf(
       detectInstallment(dateMatch.description);
     // Pagamento da fatura anterior (RF-CC-04).
     const creditCardPayment = isCreditCardPaymentDescription(dateMatch.description);
+    const amountCents = amount === null ? null : toSystemAmount(amount);
 
     parsedRows.push({
       occurredOn,
       rawDescription: dateMatch.description,
-      amountCents: amount === null ? null : toSystemAmount(amount),
+      amountCents,
       fitId: null,
       installment:
         detected === null
           ? null
           : { current: detected.current, total: detected.total },
       ...(creditCardPayment ? { creditCardPayment: true } : {}),
+      // Decisao 8: `ANUIDADE DIFERENCIADA` R$ 0,00 (com parcela 01/12).
+      ...(isInformationalAmount(amountCents) ? { informational: true } : {}),
     });
   }
 

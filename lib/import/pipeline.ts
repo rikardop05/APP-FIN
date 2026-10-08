@@ -257,7 +257,12 @@ export function buildImportPreview(
   input: BuildImportPreviewInput,
 ): ImportPreview {
   const rows: ImportPreviewRow[] = input.parse.rows.map((row, index) => {
-    const { description, installment } = resolveInstallment(row);
+    const resolved = resolveInstallment(row);
+    const description = resolved.description;
+    // Linha informativa (decisao 8, R$ 0,00): zero nao e compromisso, entao a
+    // parcela impressa ao lado (`ANUIDADE DIFERENCIADA 01/12`) nao vira plano.
+    // O `finalizeImport` e quem garante que ela nao vira lancamento.
+    const installment = row.informational === true ? null : resolved.installment;
 
     const occurredOn = row.occurredOn;
     const amountCents = row.amountCents;
@@ -348,8 +353,11 @@ export function buildImportPreview(
       rowsDuplicated: rows.length - notDuplicated.length,
       installmentPlansDetected: planKeys.size,
       totalCents: addCents(...amounts),
+      // Linha informativa nao vira lancamento: nao ha o que categorizar.
       uncategorizedCount: notDuplicated.filter(
-        (row) => row.suggestedCategoryId === null,
+        (row) =>
+          row.suggestedCategoryId === null &&
+          input.parse.rows[row.index]?.informational !== true,
       ).length,
     },
     diagnostics: input.parse.diagnostics,
@@ -425,7 +433,14 @@ export interface FinalizedInstallmentPlan {
 export interface FinalizeResult {
   transactions: FinalizedTransaction[];
   installmentPlans: FinalizedInstallmentPlan[];
-  skipped: { index: number; reason: 'excluded_by_user' | 'duplicate' }[];
+  /**
+   * `informational` (decisao 8): valor CONFIRMADO zero. Nao e despesa nem
+   * receita, entao nao vira lancamento nem plano — com ou sem parcela.
+   */
+  skipped: {
+    index: number;
+    reason: 'excluded_by_user' | 'duplicate' | 'informational';
+  }[];
   totals: {
     includedCents: Cents;
     reportedCents: Cents | null;
@@ -488,6 +503,13 @@ export function finalizeImport(input: FinalizeInput): FinalizeResult {
   for (const row of input.rows) {
     if (!row.include) {
       skipped.push({ index: row.index, reason: 'excluded_by_user' });
+      continue;
+    }
+    // Pelo valor CONFIRMADO, nao pela marca do parser (regra 7): zero editado
+    // para um valor entra; um valor editado para zero sai. Daqui para frente
+    // nenhuma transacao tem valor zero, e o `kind` por sinal nunca ve zero.
+    if (row.amountCents === 0) {
+      skipped.push({ index: row.index, reason: 'informational' });
       continue;
     }
 

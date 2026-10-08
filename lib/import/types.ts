@@ -82,6 +82,17 @@ export interface ParsedRow {
    * antes de qualquer uso do valor.
    */
   creditCardPayment?: boolean;
+  /**
+   * `true` quando a linha e **informativa**: valor impresso R$ 0,00 (ex.: a
+   * `ANUIDADE DIFERENCIADA` isenta do Santander, impressa com parcela 01/12).
+   * Decisao 8 do Ricardo, 2026-10-07: zero nao e despesa nem receita, entao a
+   * linha nao vira lancamento nem plano de parcelas.
+   *
+   * Mesmo desenho de `creditCardPayment`: campo aditivo e opcional, o parser so
+   * REPORTA o que leu; a consequencia e do pipeline. `amountCents === null`
+   * (valor nao lido) NAO e informativo — e campo a completar.
+   */
+  informational?: boolean;
 }
 
 /**

@@ -528,3 +528,66 @@ describe('parseSantanderPdf — data do documento', () => {
     expect(result.documentDate).toEqual({ date: '2026-08-22', kind: 'due_date' });
   });
 });
+
+describe('parseSantanderPdf — linha de valor zero e informativa (decisao 8)', () => {
+  const CARD = { closingDay: 10, dueDay: 20 };
+  // Forma do caso real: anuidade isenta, impressa com parcela e R$ 0,00.
+  const anuidade = makeRow(700, [
+    { x: 16, y: 700, text: '2' },
+    { x: DATE_X, y: 700, text: '11/09 ANUIDADE DIFERENCIADA' },
+    { x: AUX_X, y: 700, text: '01/12' },
+    { x: valueX('0,00'), y: 700, text: '0,00' },
+  ]);
+
+  it('marca a linha de R$ 0,00 como informativa, e a compra ao lado nao', () => {
+    const result = parseSantanderPdf(
+      [anuidade, transactionRow(680, { date: '12/09', description: 'LOJA', value: '10,00' })],
+      { defaultYear: 2026 },
+    );
+    expect(result.rows[0]?.informational).toBe(true);
+    expect(result.rows[0]?.amountCents).toBe(0);
+    expect(result.rows[1]?.informational).toBeUndefined();
+  });
+
+  it('ponta a ponta: nao vira lancamento nem plano de parcelas', () => {
+    const parse = parseSantanderPdf([anuidade], { defaultYear: 2026 });
+    const preview = buildImportPreview({
+      parse,
+      sourceId: 'santander-card',
+      sourceKind: 'credit_card',
+      cardCycle: CARD,
+      rules: [],
+      existingHashes: new Set<string>(),
+      today: '2026-09-30',
+      statementCompetence: '2026-10',
+    });
+    const first = preview.rows[0];
+    expect(first?.installment).toBeNull();
+    expect(preview.summary.installmentPlansDetected).toBe(0);
+
+    const result = finalizeImport({
+      rows: [
+        {
+          index: 0,
+          include: true,
+          occurredOn: first?.occurredOn ?? '2026-09-11',
+          description: first?.description ?? '',
+          rawDescription: first?.rawDescription ?? '',
+          amountCents: first?.amountCents ?? cents(0),
+          categoryId: null,
+          memberId: null,
+          installment: first?.installment ?? null,
+        },
+      ],
+      sourceId: 'santander-card',
+      sourceKind: 'credit_card',
+      cardCycle: CARD,
+      existingHashes: new Set<string>(),
+      reportedTotalCents: null,
+      statementCompetence: '2026-10',
+    });
+    expect(result.transactions).toEqual([]);
+    expect(result.installmentPlans).toEqual([]);
+    expect(result.skipped).toEqual([{ index: 0, reason: 'informational' }]);
+  });
+});

@@ -27,7 +27,7 @@
  * Modulo puro (CONVENTIONS §5): sem I/O, sem `Date`, sem `process.env`.
  */
 
-import { MINUS_DASH_CLASS } from '@/lib/money';
+import { MINUS_DASH_CLASS, type Cents } from '@/lib/money';
 
 /**
  * Token monetario comum: valor com `R$` ou numero decimal pt-BR, com traco de
@@ -64,6 +64,18 @@ const CREDIT_CARD_PAYMENT_PATTERN = /^\s*pagamento\b/i;
 /** `true` quando a descricao parece o pagamento da fatura anterior. */
 export function isCreditCardPaymentDescription(description: string): boolean {
   return CREDIT_CARD_PAYMENT_PATTERN.test(description);
+}
+
+/**
+ * Reconhece uma linha **informativa** da fatura (decisao 8): valor R$ 0,00.
+ *
+ * Zero nao e despesa nem receita; a linha existe no documento so para informar
+ * (anuidade isenta, tarifa zerada). Centralizado aqui pelo mesmo motivo do
+ * pagamento de fatura: os quatro parsers nao divergirem. `null` (valor nao
+ * lido) fica de fora: e campo a completar, nao zero.
+ */
+export function isInformationalAmount(amountCents: Cents | null): boolean {
+  return amountCents === 0;
 }
 
 /**

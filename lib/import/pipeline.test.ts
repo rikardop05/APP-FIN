@@ -587,3 +587,56 @@ describe('buildImportPreview — total impresso (vai ate o commit)', () => {
     expect(preview([parsed({})]).reportedTotalCents).toBeNull();
   });
 });
+
+describe('linha de valor zero e informativa (decisao 8)', () => {
+  const anuidade = parsed({
+    rawDescription: 'ANUIDADE DIFERENCIADA',
+    amountCents: cents(0),
+    installment: { current: 1, total: 12 },
+    informational: true,
+  });
+
+  it('no preview, nao carrega parcela nem conta plano', () => {
+    const result = preview([anuidade]);
+    expect(result.rows[0]?.installment).toBeNull();
+    expect(result.rows[0]?.state).toBe('new');
+    expect(result.summary.installmentPlansDetected).toBe(0);
+  });
+
+  it('no preview, segue na contagem (invariante do §15) mas nao pede categoria', () => {
+    const result = preview([anuidade, parsed({})]);
+    expect(result.summary.rowsNew + result.summary.rowsDuplicated).toBe(
+      result.summary.rowsRead,
+    );
+    expect(result.summary.uncategorizedCount).toBe(1);
+  });
+
+  it('no finalize, valor CONFIRMADO zero nao vira lancamento nem plano', () => {
+    const result = finalize([
+      confirmed({ index: 0, amountCents: cents(0), installment: { current: 1, total: 12 } }),
+      confirmed({ index: 1, rawDescription: 'LOJA', description: 'LOJA' }),
+    ]);
+    expect(result.installmentPlans).toEqual([]);
+    expect(result.transactions).toHaveLength(1);
+    expect(result.transactions.every((t) => t.amountCents !== 0)).toBe(true);
+    expect(result.skipped).toEqual([{ index: 0, reason: 'informational' }]);
+    expect(result.totals.includedCents).toBe(-1000);
+  });
+
+  it('o que conta e o valor confirmado: zero editado para um valor entra', () => {
+    const result = finalize([confirmed({ amountCents: cents(-500) })]);
+    expect(result.transactions).toHaveLength(1);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it('linha desmarcada pelo usuario continua excluded_by_user, mesmo sendo zero', () => {
+    const result = finalize([confirmed({ include: false, amountCents: cents(0) })]);
+    expect(result.skipped).toEqual([{ index: 0, reason: 'excluded_by_user' }]);
+  });
+
+  it('decisao 9a intacta: duas linhas identicas com valor, a segunda e duplicata', () => {
+    const result = finalize([confirmed({ index: 0 }), confirmed({ index: 1 })]);
+    expect(result.transactions).toHaveLength(1);
+    expect(result.skipped).toEqual([{ index: 1, reason: 'duplicate' }]);
+  });
+});

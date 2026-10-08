@@ -443,3 +443,17 @@ describe('parsePastedText — pureza e reentrancia', () => {
     expect(parsePastedText(undefined as unknown as string).rows).toEqual([]);
   });
 });
+
+describe('parsePastedText — linha de valor zero e informativa (decisao 8)', () => {
+  it('marca R$ 0,00 como informativa', () => {
+    expect(onlyRow('10/09/2026 ANUIDADE DIFERENCIADA R$ 0,00').informational).toBe(true);
+  });
+
+  it('nao marca linha com valor', () => {
+    expect(onlyRow('10/09/2026 LOJA SINTETICA R$ 50,00').informational).toBeUndefined();
+  });
+
+  it('nao marca linha sem valor: ela e campo a completar, nao zero', () => {
+    expect(onlyRow('10/09/2026 LOJA SINTETICA').informational).toBeUndefined();
+  });
+});

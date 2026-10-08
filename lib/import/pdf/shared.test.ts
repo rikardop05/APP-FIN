@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { PDF_MONEY_TOKEN, yearForDateWithoutYear } from '@/lib/import/pdf/shared';
+import {
+  PDF_MONEY_TOKEN,
+  isInformationalAmount,
+  yearForDateWithoutYear,
+} from '@/lib/import/pdf/shared';
 import { MINUS_DASH_CODE_POINTS, cents, parseBRL } from '@/lib/money';
 
 /** Traço como string, a partir do code point. */
@@ -67,5 +71,20 @@ describe('shared — virada de ano', () => {
     expect(
       yearForDateWithoutYear({ month: 11, day: 24, reference: null, fallbackYear: null }),
     ).toBeNull();
+  });
+});
+
+describe('shared — linha informativa (decisao 8)', () => {
+  it('valor zero e informativo', () => {
+    expect(isInformationalAmount(cents(0))).toBe(true);
+  });
+
+  it('valor nao zero, de qualquer sinal, nao e informativo', () => {
+    expect(isInformationalAmount(cents(-1))).toBe(false);
+    expect(isInformationalAmount(cents(1))).toBe(false);
+  });
+
+  it('valor nao lido (null) nao e informativo: e campo a completar', () => {
+    expect(isInformationalAmount(null)).toBe(false);
   });
 });

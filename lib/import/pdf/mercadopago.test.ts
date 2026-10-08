@@ -531,3 +531,15 @@ describe('parseMercadoPagoPdf — data do documento', () => {
     expect(result.documentDate).toEqual({ date: '2026-07-20', kind: 'due_date' });
   });
 });
+
+describe('parseMercadoPagoPdf — linha de valor zero e informativa (decisao 8)', () => {
+  it('marca R$ 0,00 como informativa, e a compra ao lado nao', () => {
+    const result = parseMercadoPagoPdf([
+      headerRow(),
+      transactionRow(680, { date: '14/07', description: 'TARIFA ISENTA', value: 'R$ 0,00' }),
+      transactionRow(660, { date: '15/07', description: 'LOJA', value: 'R$ 10,00' }),
+    ]);
+    expect(result.rows[0]?.informational).toBe(true);
+    expect(result.rows[1]?.informational).toBeUndefined();
+  });
+});

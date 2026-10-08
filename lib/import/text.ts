@@ -95,7 +95,10 @@ import type { Competence, IsoDate } from '@/lib/date';
 import { parseBRL } from '@/lib/money';
 import type { Cents } from '@/lib/money';
 import { detectInstallment } from '@/lib/import/installments';
-import { isCreditCardPaymentDescription } from '@/lib/import/pdf/shared';
+import {
+  isCreditCardPaymentDescription,
+  isInformationalAmount,
+} from '@/lib/import/pdf/shared';
 import type { ParseDiagnostic, ParseResult, ParsedRow } from '@/lib/import/types';
 
 /** Nivel de confianca do parse de uma linha. Ver as regras em `parsePastedText`. */
@@ -661,6 +664,10 @@ export function parsePastedText(
       sourceLine: line,
       missing,
       ...(creditCardPayment ? { creditCardPayment: true } : {}),
+      // Decisao 8: R$ 0,00 LIDO e informativo; valor nao lido (`null`) nao e.
+      ...(isInformationalAmount(parsed.amount?.value ?? null)
+        ? { informational: true }
+        : {}),
     });
   }
 
