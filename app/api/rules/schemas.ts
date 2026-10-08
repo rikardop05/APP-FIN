@@ -60,5 +60,24 @@ export const ruleOrderSchema = z.object({
 
 export const ruleIdSchema = z.string().uuid();
 
+/**
+ * Aplicar regras aos lancamentos existentes (F3), em dois passos:
+ * `dryRun: true` devolve a previa (`ruleId` null = todas as regras);
+ * `dryRun: false` grava EXATAMENTE os itens confirmados da previa.
+ */
+export const applyRulesSchema = z.discriminatedUnion('dryRun', [
+  z.object({
+    dryRun: z.literal(true),
+    ruleId: z.string().uuid().nullable().optional().default(null),
+  }),
+  z.object({
+    dryRun: z.literal(false),
+    items: z
+      .array(z.object({ transactionId: z.string().uuid(), ruleId: z.string().uuid() }))
+      .max(2000),
+  }),
+]);
+
 export type RuleBody = z.infer<typeof ruleBodySchema>;
 export type RuleOrder = z.infer<typeof ruleOrderSchema>;
+export type ApplyRulesBody = z.infer<typeof applyRulesSchema>;

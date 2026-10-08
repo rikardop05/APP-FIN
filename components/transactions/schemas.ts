@@ -118,3 +118,29 @@ export const deleteResultSchema = z.object({ id: z.string().uuid(), deleted: del
 
 export type DeleteImpact = z.infer<typeof deleteImpactSchema>;
 export type DeleteEffect = DeleteImpact['effects'][number];
+
+/** Previa de `POST /api/rules/apply` com `dryRun: true` (F3). */
+export const ruleApplicationProposalSchema = z.object({
+  transactionId: z.string().uuid(),
+  occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  description: z.string(),
+  amountCents: centsSchema,
+  ruleId: z.string().uuid(),
+  rulePattern: z.string(),
+  categoryId: z.string().uuid(),
+  categoryName: z.string(),
+});
+
+export const ruleApplicationPreviewSchema = z.object({
+  proposals: z.array(ruleApplicationProposalSchema),
+});
+
+/** Resposta de `POST /api/rules/apply` com `dryRun: false`. */
+export const ruleApplicationResultSchema = z.object({
+  applied: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+  propagated: z.number().int().nonnegative(),
+});
+
+export type RuleApplicationProposal = z.infer<typeof ruleApplicationProposalSchema>;
+export type RuleApplicationResult = z.infer<typeof ruleApplicationResultSchema>;
