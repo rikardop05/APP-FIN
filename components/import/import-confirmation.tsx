@@ -659,7 +659,11 @@ export function ImportConfirmation({
         })}
       </div>
 
-      <footer className="sticky bottom-0 mt-2 flex flex-col gap-3 border-t border-border bg-card py-4 sm:flex-row sm:items-center sm:justify-between">
+      {/*
+        No celular o BottomNav é fixo (z-30, 4rem + área segura do iPhone): o rodapé gruda logo
+        ACIMA dele, com a mesma soma, e não por baixo. A partir de md não há BottomNav: bottom-0.
+      */}
+      <footer className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 mt-2 flex flex-col gap-3 border-t border-border bg-card py-4 sm:flex-row sm:items-center sm:justify-between md:bottom-0">
         <div className="flex flex-col gap-0.5">
           <p className="text-xs text-muted-foreground">Total das linhas incluídas</p>
           <p className="text-lg font-semibold text-foreground">

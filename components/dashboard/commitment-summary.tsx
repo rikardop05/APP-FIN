@@ -1,3 +1,4 @@
+import { competenceShort } from '@/components/cashflow/labels';
 import { CalendarClock, CreditCard } from 'lucide-react';
 
 import { EmptyState, Money } from '@/components/ui-kit';
@@ -33,13 +34,13 @@ export function CommitmentSummary({
   competence,
   commitmentMonths,
 }: CommitmentSummaryProps) {
-  const competenciaCurta = `${competence.slice(5)}/${competence.slice(0, 4)}`;
+  const competenciaCurta = competenceShort(competence);
   const hasCommitment = lastCommittedCompetence !== null;
   const lastShort =
     lastCommittedCompetence === null
       ? null
-      : `${lastCommittedCompetence.slice(5)}/${lastCommittedCompetence.slice(0, 4)}`;
-  const endShort = `${windowEnd.slice(5)}/${windowEnd.slice(0, 4)}`;
+      : competenceShort(lastCommittedCompetence);
+  const endShort = competenceShort(windowEnd);
   const atWindowEdge =
     lastCommittedCompetence !== null && lastCommittedCompetence === windowEnd;
 

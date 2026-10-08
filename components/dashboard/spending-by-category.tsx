@@ -1,6 +1,8 @@
 import { PiggyBank, Receipt } from 'lucide-react';
 
+import { competenceShort } from '@/components/cashflow/labels';
 import { EmptyState, Money } from '@/components/ui-kit';
+import { BAR_X_CLASS, barScaleStyle } from './bar-scale';
 import { basisPoints, type BasisPoints, type Cents } from '@/lib/money';
 
 type SpendingByCategoryProps = {
@@ -35,7 +37,7 @@ export function SpendingByCategory({ items: unsortedItems, competence }: Spendin
   // deixa a ordenação a quem desenha (`spendingByCategory`, docblock); ordenar é
   // apresentação. `sort` em cópia: o array de entrada não é do componente.
   const items = [...unsortedItems].sort((a, b) => b.spentCents - a.spentCents);
-  const competenciaCurta = `${competence.slice(5)}/${competence.slice(0, 4)}`;
+  const competenciaCurta = competenceShort(competence);
 
   if (items.length === 0) {
     return (
@@ -111,10 +113,7 @@ export function SpendingByCategory({ items: unsortedItems, competence }: Spendin
                   role="img"
                   aria-label={`${item.name}: ${Math.round(width)}% do maior gasto da lista`}
                 >
-                  <div
-                    className="h-full rounded-full bg-primary transition-[width]"
-                    style={{ width: `${width}%` }}
-                  />
+                  <div className={`${BAR_X_CLASS} bg-primary`} style={barScaleStyle(width, 'x')} />
                 </div>
                 {variation === null ? (
                   <span className="min-w-[3.5rem] text-right text-xs text-muted-foreground">sem média</span>

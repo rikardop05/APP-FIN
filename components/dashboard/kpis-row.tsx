@@ -1,5 +1,6 @@
 import { ArrowDownRight, ArrowUpRight, PiggyBank, Receipt, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 
+import { competenceShort } from '@/components/cashflow/labels';
 import { Money } from '@/components/ui-kit';
 import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 import type { BasisPoints, Cents } from '@/lib/money';
@@ -46,7 +47,7 @@ export function KpisRow({
   competence,
   commitmentMonths,
 }: KpisRowProps) {
-  const competenciaCurta = `${competence.slice(5)}/${competence.slice(0, 4)}`;
+  const competenciaCurta = competenceShort(competence);
   const surplusIsDeficit = surplusCents < 0;
   return (
     <section

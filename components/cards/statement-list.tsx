@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { competenceShort } from '@/components/cashflow/labels';
 import { Badge, DateText, EmptyState, Money } from '@/components/ui-kit';
 import type { IsoDate } from '@/lib/date';
 import type { CardCycleConfig } from '@/lib/finance/billing';
@@ -84,7 +85,7 @@ function StatementTableRow({ statement, staleDueDate }: { statement: StatementRe
 
   return (
     <tr className="border-b border-border last:border-0">
-      <td className="px-3 py-3 align-middle font-medium">{statement.period}</td>
+      <td className="px-3 py-3 align-middle font-medium">{competenceShort(statement.period)}</td>
       <td className="px-3 py-3 align-middle"><DateText value={statement.dueDate} /></td>
       <td className="px-3 py-3 text-right align-middle"><Money value={statement.computedTotalCents} /></td>
       <td className="px-3 py-3 text-right align-middle">
@@ -108,7 +109,7 @@ function StatementCard({ statement, staleDueDate }: { statement: StatementRecord
     <article className="rounded-md border border-border p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h4 className="font-medium text-foreground">Competência {statement.period}</h4>
+          <h4 className="font-medium text-foreground">Competência {competenceShort(statement.period)}</h4>
           <p className="text-xs text-muted-foreground">
             Vencimento <DateText value={statement.dueDate} />
           </p>

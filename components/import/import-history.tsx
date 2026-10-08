@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertCircle, History, Undo2 } from 'lucide-react';
 
 import { Badge, Button } from '@/components/ui-kit';
 import { formatDateBR } from '@/lib/date';
 
 import { ImportHistoryEmptyState } from './import-history-empty-state';
+import { revertedMessage, rowCountLabel } from './import-history-text';
 import { apiErrorSchema } from './schemas';
 import {
   importBatchesResponseSchema,
@@ -52,11 +54,6 @@ function statusVariant(
   return 'danger';
 }
 
-function rowCountLabel(rowsImported: number): string {
-  if (rowsImported === 1) return '1 lançamento';
-  return `${rowsImported} lançamentos`;
-}
-
 /**
  * Texto da confirmação explícita do desfazer. Carrega o NÚMERO de linhas e a
  * DATA do lote — é o que dá ao usuário a percepção de "qual lote" ele está
@@ -73,6 +70,10 @@ function revertPrompt(batch: ImportBatchHistoryItem): string {
   return `Desfazer importação de ${date} com ${rowCountLabel(batch.rowsImported)}?`;
 }
 
+const revertTriggerId = (batchId: string) => `revert-trigger-${batchId}`;
+const revertCancelId = (batchId: string) => `revert-cancel-${batchId}`;
+const revertDialogId = (batchId: string) => `revert-dialog-${batchId}`;
+
 async function readApiError(response: Response, fallback: string): Promise<string> {
   const body: unknown = await response.json().catch(() => null);
   const parsed = apiErrorSchema.safeParse(body);
@@ -80,8 +81,15 @@ async function readApiError(response: Response, fallback: string): Promise<strin
 }
 
 export function ImportHistory({ refreshKey }: ImportHistoryProps) {
+  const router = useRouter();
   const [state, setState] = useState<LoadState>({ kind: 'idle' });
   const [revertState, setRevertState] = useState<RevertState>({ kind: 'idle' });
+  // Foco do alertdialog: entra no "Cancelar" ao abrir (a opção que não apaga nada) e
+  // volta ao botão "Desfazer" do lote ao fechar. Depois de desfazer, o botão some (o lote
+  // deixa de ser "Confirmada"), então o foco vai para a mensagem de resultado.
+  // Por id, não por ref: o `Button` do ui-kit não repassa ref.
+  const resultRef = useRef<HTMLParagraphElement>(null);
+  const returnFocusTo = useRef<string | null>(null);
 
   const refetch = useCallback(async () => {
     setState({ kind: 'loading' });
@@ -115,7 +123,23 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
     return state.batches.find((batch) => batch.id === revertState.batchId) ?? null;
   }, [revertState, state]);
 
+  useEffect(() => {
+    if (revertState.kind === 'confirming') {
+      document.getElementById(revertCancelId(revertState.batchId))?.focus();
+    } else if (revertState.kind === 'reverting') {
+      // Os botões ficam desabilitados e perderiam o foco para o <body>: o foco fica no diálogo.
+      document.getElementById(revertDialogId(revertState.batchId))?.focus();
+    } else if (revertState.kind === 'reverted') {
+      resultRef.current?.focus();
+      returnFocusTo.current = null;
+    } else if ((revertState.kind === 'idle' || revertState.kind === 'error') && returnFocusTo.current !== null) {
+      document.getElementById(revertTriggerId(returnFocusTo.current))?.focus();
+      returnFocusTo.current = null;
+    }
+  }, [revertState]);
+
   function startConfirm(batchId: string) {
+    returnFocusTo.current = batchId;
     setRevertState({ kind: 'confirming', batchId });
   }
 
@@ -148,6 +172,9 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
         batchId,
         transactionsDeleted: result.transactionsDeleted,
       });
+      // Os números das outras telas (lançamentos, painel, fluxo) passam a refletir o lote
+      // desfeito sem a pessoa recarregar nada.
+      router.refresh();
       await refetch();
     } catch (cause) {
       setRevertState({
@@ -195,8 +222,10 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
       {state.kind === 'ready' && state.batches.length > 0 ? (
         <ul className="flex flex-col gap-2">
           {state.batches.map((batch) => {
+            // O diálogo fica aberto também enquanto desfaz: some só com o resultado.
             const isConfirming =
-              revertState.kind === 'confirming' && revertState.batchId === batch.id;
+              (revertState.kind === 'confirming' || revertState.kind === 'reverting') &&
+              revertState.batchId === batch.id;
             const isReverting =
               revertState.kind === 'reverting' && revertState.batchId === batch.id;
             const revertError =
@@ -231,6 +260,7 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
                     </Badge>
                     {canRevert ? (
                       <Button
+                        id={revertTriggerId(batch.id)}
                         type="button"
                         size="sm"
                         variant="outline"
@@ -247,17 +277,25 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
 
                 {isConfirming && confirmingBatch ? (
                   <div
+                    id={revertDialogId(batch.id)}
+                    tabIndex={-1}
+                    aria-busy={isReverting}
                     role="alertdialog"
-                    aria-label="Confirmar desfazer importação"
+                    aria-labelledby={`revert-prompt-${batch.id}`}
+                    aria-describedby={`revert-detail-${batch.id}`}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') cancelConfirm();
+                    }}
                     className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
                   >
-                    <p className="font-medium">{revertPrompt(confirmingBatch)}</p>
-                    <p className="mt-1 text-xs text-amber-900/80">
+                    <p id={`revert-prompt-${batch.id}`} className="font-medium">{revertPrompt(confirmingBatch)}</p>
+                    <p id={`revert-detail-${batch.id}`} className="mt-1 text-xs text-amber-900/80">
                       Esta ação remove os lançamentos do lote. O histórico do
                       lote é preservado como desfeito.
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button
+                        id={revertCancelId(batch.id)}
                         type="button"
                         size="sm"
                         variant="outline"
@@ -288,10 +326,9 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
                   </div>
                 ) : null}
 
-                {justReverted ? (
-                  <p className="mt-2 text-xs text-emerald-700">
-                    Lote desfeito. Recarregue a tela de lançamentos para ver
-                    os números atualizados.
+                {justReverted && revertState.kind === 'reverted' ? (
+                  <p ref={resultRef} tabIndex={-1} role="status" className="mt-2 text-xs text-emerald-700">
+                    {revertedMessage(revertState.transactionsDeleted)}
                   </p>
                 ) : null}
               </li>

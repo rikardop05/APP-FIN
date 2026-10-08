@@ -130,7 +130,7 @@ export function ReviewScreen() {
                 <li key={group.key} className="flex flex-col gap-3 rounded-lg border border-border p-4">
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
-                      <p className="truncate font-medium">{group.sampleDescriptions.join(' · ')}</p>
+                      <p className="truncate font-medium" title={group.sampleDescriptions.join(' · ')}>{group.sampleDescriptions.join(' · ')}</p>
                       <p className="text-xs text-muted-foreground">
                         {group.count} lançamento{group.count === 1 ? '' : 's'} · {group.direction === 'in' ? 'entrada' : 'saída'}
                         {group.ruleId !== null ? <> · já reconhecido pela regra &ldquo;{group.pattern}&rdquo;</> : null}

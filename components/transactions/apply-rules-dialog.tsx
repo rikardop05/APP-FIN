@@ -63,7 +63,7 @@ export function ApplyRulesDialog({
                   onChange={() => toggle(proposal.transactionId)}
                 />
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate font-medium">{proposal.description}</span>
+                  <span className="truncate font-medium" title={proposal.description}>{proposal.description}</span>
                   <span className="text-xs text-muted-foreground">
                     <DateText value={proposal.occurredOn} /> · regra &ldquo;{proposal.rulePattern}&rdquo; → {proposal.categoryName}
                   </span>

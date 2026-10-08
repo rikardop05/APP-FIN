@@ -14,6 +14,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // Ocupa a tela inteira do iPhone (inclusive a faixa do indicador de início), para o
+  // BottomNav poder somar `env(safe-area-inset-bottom)`: sem `cover` o env() vale 0.
+  viewportFit: 'cover',
   themeColor: '#18181b',
 };
 

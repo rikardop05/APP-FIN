@@ -23,6 +23,16 @@ export function competenceLabel(competence: string): string {
   return `${MONTHS[month - 1] ?? competence} de ${year}`;
 }
 
+/**
+ * `2026-10` -> `Outubro de 2026`: o mesmo texto de `competenceLabel` com SÓ a primeira letra em
+ * maiúscula. Antes o título usava a classe CSS `capitalize`, que capitaliza toda palavra e dava
+ * "Outubro De 2026" (o "de" em maiúscula não é português).
+ */
+export function competenceTitle(competence: string): string {
+  const label = competenceLabel(competence);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 /** Valor para o CAMPO do formulário: `120050` -> `1.200,50` (sem `R$`). */
 export function toFieldText(value: Cents): string {
   return formatBRL(value).replace(/^R\$\s*/, '').trim();

@@ -1,0 +1,149 @@
+{
+  "title": "Escolha o mundo visual do APPFIN",
+  "question": "O sorteio indicou a Tabela de Classificação. Fique com ela, escolha uma alternativa ou sorteie de novo. A primeira tela redesenhada é a revisão da fatura.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Tabela de Classificação",
+      "kicker": "O SORTEIO",
+      "lineage": "a tabela do Brasileirão no caderno de esportes e no rodapé da TV",
+      "thesis": "O mês de vocês lido como uma tabela que todo brasileiro sabe ler: linhas densas, números condensados e zonas coloridas que dizem onde cada coisa está.",
+      "palette": ["#FFFFFF", "#111418", "#14284B", "#1F6FD1", "#1E9E5A", "#E8A317", "#D3322C"],
+      "materials": ["numerais condensados tabulares", "faixas de zona na borda da linha", "réguas de 1px, sem raio"],
+      "viewport": "Barra lateral azul-noite com a navegação. À direita, a revisão da fatura como tabela densa (data · descrição · parcela · categoria · responsável · valor), uma linha por lançamento, cada uma com sua faixa de zona: verde nova, cinza duplicada, âmbar precisa de atenção. No rodapé fixo, o placar: Fatura R$ 3.132,24 × Incluído R$ 3.098,10 · diferença R$ 34,14, e o botão Confirmar.",
+      "risk": "Se as zonas virarem enfeite em tudo, a tela fica um painel de futebol; elas só aparecem onde há estado.",
+      "raised": [
+        {"from": "challenger-centre-rail", "raise": "Toda régua e borda em 1px, sem cantos arredondados: estado é marca impressa, não sombra."},
+        {"from": "challenger-bitmap", "raise": "Um só sistema de numerais em todas as escalas: o número do placar e o da célula são a mesma face condensada tabular."},
+        {"from": "challenger-feed", "raise": "A próxima linha que precisa de atenção já está pronta: J e K pulam entre elas, uma de cada vez."},
+        {"from": "challenger-jcard", "raise": "Todo total mostra quanto resta da capacidade, alinhado à direita, como o tempo que sobra no lado da fita."},
+        {"from": "challenger-darkroom", "raise": "Estado nunca só por cor: cada faixa de zona carrega também uma letra (N, D, !) legível sem cor."}
+      ],
+      "wireframe": {"cols": 12, "rows": 10, "regions": [
+        {"label": "navegação", "x": 0, "y": 0, "w": 2, "h": 10, "accent": true},
+        {"label": "filtros · só atenção", "x": 2, "y": 0, "w": 10, "h": 1},
+        {"label": "tabela densa com faixas de zona", "x": 2, "y": 1, "w": 10, "h": 8},
+        {"label": "placar: fatura × incluído · Confirmar", "x": 2, "y": 9, "w": 10, "h": 1, "accent": true}
+      ]}
+    },
+    {
+      "id": "model-pick",
+      "label": "Carnê de Prestações",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "o carnê de loja de departamento, com canhotos destacáveis",
+      "thesis": "O futuro comprometido é um carnê: cada parcela é um canhoto, e o mês que passa é o canhoto destacado.",
+      "palette": ["#F1F6F4", "#0F2A2A", "#2E8C7A", "#C8352B", "#B8C7C2"],
+      "materials": ["fundo de segurança em guilhoché leve", "picote tracejado", "carimbo PAGO"],
+      "viewport": "Revisão da fatura como lista de canhotos em coluna: cada lançamento um canhoto com vencimento, parcela 3/10 e valor; as parcelas futuras aparecem como os canhotos ainda presos, à direita.",
+      "risk": "Pode ler como varejo popular ou boleto, perto do 'app de banco' que vocês rejeitaram.",
+      "wireframe": {"cols": 12, "rows": 10, "regions": [
+        {"label": "navegação", "x": 0, "y": 0, "w": 2, "h": 10, "accent": true},
+        {"label": "canhotos do mês", "x": 2, "y": 0, "w": 7, "h": 9},
+        {"label": "carnê das parcelas futuras", "x": 9, "y": 0, "w": 3, "h": 9},
+        {"label": "total · Confirmar", "x": 2, "y": 9, "w": 10, "h": 1}
+      ]}
+    },
+    {
+      "id": "challenger-wayfinding",
+      "label": "Sinalização de Aeroporto",
+      "verdict": "competitive",
+      "lineage": "painéis amarelos de sinalização de terminal",
+      "thesis": "Cada tela mostra só a próxima decisão, em amarelo, com a distância até ela.",
+      "palette": ["#FFC917", "#111111", "#FFFFFF", "#2B2B2B"],
+      "materials": ["painel amarelo saturado", "sans humanista em caixa-baixa", "setas presas à borda"],
+      "viewport": "Faixa amarela no topo da revisão: '4 linhas precisam de você · diferença R$ 34,14'. Abaixo, a lista; cada linha resolvida sai do painel.",
+      "case": "Funde bem: a revisão vira uma sequência de decisões e o Painel ganha uma frase só. Perde na identificação: é o mundo de viagem, não o da casa.",
+      "risk": "Amarelo em área grande cansa numa sessão de revisão longa.",
+      "hero": "https://impeccable.style/worlds/cards/wayfinding-cartography-signage-terminal-yellow-wayfinding-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/wayfinding-cartography-signage-terminal-yellow-wayfinding.webp",
+      "wireframe": {"cols": 12, "rows": 10, "regions": [
+        {"label": "navegação", "x": 0, "y": 0, "w": 2, "h": 10},
+        {"label": "faixa amarela: próxima decisão", "x": 2, "y": 0, "w": 10, "h": 2, "accent": true},
+        {"label": "lista restante", "x": 2, "y": 2, "w": 10, "h": 7},
+        {"label": "Confirmar", "x": 2, "y": 9, "w": 10, "h": 1}
+      ]}
+    },
+    {
+      "id": "challenger-centre-rail",
+      "label": "Edição Anotada",
+      "verdict": "declined",
+      "lineage": "edição de referência com trilho central de chaves",
+      "thesis": "Duas colunas estreitas em torno de um trilho de chaves, com o aparato na margem.",
+      "palette": ["#EDE8DC", "#141414", "#C2361F"],
+      "materials": ["régua de 1px", "versalete de aparato"],
+      "viewport": "Lançamentos em duas colunas com as chaves de estado no trilho central.",
+      "case": "Funde mal: vocês não se reconhecem numa edição erudita, e duas colunas pioram a leitura de valores.",
+      "kept": "Régua de 1px e estado como marca impressa.",
+      "risk": "Lê como livro, não como ferramenta.",
+      "hero": "https://impeccable.style/worlds/cards/rw-centre-rail-reference-setting-hero.webp"
+    },
+    {
+      "id": "challenger-bitmap",
+      "label": "Espécime Bitmap",
+      "verdict": "declined",
+      "lineage": "espécimes tipográficos bitmap da Emigre",
+      "thesis": "Letras de pixel em escala de cartaz sobre colunas finas.",
+      "palette": ["#FFFFFF", "#000000", "#FF3B1F"],
+      "materials": ["pixel inteiro", "meio-tom"],
+      "viewport": "O total da fatura em pixel gigante sobre a lista.",
+      "case": "Funde mal: dinheiro em pixel parece brincadeira e prejudica a leitura.",
+      "kept": "Uma só família numérica em todas as escalas.",
+      "risk": "Ilegível nos tamanhos de tabela.",
+      "hero": "https://impeccable.style/worlds/cards/emigre-bitmap-specimen-hero.webp"
+    },
+    {
+      "id": "challenger-feed",
+      "label": "Feed Vertical",
+      "verdict": "declined",
+      "lineage": "feed vertical de vídeos curtos",
+      "thesis": "Um lançamento por tela, o próximo a um deslize.",
+      "palette": ["#000000", "#FFFFFF", "#FE2C55"],
+      "materials": ["tela cheia", "trilho de ícones"],
+      "viewport": "Cada linha da fatura ocupa a tela; deslizar confirma e passa.",
+      "case": "Funde mal: revisar 30 linhas no desktop uma a uma é lento e esconde o conjunto.",
+      "kept": "A próxima linha com problema já está pronta, uma tecla adiante.",
+      "risk": "Vira jogo de deslizar com dinheiro.",
+      "hero": "https://impeccable.style/worlds/cards/pop-culture-shelf-vertical-video-feed-surface-hero.webp"
+    },
+    {
+      "id": "challenger-jcard",
+      "label": "Capa de Fita K7",
+      "verdict": "declined",
+      "lineage": "encarte de fita cassete escrito à mão",
+      "thesis": "Lado A e lado B que não podem estourar a fita.",
+      "palette": ["#FFFFFF", "#1C3FAA", "#9AA0A6", "#D7262E"],
+      "materials": ["caneta esferográfica", "pauta impressa"],
+      "viewport": "Receitas no lado A, despesas no lado B, tempo restante à direita.",
+      "case": "Funde mal na tela de revisão: a letra à mão atrapalha valores; a ideia de capacidade é boa.",
+      "kept": "Todo total mostra quanto resta, alinhado à direita.",
+      "risk": "Nostalgia vira fantasia.",
+      "hero": "https://impeccable.style/worlds/cards/vernacular-ephemera-cassette-j-card-hero.webp"
+    },
+    {
+      "id": "challenger-darkroom",
+      "label": "Ficha de Laboratório",
+      "verdict": "declined",
+      "lineage": "ficha de exposição de laboratório fotográfico",
+      "thesis": "Folhas translúcidas com hachura indicando carga e conflito.",
+      "palette": ["#2A2A2A", "#BDBDBD", "#E0399A"],
+      "materials": ["hachura", "rampa de 11 tons"],
+      "viewport": "Duplicadas e parcelas sobrepostas marcadas por hachura cruzada.",
+      "case": "Funde mal: ninguém da casa vive esse mundo, e a tela fica escura demais.",
+      "kept": "Estado legível sem cor, por marca.",
+      "risk": "Hermético.",
+      "hero": "https://impeccable.style/worlds/cards/operate-b-exposure-record-zone-sheets-hero.webp"
+    }
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "buildPath": {"value": "code"},
+  "canon": true,
+  "canonCard": {
+    "label": "O padrão da categoria",
+    "thesis": "O app de finanças pessoais que a categoria entrega, executado com capricho.",
+    "palette": ["#FFFFFF", "#0F172A", "#2563EB", "#F1F5F9"],
+    "materials": ["grade limpa", "cards brancos", "gráficos de rosca"],
+    "viewport": "A revisão como tabela limpa com cards de resumo no topo.",
+    "risk": "Indistinguível dos concorrentes por definição."
+  },
+  "steer": true
+}

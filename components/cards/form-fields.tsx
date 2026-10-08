@@ -18,6 +18,6 @@ export function Field({ label, htmlFor, error, children }: FieldProps) {
 }
 
 export const inputClassName =
-  'h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-ring';
+  'h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring';
 
 export const selectClassName = inputClassName;

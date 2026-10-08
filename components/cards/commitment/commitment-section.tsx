@@ -4,6 +4,8 @@ import { BarChart3, CreditCard } from 'lucide-react';
 import { toCompetence, type Competence } from '@/lib/date';
 import { futureCommitment, type CommitmentInput } from '@/lib/finance/commitment';
 import type { Cents } from '@/lib/money';
+import { competenceMonth, competenceShort } from '@/components/cashflow/labels';
+import { BAR_X_CLASS, BAR_Y_CLASS, barScaleStyle } from '@/components/dashboard/bar-scale';
 import { Badge, EmptyState, Money } from '@/components/ui-kit';
 import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 import type { CardList } from '../schemas';
@@ -25,7 +27,7 @@ type CommitmentSectionProps = {
 };
 
 function competenceLabel(competence: Competence): string {
-  return `${competence.slice(5)}/${competence.slice(0, 4)}`;
+  return competenceShort(competence);
 }
 
 function magnitude(value: Cents): number {
@@ -53,14 +55,14 @@ function CommitmentChart({
               <div className="flex h-36 w-full items-end justify-center rounded-sm bg-secondary/50 px-1" title={isDebt ? undefined : 'Sem comprometimento devedor'}>
                 {isDebt ? (
                   <div
-                    className="w-full rounded-t-sm bg-primary transition-[height]"
-                    style={{ height: `${height}%` }}
+                    className={`${BAR_Y_CLASS} bg-primary`}
+                    style={barScaleStyle(height, 'y')}
                     aria-label={`${competenceLabel(entry.competence)}: comprometimento devedor`}
                   />
                 ) : null}
               </div>
               <span className="text-[10px] tabular text-muted-foreground [writing-mode:vertical-rl] sm:[writing-mode:horizontal-tb]">
-                {entry.competence.slice(5)}
+                {competenceMonth(entry.competence)}
               </span>
             </div>
           );
@@ -164,7 +166,7 @@ function LimitUsage({
               {hasLimit ? (
                 <div className="mt-4">
                   <div className="h-2 overflow-hidden rounded-full bg-secondary" role="img" aria-label={`Uso de limite: ${formatBasisPoints(usageBp)}`}>
-                    <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${width}%` }} />
+                    <div className={`${BAR_X_CLASS} bg-primary`} style={barScaleStyle(width, 'x')} />
                   </div>
                 </div>
               ) : null}

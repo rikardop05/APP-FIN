@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { AlertCircle, AlertTriangle, CheckCircle2, Inbox } from 'lucide-react';
 
+import { competenceShort } from '@/components/cashflow/labels';
 import { EmptyState, Money } from '@/components/ui-kit';
 import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 import { formatDateBR } from '@/lib/date';
@@ -157,7 +158,7 @@ export function PendenciasList({
                     <span className="truncate text-sm font-medium text-foreground">
                       {item.description}
                     </span>
-                    <span className="text-xs text-muted-foreground">{item.occurredOn}</span>
+                    <span className="text-xs text-muted-foreground">{formatDateBR(item.occurredOn)}</span>
                   </div>
                   <Money value={item.amountCents as Cents} className="shrink-0 text-sm font-medium tabular" />
                 </li>
@@ -202,7 +203,7 @@ export function PendenciasList({
                         {item.cardName}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {item.period.slice(5)}/{item.period.slice(0, 4)} · diferença{' '}
+                        {competenceShort(item.period)} · diferença{' '}
                         <Money
                           value={item.differenceCents}
                           sign={item.differenceCents < 0 ? 'never' : 'never'}

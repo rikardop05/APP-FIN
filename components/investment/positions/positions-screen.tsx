@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, type FormEvent, type ReactNode } from 'react';
 
+import { BAR_X_CLASS, barScaleStyle } from '@/components/dashboard/bar-scale';
 import { Badge, Button, Money, PageHeader } from '@/components/ui-kit';
 import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 import { formatDateBR } from '@/lib/date';
@@ -34,7 +35,7 @@ import {
 } from './view';
 
 const inputClass =
-  'h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-ring';
+  'h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring';
 
 function Field({ label, htmlFor, error, hint, children }: { label: string; htmlFor: string; error?: string; hint?: string; children: ReactNode }) {
   return (
@@ -240,7 +241,7 @@ export function PositionsScreen({ initial, today }: { initial: PositionsData; to
                   aria-valuenow={Math.round(row.barBp / 100)}
                   className="h-2 w-full overflow-hidden rounded-full bg-secondary"
                 >
-                  <div className={`h-full rounded-full ${row.belowPlan && !row.inProgress ? 'bg-amber-500' : 'bg-primary'}`} style={{ width: `${row.barBp / 100}%` }} />
+                  <div className={`${BAR_X_CLASS} ${row.belowPlan && !row.inProgress ? 'bg-amber-500' : 'bg-primary'}`} style={barScaleStyle(row.barBp / 100, 'x')} />
                 </div>
               ) : null}
             </li>

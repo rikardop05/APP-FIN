@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PiggyBank, Pencil, Plus, Target, Trash2 } from 'lucide-react';
 
+import { BAR_X_CLASS, barScaleStyle } from '@/components/dashboard/bar-scale';
 import { Badge, Button, DateText, EmptyState, Money, PageHeader } from '@/components/ui-kit';
 import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 import { basisPoints } from '@/lib/money';
@@ -46,7 +47,7 @@ function ProgressBar({ bp, label }: { bp: number; label: string }) {
       aria-valuenow={Math.round(percent)}
       className="h-2.5 w-full overflow-hidden rounded-full bg-secondary"
     >
-      <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
+      <div className={`${BAR_X_CLASS} bg-primary`} style={barScaleStyle(percent, 'x')} />
     </div>
   );
 }

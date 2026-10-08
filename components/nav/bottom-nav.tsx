@@ -23,6 +23,11 @@ const OVERFLOW_PANEL_ID = 'bottom-nav-overflow';
  * é `<nav>`, não `role="menu"` (que exigiria filhos `menuitem` e o contrato de
  * teclado de setas/Home/End). Fecha com Escape e devolve o foco ao botão que
  * o abriu.
+ *
+ * Área segura do iPhone: a barra cresce `env(safe-area-inset-bottom)` para baixo (com o
+ * `viewport-fit=cover` do layout raiz), e os ícones ficam acima do indicador de início. Em
+ * aparelhos sem essa faixa o env() vale 0 e nada muda. O painel do "Mais" e o rodapé fixo da
+ * confirmação de importação usam a mesma soma, `4rem + env(safe-area-inset-bottom)`.
  */
 export function BottomNav() {
   const pathname = usePathname();
@@ -68,7 +73,7 @@ export function BottomNav() {
           <nav
             id={OVERFLOW_PANEL_ID}
             aria-label="Mais opções de navegação"
-            className="absolute inset-x-0 bottom-16 max-h-[calc(100dvh-4rem)] overflow-y-auto rounded-t-lg border-t border-border bg-background p-3 shadow-lg"
+            className="absolute inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] max-h-[calc(100dvh-4rem-env(safe-area-inset-bottom))] overflow-y-auto rounded-t-lg border-t border-border bg-background p-3 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] shadow-lg"
           >
             <div className="mb-2 flex items-center justify-between px-1">
               <span className="text-sm font-medium text-foreground">
@@ -95,7 +100,7 @@ export function BottomNav() {
                     onClick={() => setOpen(false)}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'flex flex-col items-center gap-1 rounded-md px-2 py-3 text-xs font-medium',
+                      'flex flex-col items-center gap-1 rounded-md px-2 py-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       active
                         ? 'bg-secondary text-secondary-foreground'
                         : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
@@ -114,7 +119,7 @@ export function BottomNav() {
 
       <nav
         aria-label="Navegação principal"
-        className="fixed inset-x-0 bottom-0 z-30 flex h-16 border-t border-border bg-background md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 flex h-[calc(4rem+env(safe-area-inset-bottom))] border-t border-border bg-background pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden"
       >
         {primary.map((item) => {
           const active = isNavItemActive(item.href, pathname);
@@ -125,7 +130,7 @@ export function BottomNav() {
               href={item.href}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium',
+                'flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                 active ? 'text-primary' : 'text-muted-foreground',
               )}
             >
@@ -141,7 +146,7 @@ export function BottomNav() {
           aria-expanded={open}
           aria-controls={OVERFLOW_PANEL_ID}
           className={cn(
-            'flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium',
+            'flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
             open || overflowActive ? 'text-primary' : 'text-muted-foreground',
           )}
         >

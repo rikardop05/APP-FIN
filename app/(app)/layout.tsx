@@ -6,12 +6,28 @@ import { BottomNav } from '@/components/nav/bottom-nav';
  * Shell das telas autenticadas: nav lateral no desktop, inferior no celular.
  * As 9 rotas de SPEC §7 vivem sob este grupo, `/` inclusive: o T-115 trouxe o
  * dashboard para `app/(app)/page.tsx` e removeu a landing provisória do T-001.
+ *
+ * Acessibilidade: o primeiro foco da página é "Pular para o conteúdo", que leva ao `<main>`
+ * sem atravessar as 9 rotas da navegação. No celular, o fundo do `<main>` soma a área segura
+ * do iPhone (`env(safe-area-inset-bottom)`, 0 nos demais), a mesma que o BottomNav ocupa, e as
+ * laterais usam `max(margem, env(safe-area-inset-left/right))` para o entalhe do iPhone deitado
+ * (o iOS ignora a trava de retrato do manifesto). Sem entalhe, os valores são os de antes.
  */
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
+      <a
+        href="#conteudo"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-[max(1rem,env(safe-area-inset-left))] focus:top-4 focus:z-50 focus:rounded-md focus:border focus:border-border focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+      >
+        Pular para o conteúdo
+      </a>
       <SidebarNav />
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 pb-24 pt-6 sm:px-6 md:pb-10">
+      <main
+        id="conteudo"
+        tabIndex={-1}
+        className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 pb-[calc(6rem+env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-6 focus:outline-none sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))] md:pb-10"
+      >
         {children}
       </main>
       <BottomNav />

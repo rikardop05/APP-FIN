@@ -17,7 +17,8 @@ import {
 import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 
 import { buildSaveBody, type BudgetFieldValues } from './save-body';
-import { competenceLabel, EXPECTED_LABEL, expectedUsageText, LIGHT_VIEW, remainingText, toFieldText } from './labels';
+import { BAR_X_CLASS, barScaleStyle } from '@/components/dashboard/bar-scale';
+import { competenceLabel, competenceTitle, EXPECTED_LABEL, expectedUsageText, LIGHT_VIEW, remainingText, toFieldText } from './labels';
 import {
   apiErrorSchema,
   budgetMonthResponseSchema,
@@ -210,8 +211,8 @@ export function BudgetScreen({ today }: { today: string }) {
       >
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
       </Button>
-      <span className="min-w-36 text-center text-sm font-medium capitalize" aria-live="polite">
-        {competenceLabel(period)}
+      <span className="min-w-36 text-center text-sm font-medium" aria-live="polite">
+        {competenceTitle(period)}
       </span>
       <Button
         variant="outline"
@@ -484,8 +485,8 @@ function CategoryRow({
                 aria-label={expectedUsageText(row.usageBp)}
               >
                 <div
-                  className={`h-full ${LIGHT_VIEW[row.light].bar}`}
-                  style={{ width: `${String(Math.min(100, Math.max(0, row.usageBp / 100)))}%` }}
+                  className={`${BAR_X_CLASS} ${LIGHT_VIEW[row.light].bar}`}
+                  style={barScaleStyle(row.usageBp / 100, 'x')}
                 />
               </div>
             ) : null}

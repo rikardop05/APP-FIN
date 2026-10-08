@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Pencil, Tags, Trash2 } from 'lucide-react';
+import { competenceShort } from '@/components/cashflow/labels';
 import { formatBRL, parseBRL } from '@/lib/money';
 import {
   Badge,
@@ -237,17 +238,17 @@ export function TransactionList({
                   <div className="flex min-w-0 items-start gap-3">
                     <Checkbox aria-label={`Selecionar ${row.description}`} checked={selectedIds.includes(row.id)} onChange={() => onToggle(row.id)} />
                     <div className="min-w-0">
-                      <p className="truncate font-medium">{row.description}</p>
+                      <p className="truncate font-medium" title={row.description}>{row.description}</p>
                       <p className="text-sm text-muted-foreground"><DateText value={row.occurredOn} /> · {kindLabel[row.kind]}</p>
                     </div>
                   </div>
                   <Money value={row.amountCents} />
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm">
-                  <div><dt className="text-xs text-muted-foreground">Origem</dt><dd className="truncate">{sourceLabel(row)}</dd></div>
+                  <div><dt className="text-xs text-muted-foreground">Origem</dt><dd className="truncate" title={sourceLabel(row)}>{sourceLabel(row)}</dd></div>
                   <div><dt className="text-xs text-muted-foreground">Categoria</dt><dd>{row.categoryName ?? <Badge variant="warning">Não categorizado</Badge>}</dd></div>
                   <div><dt className="text-xs text-muted-foreground">Responsável</dt><dd>{row.memberName ?? '—'}</dd></div>
-                  <div><dt className="text-xs text-muted-foreground">Competência</dt><dd>{row.competence}</dd></div>
+                  <div><dt className="text-xs text-muted-foreground">Competência</dt><dd>{competenceShort(row.competence)}</dd></div>
                 </dl>
                 <div className="mt-3 border-t border-border pt-3"><RowActions description={row.description} onEdit={() => onEdit(row.id)} onRule={() => onRule(row.id)} onDelete={() => onDelete(row.id)} /></div>
               </>

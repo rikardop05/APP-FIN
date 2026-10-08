@@ -21,6 +21,12 @@ export function competenceShort(competence: Competence): string {
   return `${SHORT[index]}/${year}`;
 }
 
+/** `2027-03` → `mar`: só o mês abreviado, para eixo estreito de gráfico (o ano vem do contexto). */
+export function competenceMonth(competence: Competence): string {
+  const { index } = parts(competence);
+  return SHORT[index] ?? competence;
+}
+
 /** `2027-03` → `março de 2027`. */
 export function competenceLong(competence: Competence): string {
   const { year, index } = parts(competence);
