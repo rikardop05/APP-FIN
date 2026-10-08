@@ -579,3 +579,31 @@ describe('parseMercadoPagoPdf — final do cartao em campo proprio (decisao 20)'
     expect(result.rows[1]?.cardLast4).toBe('1111');
   });
 });
+
+describe('parseMercadoPagoPdf — o Total fecha a secao do cartao (revisao do Corvo, f57fd92)', () => {
+  // Medido na fatura real: cada secao de cartao termina num `Total R$`. Linha
+  // datada depois dele nao e daquele cartao, e nao pode herdar o dono dele.
+  it('linha datada depois do Total da ultima secao nao herda o final', () => {
+    const result = parseMercadoPagoPdf([
+      headerRow(),
+      cardHeaderRow(700, '1111'),
+      transactionRow(680, { date: '05/07', description: 'PADARIA SINTETICA', value: 'R$ 20,00' }),
+      totalRow(660, 'R$ 20,00'),
+      transactionRow(640, { date: '10/07', description: 'IOF SINTETICO', value: 'R$ 1,00' }),
+    ]);
+    expect(result.rows[0]?.cardLast4).toBe('1111');
+    expect(result.rows[1]?.cardLast4).toBeUndefined();
+  });
+
+  it('a secao que continua na pagina seguinte (cabecalho repetido) segue no mesmo final', () => {
+    const result = parseMercadoPagoPdf([
+      headerRow(),
+      cardHeaderRow(700, '2222'),
+      transactionRow(680, { date: '05/07', description: 'LOJA A', value: 'R$ 20,00' }),
+      cardHeaderRow(732, '2222'),
+      transactionRow(700, { date: '06/07', description: 'LOJA B', value: 'R$ 5,00' }),
+      totalRow(660, 'R$ 25,00'),
+    ]);
+    expect(result.rows.map((row) => row.cardLast4)).toEqual(['2222', '2222']);
+  });
+});

@@ -706,3 +706,20 @@ describe('buildImportPreview — membro pelo final do cartao (decisao 20)', () =
     expect(result.rows[0]?.suggestedMemberId).toBeNull();
   });
 });
+
+describe('buildImportPreview — cardHolders so vale em cartao (revisao do Corvo, f57fd92)', () => {
+  it('numa CONTA o mapa e ignorado, mesmo que o chamador o passe', () => {
+    const result = buildImportPreview({
+      parse: parseResult([parsed({ cardLast4: '4239' })]),
+      sourceId: SOURCE_ID,
+      sourceKind: 'account',
+      cardCycle: null,
+      rules: [],
+      existingHashes: new Set<string>(),
+      today: '2026-09-20',
+      statementCompetence: null,
+      cardHolders: new Map([['4239', '11111111-1111-4111-8111-111111111111']]),
+    });
+    expect(result.rows[0]?.suggestedMemberId).toBeNull();
+  });
+});

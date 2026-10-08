@@ -332,8 +332,9 @@ export function buildImportPreview(
 
     const rule = matchRule(input.rules, description);
     // Decisao 20: o dono do final do cartao, se mapeado. A regra com membro vence.
+    // So em cartao, como o `creditCardPayment`: numa conta o final nao tem dono.
     const cardHolder =
-      row.cardLast4 === undefined
+      input.sourceKind !== 'credit_card' || row.cardLast4 === undefined
         ? null
         : (input.cardHolders?.get(row.cardLast4) ?? null);
 

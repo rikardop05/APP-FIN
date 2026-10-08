@@ -459,6 +459,9 @@ export function parseMercadoPagoPdf(
         if (MERCADOPAGO_LAYOUT.totalMarkers.some((marker) => lower.includes(marker))) {
           const amount = rowAmount(row);
           if (amount !== null) totals.push(amount);
+          // O `Total` fecha a secao (medido: toda secao de cartao termina nele).
+          // Linha datada depois dele nao e daquele cartao, nem do dono dele.
+          currentCard = null;
           return;
         }
         // Palavra na posicao da data e cabecalho, nunca lancamento (§7).
