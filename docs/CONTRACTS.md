@@ -225,6 +225,93 @@ function setInstallmentPlanCategory(householdId: string, planId: string, categor
 > Limite da regra de propagação: parcela posta à mão na MESMA categoria do plano é indistinguível de uma que o
 > acompanhava, e passa a acompanhá-lo. Sem perda — no momento ela concordava com o plano.
 
+### 6.3 Aplicar regras aos lançamentos existentes — `/lib/db/queries/apply-rules.ts` (F3, 2026-10-08)
+
+Dois passos: **prévia** (só leitura) e **gravação** do que a pessoa confirmou. A gravação grava EXATAMENTE os
+itens confirmados e nunca roda `categorizeBatch` de novo (a obrigação do §6.1): uma regra de prioridade maior
+pegaria a linha, e o "pega N" mostrado ficaria errado.
+
+**Linha elegível** (prévia e gravação): `category_id` null (regra nunca sobrescreve categoria), status ≠
+`reconciled`, não é previsão de recorrência (`recurring_expense_id` e `income_id` nulos — a categoria dela vem da
+definição da recorrência), e, se for parcela, o plano está sem categoria (quem decide é o plano). Mais o filtro do
+`previewRule`: `kind ∈ {expense, income}`, `amountCents ≠ 0`.
+
+```ts
+/** Máximo de linhas por prévia e por gravação. Mora em `apply-rules-limit.ts` (sem importar `db`, para o
+ *  schema da rota) e é reexportado por `apply-rules.ts`. */
+const APPLY_RULES_LIMIT = 500
+
+type RuleApplicationProposal = {
+  transactionId: string; occurredOn: string; description: string; amountCents: Cents
+  ruleId: string; rulePattern: string; categoryId: string; categoryName: string
+}
+type RuleApplicationPreview = { proposals: RuleApplicationProposal[]; total: number }  // total pode passar do limite
+type RuleApplicationItem = { transactionId: string; ruleId: string; categoryId: string }
+type RuleApplicationResult = { applied: number; skipped: number; propagated: number }
+
+/** A regra pedida não existe no household. A rota responde 404. */
+class RuleToApplyNotFoundError extends Error
+
+/**
+ * O que as regras categorizariam agora. Só leitura.
+ * - ruleId informado: só aquela regra, mesmo que outra de prioridade maior também case (a oferta logo após
+ *   criar a regra). Regra que não é do household → RuleToApplyNotFoundError.
+ * - ruleId null: todas as regras ativas; cada linha vai para a PRIMEIRA (priority asc, id asc) cujo
+ *   previewRule a inclui.
+ * Ordem: linhas reais antes das parcelas projetadas (planned), depois occurredOn desc, createdAt asc, id asc.
+ * proposals tem até `limit`; total conta todas.
+ */
+function previewRuleApplication(householdId: string, ruleId: string | null, limit?: number /* = APPLY_RULES_LIMIT */):
+  Promise<RuleApplicationPreview>
+
+/**
+ * Grava os itens confirmados, numa transação, com as linhas travadas (FOR UPDATE). Cada item é conferido de novo
+ * e PULADO — nunca gravado com outra regra ou outra categoria — se a linha não é do household, já tem categoria,
+ * deixou de ser elegível, ou se a regra não existe no household, está inativa, não casa mais (previewRule) ou
+ * aponta hoje para categoria diferente da do item (regra editada desde a prévia). O UPDATE repete
+ * `category_id is null`: quem categorizou entre a prévia e a gravação ganha.
+ * Linha gravada: category_id = categoria da regra, category_rule_id = regra, member_id = coalesce(atual, membro da
+ * regra), updated_at = now().
+ * Parcela gravada de plano sem categoria: a categoria vai para o plano e para as parcelas dele ainda sem categoria
+ * (essas com category_rule_id null: vêm do plano, não da regra) — exceto categoria de receita ou que não é mais
+ * folha. Não usa setInstallmentPlanCategory: parcela que já tem categoria não muda sem aparecer na prévia.
+ * hits (incrementRuleHits, na mesma transação) soma só linha posted: parcela projetada não é uso da regra.
+ * items vazio → { 0, 0, 0 }. skipped = items.length − applied (item repetido conta como pulado).
+ * propagated = parcelas que receberam a categoria pelo plano.
+ */
+function applyRuleProposals(householdId: string, items: readonly RuleApplicationItem[]): Promise<RuleApplicationResult>
+```
+
+**Rota — `POST /api/rules/apply`** (`app/api/rules/apply/route.ts`, corpo em `applyRulesSchema`):
+
+| Corpo | Resposta 200 |
+|---|---|
+| `{ dryRun: true, ruleId?: uuid \| null }` (ausente = `null` = todas as regras) | a prévia: `RuleApplicationPreview` |
+| `{ dryRun: false, items: RuleApplicationItem[] }` (no máximo `APPLY_RULES_LIMIT`) | `RuleApplicationResult` |
+
+Erros: 400 corpo inválido · 401 sem sessão · 404 `RuleToApplyNotFoundError` (prévia com `ruleId` de outra casa ou
+inexistente) · 500.
+
+> **Divergência aberta (2026-10-08, achada ao escrever esta seção):** no `dryRun: true` a rota hoje responde
+> `NextResponse.json({ proposals })` com `proposals = RuleApplicationPreview`, ou seja,
+> `{ proposals: { proposals, total } }`. A tela (`ruleApplicationPreviewSchema` em
+> `components/transactions/schemas.ts`) lê `{ proposals, total }` no topo, que é o contrato acima. O
+> `apply-shape.test.ts` não pega a diferença porque valida uma prévia montada à mão, sem passar pela rota. A
+> correção é responder `NextResponse.json(preview)`.
+
+### 6.4 Atribuição de regra na importação — `commitImport` em `/lib/db/queries/import.ts` (F3)
+
+A linha confirmada da importação só traz a categoria, não de onde ela veio. Dentro da transação do commit:
+
+1. As regras do household são lidas **dentro da transação** (o rastro e os hits valem para o estado das regras no
+   commit, não no da prévia). Inativas não casam (`categorizeBatch`).
+2. Para cada linha gravada (inclusive parcela projetada), `categorizeBatch` acha a regra vencedora pela descrição.
+   **`category_rule_id` = essa regra se, e só se, há vencedora, a categoria confirmada não é null e é EXATAMENTE a
+   categoria da vencedora** (a pessoa aceitou a sugestão). Categoria trocada na tela, ou deixada vazia, é decisão
+   da pessoa: `category_rule_id` null.
+3. `incrementRuleHits` na mesma transação, contando só linha REAL (`raw_description ≠ ''`): parcela projetada
+   leva o rastro, mas não é uso (uma compra em 10x contaria 10 vezes). Lote revertido pela transação não soma hits.
+
 ## 7. Deduplicação — `/lib/finance/dedupe.ts`
 
 ```ts
