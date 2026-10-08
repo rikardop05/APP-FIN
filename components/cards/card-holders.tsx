@@ -12,6 +12,7 @@ import {
   holderConfirmation,
   holderRows,
   holderSubmitHint,
+  looksLikeFullCardNumber,
   type HolderEvent,
   type HolderFormErrors,
   type HolderRow,
@@ -63,6 +64,8 @@ export function CardHolders({ card, members, onUpdated }: CardHoldersProps) {
     if (!built.ok) {
       setErrors(built.errors);
       setFailure(null);
+      // Número de cartão inteiro não fica escrito na tela (nem é enviado).
+      if (looksLikeFullCardNumber(last4)) setLast4('');
       document.getElementById(built.errors.last4 ? `${idPrefix}-last4` : `${idPrefix}-member`)?.focus();
       return;
     }

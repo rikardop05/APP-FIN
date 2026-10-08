@@ -18,6 +18,14 @@ export function normalizeLast4(text: string): string | null {
   return /^\d{4}$/.test(stripped) ? stripped : null;
 }
 
+/**
+ * O texto parece um número de cartão inteiro (5 dígitos ou mais)? A tela o APAGA do campo ao recusar:
+ * ele não é gravado nem enviado, e também não precisa ficar escrito na tela.
+ */
+export function looksLikeFullCardNumber(text: string): boolean {
+  return text.replace(/D/g, '').length >= 5;
+}
+
 export type HolderFormValues = { last4: string; memberId: string };
 export type HolderFormErrors = Partial<Record<keyof HolderFormValues, string>>;
 

@@ -8,6 +8,7 @@ import {
   holderSubmitHint,
   HOLDERS_NOTE,
   normalizeLast4,
+  looksLikeFullCardNumber,
   type HolderRecord,
 } from './holders';
 
@@ -34,6 +35,16 @@ describe('final do cartão: só os 4 últimos dígitos', () => {
 
   it('zeros à esquerda se preservam (é texto, não número)', () => {
     expect(normalizeLast4('0007')).toBe('0007');
+  });
+});
+
+describe('número de cartão inteiro colado no campo', () => {
+  it('reconhece (5 dígitos ou mais, com ou sem espaços) para a tela apagar o campo', () => {
+    expect(looksLikeFullCardNumber('4111 1111 1111 1111')).toBe(true);
+    expect(looksLikeFullCardNumber('12345')).toBe(true);
+    expect(looksLikeFullCardNumber('1234')).toBe(false);
+    expect(looksLikeFullCardNumber('12')).toBe(false);
+    expect(looksLikeFullCardNumber('abc')).toBe(false);
   });
 });
 
