@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
+import { categoryKindFailure } from './category-kind-failure';
 import {
   createManualTransaction,
   InvalidTransactionReferenceError,
@@ -65,6 +66,10 @@ export async function POST(request: Request) {
     }
     if (error instanceof PlannedNotReconcilableError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    const kindFailure = categoryKindFailure(error);
+    if (kindFailure !== null) {
+      return NextResponse.json({ error: kindFailure.error }, { status: kindFailure.status });
     }
     if (error instanceof InvalidTransactionReferenceError) {
       return NextResponse.json({ error: 'Conta, cartão, categoria ou responsável inválido.' }, { status: 400 });

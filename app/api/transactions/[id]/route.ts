@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
+import { categoryKindFailure } from '../category-kind-failure';
 import {
   InvalidTransactionReferenceError,
   TransactionNotFoundError,
@@ -33,6 +34,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
     if (error instanceof TransactionNotFoundError) {
       return NextResponse.json({ error: 'Lançamento não encontrado.' }, { status: 404 });
+    }
+    const kindFailure = categoryKindFailure(error);
+    if (kindFailure !== null) {
+      return NextResponse.json({ error: kindFailure.error }, { status: kindFailure.status });
     }
     if (error instanceof InvalidTransactionReferenceError) {
       return NextResponse.json({ error: 'Categoria ou responsável inválido.' }, { status: 400 });

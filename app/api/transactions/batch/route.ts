@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
+import { categoryKindFailure } from '../category-kind-failure';
 import {
   categorizeTransactionsBatch,
   InvalidTransactionReferenceError,
@@ -19,6 +20,10 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof SessionMissingError) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
+    }
+    const kindFailure = categoryKindFailure(error);
+    if (kindFailure !== null) {
+      return NextResponse.json({ error: kindFailure.error }, { status: kindFailure.status });
     }
     if (error instanceof InvalidTransactionReferenceError) {
       return NextResponse.json({ error: 'Lançamento, categoria ou responsável inválido.' }, { status: 400 });

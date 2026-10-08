@@ -12,6 +12,7 @@ import {
   or,
 } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { assertCategoryFitsKinds } from './category-kind';
 import { COUNTED_STATUSES } from './counted-statuses';
 import { reconcileManualPosting } from './manual-reconcile';
 import type {
@@ -177,6 +178,26 @@ async function ensureCategoryAndMemberReferences(
     );
   }
   await Promise.all(checks);
+}
+
+/**
+ * Natureza x tipo: a categoria escolhida cabe nos lançamentos? (despesa não vai para categoria de
+ * receita; receita só vai para categoria de receita.) Sem categoria (`null`), não há o que conferir.
+ * Roda DEPOIS de `ensureCategoryAndMemberReferences`, que já garante que a categoria é da casa.
+ */
+async function ensureCategoryFitsKinds(
+  householdId: string,
+  categoryId: string | null,
+  kinds: readonly TransactionKind[],
+): Promise<void> {
+  if (categoryId === null) return;
+  const [category] = await db
+    .select({ nature: categories.nature })
+    .from(categories)
+    .where(and(eq(categories.id, categoryId), eq(categories.householdId, householdId)))
+    .limit(1);
+  if (!category) throw new InvalidTransactionReferenceError();
+  assertCategoryFitsKinds(category.nature, kinds);
 }
 
 async function ensureAccountOrCardReference(
@@ -423,11 +444,16 @@ export async function updateTransaction(
     input.memberId ?? null,
   );
   const [existing] = await db
-    .select({ creditCardId: transactions.creditCardId })
+    .select({ creditCardId: transactions.creditCardId, kind: transactions.kind })
     .from(transactions)
     .where(and(eq(transactions.id, id), eq(transactions.householdId, householdId)))
     .limit(1);
   if (!existing) throw new TransactionNotFoundError();
+  // Só confere quando a edição MUDA a categoria: editar a descrição de um lançamento antigo que já
+  // estava numa categoria que não cabe não pode travar.
+  if (input.categoryId !== undefined) {
+    await ensureCategoryFitsKinds(householdId, input.categoryId, [existing.kind]);
+  }
 
   const dateFields = input.occurredOn
     ? await transactionDateFields(householdId, input.occurredOn, existing.creditCardId)
@@ -446,7 +472,7 @@ export async function categorizeTransactionsBatch(
 ): Promise<number> {
   await ensureCategoryAndMemberReferences(householdId, input.categoryId, input.memberId);
   const existing = await db
-    .select({ id: transactions.id })
+    .select({ id: transactions.id, kind: transactions.kind })
     .from(transactions)
     .where(
       and(
@@ -457,6 +483,8 @@ export async function categorizeTransactionsBatch(
   if (existing.length !== input.transactionIds.length) {
     throw new InvalidTransactionReferenceError();
   }
+  // Um único lançamento que não cabe recusa o lote inteiro: nada é alterado.
+  await ensureCategoryFitsKinds(householdId, input.categoryId, existing.map((row) => row.kind));
 
   const updated = await db
     .update(transactions)
@@ -486,6 +514,7 @@ export async function createManualTransaction(
     ensureCategoryAndMemberReferences(householdId, input.categoryId, input.memberId),
     ensureAccountOrCardReference(householdId, input.accountId, input.creditCardId),
   ]);
+  await ensureCategoryFitsKinds(householdId, input.categoryId, [input.kind]);
   const dateFields = await transactionDateFields(householdId, input.occurredOn, input.creditCardId);
   const plannedId = options.reconcilePlannedId ?? null;
 
