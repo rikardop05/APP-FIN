@@ -23,14 +23,17 @@ const rowSchema = z.object({
   categoryName: z.string(),
   rootName: z.string(),
   plannedCents: centsSchema,
+  /** Realizado (`posted`). */
   spentCents: centsSchema,
-  /** Negativo quando gastou além do orçado. */
+  /** Previsto a realizar (`planned`). */
+  upcomingCents: centsSchema,
+  /** Realizado + previsto: o que a cor mede (decisão 10b). */
+  expectedCents: centsSchema,
+  /** Orçado − esperado; negativo quando o mês vai passar do orçado. */
   remainingCents: centsSchema,
-  /** `null` só com orçamento zero. */
+  /** Esperado / orçado. `null` só com orçamento zero. */
   usageBp: basisPointsSchema.nullable(),
   light: z.enum(['green', 'yellow', 'red']),
-  /** Previsto a realizar (`planned`): fora do semáforo, soma ao realizado no painel. */
-  upcomingCents: centsSchema,
 });
 
 const categorySchema = z.object({

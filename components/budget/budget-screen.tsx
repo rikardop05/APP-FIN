@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { addCompetence, toCompetence } from '@/lib/date';
-import { cents, parseBRL } from '@/lib/money';
+import { parseBRL } from '@/lib/money';
 
 import {
   Badge,
@@ -17,7 +17,7 @@ import {
 import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 
 import { buildSaveBody, type BudgetFieldValues } from './save-body';
-import { competenceLabel, LIGHT_VIEW, toFieldText } from './labels';
+import { competenceLabel, EXPECTED_LABEL, expectedUsageText, LIGHT_VIEW, remainingText, toFieldText } from './labels';
 import {
   apiErrorSchema,
   budgetMonthResponseSchema,
@@ -317,12 +317,12 @@ export function BudgetScreen({ today }: { today: string }) {
             ) : null}
 
             <p className="text-xs text-muted-foreground">
-              <strong className="font-medium text-foreground">Realizado</strong> é o que já foi
-              lançado no mês e é o que decide a cor.{' '}
-              <strong className="font-medium text-foreground">Previsto a realizar</strong> são
-              despesas esperadas que ainda não foram lançadas: aparecem ao lado, mas não entram na
-              cor. A cor muda para amarelo a partir de {formatBasisPoints(data.warnBp)} e para
-              vermelho acima de 100,00%.
+              A cor mede o <strong className="font-medium text-foreground">{EXPECTED_LABEL.toLowerCase()}</strong>{' '}
+              do mês: o que já foi lançado (<strong className="font-medium text-foreground">realizado</strong>)
+              mais as despesas esperadas que ainda não foram lançadas (
+              <strong className="font-medium text-foreground">previsto a realizar</strong>). Ela responde
+              &ldquo;ainda posso gastar nesta categoria?&rdquo;. A cor muda para amarelo a partir de{' '}
+              {formatBasisPoints(data.warnBp)} e para vermelho acima de 100,00%.
             </p>
 
             <BudgetGroups
@@ -459,9 +459,16 @@ function CategoryRow({
           </p>
         ) : (
           <div className="flex flex-col gap-2">
+            <p className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
+              <span>Realizado</span>
+              <Money value={row.spentCents} sign="never" className="text-foreground" />
+              <span aria-hidden="true">·</span>
+              <span>Previsto a realizar</span>
+              <Money value={row.upcomingCents} sign="never" className="text-foreground" />
+            </p>
             <p className="flex flex-wrap items-baseline gap-x-2">
-              <span className="text-muted-foreground">Realizado</span>
-              <Money value={row.spentCents} sign="never" className="font-medium text-foreground" />
+              <span className="text-muted-foreground">{EXPECTED_LABEL}</span>
+              <Money value={row.expectedCents} sign="never" className="font-medium text-foreground" />
               <span className="text-muted-foreground">de</span>
               <Money value={row.plannedCents} sign="never" />
               {row.usageBp !== null ? (
@@ -474,7 +481,7 @@ function CategoryRow({
               <div
                 className="h-1.5 overflow-hidden rounded-full bg-secondary"
                 role="img"
-                aria-label={`Uso do orçamento: ${formatBasisPoints(row.usageBp)}`}
+                aria-label={expectedUsageText(row.usageBp)}
               >
                 <div
                   className={`h-full ${LIGHT_VIEW[row.light].bar}`}
@@ -482,20 +489,8 @@ function CategoryRow({
                 />
               </div>
             ) : null}
-            <p className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
-              <span>{row.remainingCents < 0 ? 'Passou' : 'Restam'}</span>
-              <Money
-                value={row.remainingCents < 0 ? cents(-row.remainingCents) : row.remainingCents}
-                sign="never"
-                className="text-foreground"
-              />
-              {row.upcomingCents > 0 ? (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <span>Previsto a realizar</span>
-                  <Money value={row.upcomingCents} sign="never" className="text-foreground" />
-                </>
-              ) : null}
+            <p className={`text-xs ${row.remainingCents < 0 ? 'text-red-700' : 'text-muted-foreground'}`}>
+              {remainingText(row.remainingCents)}
             </p>
           </div>
         )}

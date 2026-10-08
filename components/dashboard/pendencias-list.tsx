@@ -33,6 +33,8 @@ export type OverBudgetListItem = {
   categoryName: string;
   plannedCents: Cents;
   spentCents: Cents;
+  /** Realizado + previsto: o que o vermelho mede (decisão 10b). */
+  expectedCents: Cents;
   /** `null` só quando `plannedCents = 0`. */
   usageBp: BasisPoints | null;
 };
@@ -223,8 +225,8 @@ export function PendenciasList({
               </span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Categorias em vermelho na tela de Orçamento. Conta só o que já foi realizado, por isso os valores podem
-              diferir dos cards acima, que somam também o previsto.
+              Categorias em vermelho na tela de Orçamento: o realizado mais o previsto a realizar do mês passa do
+              orçado.
             </p>
             <ul className="flex flex-col gap-1.5">
               {overBudgetItems.map((item) => (
@@ -235,7 +237,7 @@ export function PendenciasList({
                   <div className="flex min-w-0 flex-col">
                     <span className="truncate text-sm font-medium text-foreground">{item.categoryName}</span>
                     <span className="text-xs text-muted-foreground">
-                      <Money value={item.spentCents} sign="never" className="text-muted-foreground" /> de{' '}
+                      <Money value={item.expectedCents} sign="never" className="text-muted-foreground" /> previstos no mês de{' '}
                       <Money value={item.plannedCents} sign="never" className="text-muted-foreground" /> planejados
                     </span>
                   </div>
