@@ -21,11 +21,12 @@ import {
   type FinalizeResult,
   type SourceKind,
 } from '@/lib/import/pipeline';
-import type { Rule } from '@/lib/finance/categorization';
+import { categorizeBatch, type Rule } from '@/lib/finance/categorization';
 import type { Cents } from '@/lib/money';
 import { reconcileImportedPostings } from './import-reconcile';
 import { importedRowsCount } from './import-counts';
 import { kindForAmount } from './import-kind';
+import { incrementRuleHits } from './auto-categorization';
 import { listTransactionDedupeHashes } from './transactions';
 
 export type ImportSourceContext = {
@@ -185,8 +186,8 @@ async function sourceContext(
   };
 }
 
-async function listImportRules(householdId: string): Promise<Rule[]> {
-  const rows = await db
+async function listImportRules(householdId: string, executor: Executor = db): Promise<Rule[]> {
+  const rows = await executor
     .select({
       id: categorizationRules.id,
       pattern: categorizationRules.pattern,
@@ -200,6 +201,32 @@ async function listImportRules(householdId: string): Promise<Rule[]> {
     .where(eq(categorizationRules.householdId, householdId))
     .orderBy(asc(categorizationRules.priority), asc(categorizationRules.id));
   return rows;
+}
+
+type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Qual regra deu a categoria de cada linha (F3, CONTRACTS §6.2).
+ *
+ * A linha confirmada so diz a categoria, nao de onde ela veio. Ela veio da
+ * regra quando a regra vencedora para a descricao aponta para EXATAMENTE a
+ * categoria confirmada: o usuario aceitou a sugestao. Categoria trocada na
+ * tela, ou deixada vazia, e decisao do usuario, e fica sem rastro de regra.
+ */
+function ruleAttribution(
+  rules: Rule[],
+  rows: readonly { description: string; categoryId: string | null }[],
+): (string | null)[] {
+  const matched = categorizeBatch(
+    rules,
+    rows.map((row, index) => ({ id: String(index), description: row.description })),
+  );
+  return rows.map((row, index) => {
+    const match = matched[String(index)];
+    return match !== undefined && row.categoryId !== null && match.categoryId === row.categoryId
+      ? match.ruleId
+      : null;
+  });
 }
 
 async function listPreviousBatches(
@@ -426,6 +453,9 @@ export async function commitImport(
       // Ids gerados aqui (não lidos do `returning`): a conciliação não depende da
       // ordem em que o Postgres devolve as linhas.
       const ids = result.transactions.map(() => randomUUID());
+      // Regras lidas DENTRO da transacao: o rastro e os hits valem para o
+      // estado das regras no momento do commit, nao no da previa.
+      const ruleIds = ruleAttribution(await listImportRules(householdId, tx), result.transactions);
       await tx.insert(transactions).values(
         result.transactions.map((row, index) => {
           const projected = row.rawDescription === '';
@@ -444,6 +474,7 @@ export async function commitImport(
             kind,
             status,
             categoryId: row.categoryId,
+            categoryRuleId: ruleIds[index] ?? null,
             accountId: source.accountId,
             creditCardId: source.creditCardId,
             statementId: projected ? null : statementId,
@@ -473,6 +504,16 @@ export async function commitImport(
         ];
       });
       plannedReconciled = await reconcileImportedPostings(tx, householdId, postings);
+
+      // Uso da regra = linha REAL que ela categorizou. Parcela projetada
+      // (planned) leva o rastro, mas nao e uso: contaria 10 vezes uma compra so.
+      const hitsByRuleId: Record<string, number> = {};
+      result.transactions.forEach((row, index) => {
+        const ruleId = ruleIds[index];
+        if (ruleId === null || ruleId === undefined || row.rawDescription === '') return;
+        hitsByRuleId[ruleId] = (hitsByRuleId[ruleId] ?? 0) + 1;
+      });
+      await incrementRuleHits(householdId, hitsByRuleId, tx);
     }
     if (options.failAfter === 'transactions') throw new Error('Falha de teste após os lançamentos.');
 
