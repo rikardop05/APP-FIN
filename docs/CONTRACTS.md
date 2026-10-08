@@ -182,7 +182,8 @@ interface UncategorizedGroup {
 
 /**
  * A categoria cabe no lançamento? expense → qualquer natureza menos income; income → só income; demais kinds → true
- * (não passam pela revisão). Uma despesa em categoria income viraria receita negativa no painel (KPIs somam pela nature).
+ * (não passam pela revisão). Os KPIs somam pelo kind (§14), não pela nature; o dano de uma despesa em categoria income
+ * é outro: ela aparece no gasto por categoria e no orçamento debaixo de uma categoria de receita, e some do "essencial".
  * Conferida também no servidor: a revisão (§6.5) e a aplicação de regras (§6.3) recusam ou pulam o que não cabe.
  */
 function categoryFitsKind(nature: CategoryNature, kind: TransactionKind): boolean
@@ -275,6 +276,8 @@ class RuleToApplyNotFoundError extends Error
  *   criar a regra). Regra que não é do household → RuleToApplyNotFoundError.
  * - ruleId null: todas as regras ativas; cada linha vai para a PRIMEIRA (priority asc, id asc) cujo
  *   previewRule a inclui.
+ * Nos dois casos, cada regra só considera as linhas em que a categoria dela cabe (categoryFitsKind, §6.1): regra de
+ * receita não propõe despesa e vice-versa, e a próxima regra por prioridade ainda pode propor a linha.
  * Ordem: linhas reais antes das parcelas projetadas (planned), depois occurredOn desc, createdAt asc, id asc.
  * proposals tem até `limit`; total conta todas.
  */
@@ -284,8 +287,9 @@ function previewRuleApplication(householdId: string, ruleId: string | null, limi
 /**
  * Grava os itens confirmados, numa transação, com as linhas travadas (FOR UPDATE). Cada item é conferido de novo
  * e PULADO — nunca gravado com outra regra ou outra categoria — se a linha não é do household, já tem categoria,
- * deixou de ser elegível, ou se a regra não existe no household, está inativa, não casa mais (previewRule) ou
- * aponta hoje para categoria diferente da do item (regra editada desde a prévia). O UPDATE repete
+ * deixou de ser elegível, ou se a regra não existe no household, está inativa, não casa mais (previewRule),
+ * aponta hoje para categoria diferente da do item (regra editada desde a prévia) ou tem categoria que não cabe no
+ * kind da linha (categoryFitsKind). O UPDATE repete
  * `category_id is null`: quem categorizou entre a prévia e a gravação ganha.
  * Linha gravada: category_id = categoria da regra, category_rule_id = regra, member_id = coalesce(atual, membro da
  * regra), updated_at = now().
@@ -324,9 +328,8 @@ A linha confirmada da importação só traz a categoria, não de onde ela veio. 
 
 ### 6.5 Revisão em grupos — `/lib/db/queries/review-groups.ts` e `/api/transactions/review` (F4, 2026-10-08)
 
-Leitura com os MESMOS cortes da aplicação de regras (§6.3: sem categoria, status ≠ `reconciled`, fora de previsão
-de recorrência e de parcela de plano já categorizado) e o agrupamento do motor puro (`groupUncategorized`, com as
-regras carregando `categoryNature`).
+Leitura com os MESMOS cortes da aplicação de regras (`eligibleForRules`, §6.3) e o agrupamento do motor puro
+(`groupUncategorized`, com as regras carregando `categoryNature`).
 
 ```ts
 type ReviewGroup = {
@@ -357,7 +360,7 @@ function listReviewGroups(householdId: string): Promise<ReviewGroup[]>
 
 /**
  * Numa transação: confere a categoria (folha do household); trava as linhas (FOR UPDATE) que ainda valem
- * (household, sem categoria, dentro dos cortes, kind ∈ {expense, income}, amount ≠ 0); recusa o grupo inteiro se a
+ * (household, sem categoria, cortes do §6.3, kind ∈ {expense, income}, amount ≠ 0); recusa o grupo inteiro se a
  * categoria não cabe em alguma (ReviewCategoryKindError) antes de gravar; se nenhuma vale mais, devolve tudo como
  * skipped e NÃO cria a regra. Com newRulePattern (aparado, não vazio) cria regra 'contains', ativa, hits 0, no TOPO
  * (priority = menor − 1, ver §6). Rastro: category_rule_id = regra vencedora (matchRule, já com a regra nova) se, e
