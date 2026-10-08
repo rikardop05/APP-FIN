@@ -192,6 +192,29 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('listReviewGroups (F4)',
     }
   });
 
+  it('regra de categoria de receita nao sugere a si mesma para um Pix enviado', async () => {
+    const f = await createFixture('listar-natureza');
+    try {
+      const { listReviewGroups } = await import('./review-groups');
+      const [salario] = await f.db
+        .insert(f.schema.categories)
+        .values({ householdId: f.householdId, name: 'Salario', nature: 'income' })
+        .returning({ id: f.schema.categories.id });
+      if (salario === undefined) throw new Error('Categoria nao criada.');
+      const pix = await f.rule('pix', salario.id, 1);
+      await f.tx('PIX MARIA', { amountCents: cents(-300) });
+      await f.tx('PIX MARIA', { amountCents: cents(500), kind: 'income' });
+
+      const groups = await listReviewGroups(f.householdId);
+      expect(groups.map((g) => [g.direction, g.ruleId, g.suggestedCategoryId])).toEqual([
+        ['in', pix, salario.id],
+        ['out', null, null],
+      ]);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
   it('household sem nada a revisar devolve lista vazia', async () => {
     const f = await createFixture('vazio');
     try {

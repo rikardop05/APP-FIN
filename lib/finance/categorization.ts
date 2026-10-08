@@ -20,6 +20,12 @@ export interface Rule {
   memberId: string | null;
   priority: number;
   active: boolean;
+  /**
+   * Natureza da categoria da regra, quando quem chama a conhece. Com ela,
+   * `groupUncategorized` nao usa a regra numa linha em que a categoria nao cabe
+   * (`categoryFitsKind`). Ausente = sem essa conferencia.
+   */
+  categoryNature?: CategoryNature;
 }
 
 /** Resultado da categorizacao de uma linha. */
@@ -270,7 +276,14 @@ export function groupUncategorized(
     if (!isReviewable(row)) continue;
 
     const normalized = normalizeDescription(row.description);
-    const rule = ordered.find((candidate) => ruleMatches(candidate, normalized));
+    // Regra cuja categoria nao cabe no tipo da linha (receita x despesa) e
+    // pulada: sugerir Salario para um Pix enviado seria sugestao que o servidor
+    // recusa. A proxima regra por prioridade ainda pode casar.
+    const rule = ordered.find(
+      (candidate) =>
+        (candidate.categoryNature === undefined || categoryFitsKind(candidate.categoryNature, row.kind)) &&
+        ruleMatches(candidate, normalized),
+    );
     const pattern = rule === undefined ? suggestRulePattern(row.description).pattern : rule.pattern;
     // Prefixos distintos: um padrao nunca colide com o id de uma regra.
     const origin = rule === undefined ? `pattern:${pattern}` : `rule:${rule.id}`;

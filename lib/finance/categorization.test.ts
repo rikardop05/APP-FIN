@@ -501,6 +501,32 @@ describe('groupUncategorized', () => {
     expect(grupo?.suggestedCategoryId).toBeNull();
   });
 
+  it('regra cuja categoria nao cabe no tipo da linha nao a agrupa nem sugere', () => {
+    // "PIX" -> Salario (receita) nao pode sugerir Salario para um Pix ENVIADO.
+    const regras = [
+      rule({ id: 'r-salario', pattern: 'pix', categoryNature: 'income', priority: 1 }),
+      rule({ id: 'r-transf', pattern: 'pix', categoryNature: 'non_essential', priority: 2 }),
+    ];
+    const grupos = groupUncategorized(
+      [
+        row({ id: 'enviado', description: 'PIX MARIA', amountCents: cents(-300) }),
+        row({ id: 'recebido', description: 'PIX MARIA', amountCents: cents(500), kind: 'income' }),
+      ],
+      regras,
+    );
+    // Recebido: Salario cabe. Enviado: Salario nao cabe, a regra seguinte sim.
+    expect(grupos.map((g) => [g.ids, g.ruleId])).toEqual([
+      [['recebido'], 'r-salario'],
+      [['enviado'], 'r-transf'],
+    ]);
+  });
+
+  it('sem regra que caiba, a linha cai no grupo de padrao', () => {
+    const regras = [rule({ id: 'r-salario', pattern: 'pix', categoryNature: 'income' })];
+    const [grupo] = groupUncategorized([row({ id: 'enviado', description: 'PIX MARIA' })], regras);
+    expect(grupo).toMatchObject({ pattern: 'pix maria', ruleId: null, suggestedCategoryId: null });
+  });
+
   it('respeita a prioridade das regras ao escolher o grupo', () => {
     const regras = [
       rule({ id: 'r-geral', pattern: 'posto', priority: 20 }),
