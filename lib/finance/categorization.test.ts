@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import {
   categorizeBatch,
+  groupUncategorized,
   matchRule,
+  previewRule,
   suggestRulePattern,
+  type CategorizationRow,
   type Rule,
 } from '@/lib/finance/categorization';
 import { normalizeDescription } from '@/lib/finance/dedupe';
+import { cents } from '@/lib/money';
 
 /** Monta uma regra com os campos que o teste nao usa ja preenchidos. */
 function rule(over: Partial<Rule> & Pick<Rule, 'id' | 'pattern'>): Rule {
@@ -229,6 +233,41 @@ describe('suggestRulePattern', () => {
     expect(suggestRulePattern('PÃO DE AÇÚCAR 1234').pattern).toBe('pao de acucar');
   });
 
+  it('corta o prefixo de cartao "[final NNNN]" do inicio', () => {
+    // A mesma loja aparece com e sem o prefixo, conforme o cartao/fatura.
+    // Com o prefixo no padrao, a regra nao casaria a versao sem ele.
+    expect(suggestRulePattern('[final 4239] IRMAOS BOA').pattern).toBe('irmaos boa');
+    expect(suggestRulePattern('[FINAL 2387] IG*ExitLag (11/12)').pattern).toBe('ig*exitlag');
+  });
+
+  it('a regra sugerida com prefixo casa a mesma loja sem prefixo', () => {
+    const { pattern } = suggestRulePattern('[final 4239] IRMAOS BOA');
+    const regra = rule({ id: 'r-sugerida', pattern });
+    expect(matchRule([regra], 'IRMAOS BOA')?.id).toBe('r-sugerida');
+  });
+
+  it('corta o sufixo "- NuPay" do fim', () => {
+    expect(suggestRulePattern('KaBuM! - NuPay').pattern).toBe('kabum');
+    expect(suggestRulePattern('Pichau Informatica - NuPay (6/7)').pattern).toBe(
+      'pichau informatica',
+    );
+    expect(suggestRulePattern('Pichau Informatica - NuPay - Parcela 5/7').pattern).toBe(
+      'pichau informatica',
+    );
+  });
+
+  it('prefixo de cartao, parcela e codigo final juntos', () => {
+    expect(suggestRulePattern('[final 4239] NFS PREMIUM ITUPEVA (3/4)').pattern).toBe(
+      'nfs premium itupeva',
+    );
+    expect(suggestRulePattern('[final 4239] DROGASIL3359').pattern).toBe('drogasil');
+    expect(suggestRulePattern('FORT ATACADISTA 635').pattern).toBe('fort atacadista');
+  });
+
+  it('descricao que e so o prefixo de cartao nao vira padrao vazio', () => {
+    expect(suggestRulePattern('[final 4239]').pattern).toBe('[final 4239]');
+  });
+
   it('descricao so de digitos nao vira padrao vazio', () => {
     // Padrao vazio nao casaria nada; a descricao normalizada ainda serve.
     expect(suggestRulePattern('12345').pattern).toBe('12345');
@@ -246,6 +285,12 @@ describe('suggestRulePattern', () => {
       'PADARIA 2 IRMAOS',
       'Mercado Livre (3/10)',
       '12345',
+      '[final 4239] IRMAOS BOA',
+      'KaBuM! - NuPay',
+      'Pichau Informatica - NuPay - Parcela 5/7',
+      '[final 4239] NFS PREMIUM ITUPEVA (3/4)',
+      '[final 4239]',
+      '- NuPay',
     ];
 
     for (const descricao of descricoes) {
@@ -266,5 +311,191 @@ describe('suggestRulePattern', () => {
       const linha = `MERCADO LIVRE PARC ${String(n).padStart(2, '0')}/10`;
       expect(matchRule([regra], linha)?.id).toBe('r-sugerida');
     }
+  });
+});
+
+/** Linha candidata a revisao; por padrao, despesa sem categoria. */
+function row(
+  over: Partial<CategorizationRow> & Pick<CategorizationRow, 'id' | 'description'>,
+): CategorizationRow {
+  return {
+    amountCents: cents(-1000),
+    kind: 'expense',
+    categoryId: null,
+    ...over,
+  };
+}
+
+describe('groupUncategorized', () => {
+  it('lista vazia devolve lista vazia', () => {
+    expect(groupUncategorized([], [])).toEqual([]);
+  });
+
+  it('agrupa pela loja: prefixo de cartao, parcela e "- NuPay" caem no mesmo grupo', () => {
+    const grupos = groupUncategorized(
+      [
+        row({ id: 't1', description: '[final 4239] IRMAOS BOA', amountCents: cents(-10000) }),
+        row({ id: 't2', description: 'IRMAOS BOA', amountCents: cents(-2550) }),
+        row({ id: 't3', description: 'KaBuM! - NuPay (9/10)', amountCents: cents(-4365) }),
+        row({ id: 't4', description: 'KaBuM! - NuPay', amountCents: cents(-4366) }),
+      ],
+      [],
+    );
+
+    expect(grupos).toEqual([
+      // -10000 + -2550 = -12550
+      { pattern: 'irmaos boa', ids: ['t1', 't2'], totalCents: -12550, ruleId: null, suggestedCategoryId: null },
+      // -4365 + -4366 = -8731
+      { pattern: 'kabum', ids: ['t3', 't4'], totalCents: -8731, ruleId: null, suggestedCategoryId: null },
+    ]);
+  });
+
+  it('ordena pelo tamanho do total (valor absoluto), maior primeiro', () => {
+    const grupos = groupUncategorized(
+      [
+        row({ id: 'p', description: 'PADARIA', amountCents: cents(-900) }),
+        // Receita sem categoria tambem e revisada; +5.000,00 e o maior impacto.
+        row({ id: 's', description: 'SALARIO ACME', amountCents: cents(500000), kind: 'income' }),
+        row({ id: 'f', description: 'FORT ATACADISTA 635', amountCents: cents(-76294) }),
+      ],
+      [],
+    );
+    // |500000| > |-76294| > |-900|
+    expect(grupos.map((grupo) => grupo.pattern)).toEqual([
+      'salario acme',
+      'fort atacadista',
+      'padaria',
+    ]);
+  });
+
+  it('desempata total de mesmo tamanho pelo padrao, em ordem alfabetica', () => {
+    const grupos = groupUncategorized(
+      [
+        row({ id: 'b', description: 'B LOJA', amountCents: cents(-500) }),
+        row({ id: 'a', description: 'A LOJA', amountCents: cents(500), kind: 'income' }),
+      ],
+      [],
+    );
+    expect(grupos.map((grupo) => grupo.pattern)).toEqual(['a loja', 'b loja']);
+  });
+
+  it('exclui pagamento de fatura, linha de valor zero e linha ja categorizada', () => {
+    const grupos = groupUncategorized(
+      [
+        row({ id: 'pg', description: 'PAGAMENTO RECEBIDO', amountCents: cents(100000), kind: 'credit_card_payment' }),
+        row({ id: 'an', description: 'ANUIDADE DIFERENCIADA', amountCents: cents(0), kind: 'income' }),
+        row({ id: 'ok', description: 'IRMAOS BOA', categoryId: 'cat-mercado' }),
+        row({ id: 'ib', description: 'IRMAOS BOA', amountCents: cents(-2550) }),
+      ],
+      [],
+    );
+    expect(grupos).toEqual([
+      { pattern: 'irmaos boa', ids: ['ib'], totalCents: -2550, ruleId: null, suggestedCategoryId: null },
+    ]);
+  });
+
+  it('linha que uma regra ativa ja casa vem no grupo da regra, com a categoria sugerida', () => {
+    // Regra criada depois da importacao: as linhas antigas continuam sem
+    // categoria, e o grupo ja chega preenchido para o usuario so confirmar.
+    const regras = [rule({ id: 'r1', pattern: 'kabum', categoryId: 'cat-eletronicos' })];
+    const grupos = groupUncategorized(
+      [
+        row({ id: 't3', description: 'KaBuM! - NuPay (9/10)', amountCents: cents(-4365) }),
+        row({ id: 't4', description: 'KABUM ONLINE', amountCents: cents(-1000) }),
+        row({ id: 'x', description: 'OUTRA LOJA', amountCents: cents(-100) }),
+      ],
+      regras,
+    );
+    expect(grupos).toEqual([
+      // -4365 + -1000 = -5365: as duas casam 'kabum', mesmo com padroes sugeridos diferentes.
+      { pattern: 'kabum', ids: ['t3', 't4'], totalCents: -5365, ruleId: 'r1', suggestedCategoryId: 'cat-eletronicos' },
+      { pattern: 'outra loja', ids: ['x'], totalCents: -100, ruleId: null, suggestedCategoryId: null },
+    ]);
+  });
+
+  it('grupo de regra e grupo de padrao com o mesmo texto ficam separados', () => {
+    // Regra exact casa so a forma exata; a variante cai no grupo de padrao.
+    const regras = [rule({ id: 'r1', pattern: 'irmaos boa', matchType: 'exact' })];
+    const grupos = groupUncategorized(
+      [
+        row({ id: 'a', description: 'IRMAOS BOA', amountCents: cents(-300) }),
+        row({ id: 'b', description: '[final 4239] IRMAOS BOA', amountCents: cents(-200) }),
+      ],
+      regras,
+    );
+    expect(grupos).toEqual([
+      { pattern: 'irmaos boa', ids: ['a'], totalCents: -300, ruleId: 'r1', suggestedCategoryId: 'cat-r1' },
+      { pattern: 'irmaos boa', ids: ['b'], totalCents: -200, ruleId: null, suggestedCategoryId: null },
+    ]);
+  });
+
+  it('regra inativa nao agrupa nem sugere categoria', () => {
+    const regras = [rule({ id: 'r1', pattern: 'irmaos', active: false })];
+    const [grupo] = groupUncategorized([row({ id: 'a', description: 'IRMAOS BOA' })], regras);
+    expect(grupo?.ruleId).toBeNull();
+    expect(grupo?.suggestedCategoryId).toBeNull();
+  });
+
+  it('respeita a prioridade das regras ao escolher o grupo', () => {
+    const regras = [
+      rule({ id: 'r-geral', pattern: 'posto', priority: 20 }),
+      rule({ id: 'r-shell', pattern: 'posto shell', priority: 10 }),
+    ];
+    const [grupo] = groupUncategorized([row({ id: 'a', description: 'POSTO SHELL 4587' })], regras);
+    expect(grupo?.ruleId).toBe('r-shell');
+  });
+
+  it('nao muta as linhas nem as regras recebidas', () => {
+    const linhas = [row({ id: 'b', description: 'B' }), row({ id: 'a', description: 'A' })];
+    const regras = [rule({ id: 'r2', pattern: 'b', priority: 2 }), rule({ id: 'r1', pattern: 'a', priority: 1 })];
+    const copiaLinhas = structuredClone(linhas);
+    const copiaRegras = structuredClone(regras);
+    groupUncategorized(linhas, regras);
+    expect(linhas).toEqual(copiaLinhas);
+    expect(regras).toEqual(copiaRegras);
+  });
+});
+
+describe('previewRule', () => {
+  const linhas = [
+    row({ id: 't1', description: '[final 4239] IRMAOS BOA' }),
+    row({ id: 't2', description: 'IRMAOS BOA (2/3)' }),
+    row({ id: 'cat', description: 'IRMAOS BOA', categoryId: 'cat-mercado' }),
+    row({ id: 'pg', description: 'IRMAOS BOA', kind: 'credit_card_payment' }),
+    row({ id: 'zero', description: 'IRMAOS BOA', amountCents: cents(0) }),
+    row({ id: 'out', description: 'OUTRA LOJA' }),
+  ];
+
+  it('devolve so as linhas sem categoria que a regra casaria, na ordem recebida', () => {
+    const regra = rule({ id: 'nova', pattern: 'irmaos boa' });
+    expect(previewRule(regra, linhas)).toEqual(['t1', 't2']);
+  });
+
+  it('nunca inclui linha ja categorizada: regra nao sobrescreve categoria posta a mao', () => {
+    const regra = rule({ id: 'nova', pattern: 'irmaos boa' });
+    expect(previewRule(regra, linhas)).not.toContain('cat');
+  });
+
+  it('nao inclui pagamento de fatura nem linha de valor zero', () => {
+    const regra = rule({ id: 'nova', pattern: 'irmaos boa' });
+    const ids = previewRule(regra, linhas);
+    expect(ids).not.toContain('pg');
+    expect(ids).not.toContain('zero');
+  });
+
+  it('regra que nao casa nada devolve lista vazia', () => {
+    expect(previewRule(rule({ id: 'nova', pattern: 'inexistente' }), linhas)).toEqual([]);
+  });
+
+  it('regra inativa, padrao vazio e regex invalida devolvem lista vazia sem lancar', () => {
+    expect(previewRule(rule({ id: 'n', pattern: 'irmaos', active: false }), linhas)).toEqual([]);
+    expect(previewRule(rule({ id: 'n', pattern: '   ' }), linhas)).toEqual([]);
+    expect(previewRule(rule({ id: 'n', pattern: '([', matchType: 'regex' }), linhas)).toEqual([]);
+  });
+
+  it('respeita o matchType: exact so casa a descricao inteira', () => {
+    const regra = rule({ id: 'n', pattern: 'irmaos boa', matchType: 'exact' });
+    // t2 normaliza para 'irmaos boa' (parcela removida); t1 tem o prefixo.
+    expect(previewRule(regra, linhas)).toEqual(['t2']);
   });
 });

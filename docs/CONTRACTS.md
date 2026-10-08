@@ -148,8 +148,43 @@ function categorizeBatch(rules: Rule[], rows: { id: string; description: string 
  * Sugere o padrão de uma nova regra a partir de uma descrição: remove parcelas, datas, códigos e dígitos variáveis.
  * Devolve o padrão NORMALIZADO (minúsculo), e `matchRule` compara sem diferenciar caixa.
  * Invariante (RF-CAT-03): a regra sugerida tem de casar com a descrição que a gerou e com outras parcelas da mesma compra.
+ * Corta também, só nas pontas: o prefixo de cartão "[final NNNN]" no início e a carteira "- nupay" no fim
+ * (adendo de 2026-10-07): a mesma loja aparece com e sem esses pedaços, e o padrão tem de casar as duas formas.
  */
 function suggestRulePattern(rawDescription: string): { pattern: string; matchType: 'contains' }
+```
+
+### 6.1 Revisão de não categorizados (adendo de 2026-10-07, decisões 3b e 15a)
+
+```ts
+/** Linha candidata a revisão. `kind` é o espelho de `transaction_kind` (`enum-mirrors.ts`). */
+interface CategorizationRow {
+  id: string; description: string; amountCents: Cents
+  kind: TransactionKind; categoryId: string | null   // null = não categorizado
+}
+
+interface UncategorizedGroup {
+  pattern: string              // padrão da regra que já casa o grupo, ou o de suggestRulePattern
+  ids: string[]                // na ordem recebida
+  totalCents: Cents            // soma COM sinal: despesa negativa, receita positiva
+  ruleId: string | null        // regra ativa que já casa o grupo; null = candidato a regra nova
+  suggestedCategoryId: string | null  // categoria dessa regra; null sem regra
+}
+
+/**
+ * Agrupa as linhas revisáveis para a tela de revisão. Revisável = categoryId null, kind ≠ credit_card_payment, amountCents ≠ 0.
+ * Linha que uma regra ATIVA casa (mesma ordem do matchRule) vai para o grupo da regra; as demais agrupam por suggestRulePattern.
+ * Grupo de regra e grupo de padrão nunca se fundem, mesmo com o mesmo texto.
+ * Ordem: |totalCents| desc, depois pattern asc, depois grupo com regra antes do grupo sem regra. Não muta a entrada.
+ */
+function groupUncategorized(rows: CategorizationRow[], rules: Rule[]): UncategorizedGroup[]
+
+/**
+ * Ids que a regra categorizaria agora ("esta regra pega N lançamentos"), na ordem recebida.
+ * Só linhas revisáveis (mesmo filtro acima): regra NUNCA sobrescreve categoria posta à mão.
+ * Avalia só esta regra, sem olhar prioridade de outras. Regra inativa, padrão vazio e regex inválida → [], nunca lança.
+ */
+function previewRule(rule: Rule, rows: CategorizationRow[]): string[]
 ```
 
 ## 7. Deduplicação — `/lib/finance/dedupe.ts`
