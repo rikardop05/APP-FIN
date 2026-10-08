@@ -457,6 +457,15 @@ export const transactions = pgTable(
     categoryId: uuid('category_id').references(() => categories.id, {
       onDelete: 'restrict',
     }),
+    /**
+     * Regra que deu a categoria atual, quando foi regra. Null = categoria posta a
+     * mao, vinda do parcelamento, ou sem categoria. `SET NULL`: apagar a regra
+     * apaga so o rastro; a categoria do lancamento fica.
+     */
+    categoryRuleId: uuid('category_rule_id').references(
+      (): AnyPgColumn => categorizationRules.id,
+      { onDelete: 'set null' },
+    ),
     accountId: uuid('account_id').references(() => accounts.id),
     creditCardId: uuid('credit_card_id').references(() => creditCards.id, {
       onDelete: 'restrict',
@@ -582,6 +591,7 @@ export const categorizationRules = pgTable('categorization_rules', {
   priority: integer('priority').notNull().default(100),
   hits: integer('hits').notNull().default(0),
   active: boolean('active').notNull().default(true),
+  createdAt: createdAt(),
 });
 
 // ---------------------------------------------------------------------------

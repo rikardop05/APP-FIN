@@ -1,0 +1,3 @@
+ALTER TABLE "categorization_rules" ADD COLUMN "created_at" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
+ALTER TABLE "transactions" ADD COLUMN "category_rule_id" uuid;--> statement-breakpoint
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_category_rule_id_categorization_rules_id_fk" FOREIGN KEY ("category_rule_id") REFERENCES "public"."categorization_rules"("id") ON DELETE set null ON UPDATE no action;

@@ -74,7 +74,7 @@ async function seedEverything(m: Modules, householdId: string, memberId: string)
   const card = await one(db.insert(schema.creditCards).values({ householdId, name: 'Cartão', closingDay: 25, dueDay: 5, holderMemberId: memberId, paymentAccountId: account.id, creditLimitCents: 1_000_000 }).returning({ id: schema.creditCards.id }));
   const root = await one(db.insert(schema.categories).values({ householdId, name: 'Moradia', parentId: null, nature: 'essential' }).returning({ id: schema.categories.id }));
   const leaf = await one(db.insert(schema.categories).values({ householdId, name: 'Luz', parentId: root.id, nature: 'essential', sortOrder: 2 }).returning({ id: schema.categories.id }));
-  await db.insert(schema.categorizationRules).values({ householdId, pattern: 'ENEL', categoryId: leaf.id, memberId, priority: 10, hits: 3 });
+  const rule = await one(db.insert(schema.categorizationRules).values({ householdId, pattern: 'ENEL', categoryId: leaf.id, memberId, priority: 10, hits: 3 }).returning({ id: schema.categorizationRules.id }));
   await db.insert(schema.importMappings).values({ householdId, bankKey: 'banco-x', format: 'csv', columnMap: { data: 0, valor: 2 }, dateFormat: 'dd/MM/yyyy' });
   const plan = await one(db.insert(schema.installmentPlans).values({ householdId, creditCardId: card.id, description: 'Geladeira', totalCents: -300_000, installmentsCount: 3, firstCompetence: '2026-09', categoryId: leaf.id, source: 'manual' }).returning({ id: schema.installmentPlans.id }));
   const expense = await one(db.insert(schema.recurringExpenses).values({ householdId, description: 'Conta de luz', expectedCents: -18_000, categoryId: leaf.id, dueDay: 5, accountId: account.id, startsOn: '2026-01-01', annualAdjustmentBp: 500 }).returning({ id: schema.recurringExpenses.id }));
@@ -109,7 +109,7 @@ async function seedEverything(m: Modules, householdId: string, memberId: string)
   const payment = await tx({ competence: '2026-10', amountCents: -100_000, kind: 'credit_card_payment', accountId: account.id });
   await db.update(schema.statements).set({ paidTransactionId: payment.id }).where(eq(schema.statements.id, statement.id));
   // Previsão cumprida (reconciled) e o posted que a cumpriu; uma previsão em aberto; a receita.
-  const real = await tx({ competence: '2026-09', amountCents: -18_500, kind: 'expense', accountId: account.id, categoryId: leaf.id, rawDescription: 'ENEL' });
+  const real = await tx({ competence: '2026-09', amountCents: -18_500, kind: 'expense', accountId: account.id, categoryId: leaf.id, categoryRuleId: rule.id, rawDescription: 'ENEL' });
   await tx({ competence: '2026-09', amountCents: -18_000, kind: 'expense', accountId: account.id, categoryId: leaf.id, recurringExpenseId: expense.id, status: 'reconciled', reconciledByTransactionId: real.id });
   await tx({ competence: '2026-11', amountCents: -18_000, kind: 'expense', accountId: account.id, categoryId: leaf.id, recurringExpenseId: expense.id, status: 'planned' });
   await tx({ competence: '2026-09', amountCents: 740_000, kind: 'income', accountId: account.id, incomeId: income.id, memberId });

@@ -159,6 +159,7 @@ const TABLES: readonly TableSpec[] = [
     scope: 'household',
     fks: {
       categoryId: 'categories',
+      categoryRuleId: 'categorization_rules',
       accountId: 'accounts',
       creditCardId: 'credit_cards',
       statementId: 'statements',
