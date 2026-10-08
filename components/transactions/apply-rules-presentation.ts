@@ -17,7 +17,7 @@ export function applyResultMessage(result: RuleApplicationResult): string {
   }
   const parts = [`${count(result.applied, 'lançamento categorizado', 'lançamentos categorizados')} pelas regras`];
   if (result.propagated > 0) {
-    parts.push(`${count(result.propagated, 'parcela futura acompanhou', 'parcelas futuras acompanharam')} o parcelamento`);
+    parts.push(`${count(result.propagated, 'parcela sem categoria acompanhou', 'parcelas sem categoria acompanharam')} o parcelamento`);
   }
   if (result.skipped > 0) {
     parts.push(`${count(result.skipped, 'item pulado porque mudou', 'itens pulados porque mudaram')} desde a prévia`);
@@ -27,10 +27,19 @@ export function applyResultMessage(result: RuleApplicationResult): string {
 
 /** Itens a gravar: as propostas que o usuario deixou marcadas, na ordem da previa. */
 export function confirmedItems(
-  proposals: readonly { transactionId: string; ruleId: string }[],
+  proposals: readonly { transactionId: string; ruleId: string; categoryId: string }[],
   unchecked: ReadonlySet<string>,
-): { transactionId: string; ruleId: string }[] {
+): { transactionId: string; ruleId: string; categoryId: string }[] {
   return proposals
     .filter((proposal) => !unchecked.has(proposal.transactionId))
-    .map(({ transactionId, ruleId }) => ({ transactionId, ruleId }));
+    .map(({ transactionId, ruleId, categoryId }) => ({ transactionId, ruleId, categoryId }));
+}
+
+/**
+ * Aviso quando a previa veio cortada no limite: o resto entra numa proxima
+ * rodada. `null` quando a previa trouxe tudo.
+ */
+export function previewLimitNotice(shown: number, total: number): string | null {
+  if (total <= shown) return null;
+  return `Mostrando ${String(shown)} de ${String(total)} lançamentos. Aplique estes e abra a prévia de novo para ver o restante.`;
 }

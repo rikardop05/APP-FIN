@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyResultMessage, confirmedItems } from './apply-rules-presentation';
+import { applyResultMessage, confirmedItems, previewLimitNotice } from './apply-rules-presentation';
 
 describe('applyResultMessage', () => {
   it('nada aplicado e nada pulado', () => {
@@ -14,37 +14,50 @@ describe('applyResultMessage', () => {
 
   it('singular', () => {
     expect(applyResultMessage({ applied: 1, skipped: 1, propagated: 1 })).toBe(
-      '1 lançamento categorizado pelas regras; 1 parcela futura acompanhou o parcelamento; 1 item pulado porque mudou desde a prévia.',
+      '1 lançamento categorizado pelas regras; 1 parcela sem categoria acompanhou o parcelamento; 1 item pulado porque mudou desde a prévia.',
     );
   });
 
   it('plural, sem as partes zeradas', () => {
     expect(applyResultMessage({ applied: 5, skipped: 0, propagated: 0 })).toBe('5 lançamentos categorizados pelas regras.');
     expect(applyResultMessage({ applied: 3, skipped: 0, propagated: 4 })).toBe(
-      '3 lançamentos categorizados pelas regras; 4 parcelas futuras acompanharam o parcelamento.',
+      '3 lançamentos categorizados pelas regras; 4 parcelas sem categoria acompanharam o parcelamento.',
     );
   });
 });
 
 describe('confirmedItems', () => {
   const proposals = [
-    { transactionId: 't1', ruleId: 'r1', description: 'A' },
-    { transactionId: 't2', ruleId: 'r1', description: 'B' },
-    { transactionId: 't3', ruleId: 'r2', description: 'C' },
+    { transactionId: 't1', ruleId: 'r1', categoryId: 'c1', description: 'A' },
+    { transactionId: 't2', ruleId: 'r1', categoryId: 'c1', description: 'B' },
+    { transactionId: 't3', ruleId: 'r2', categoryId: 'c2', description: 'C' },
   ];
 
   it('tudo marcado: todos os itens, na ordem da previa, so com os ids', () => {
     expect(confirmedItems(proposals, new Set())).toEqual([
-      { transactionId: 't1', ruleId: 'r1' },
-      { transactionId: 't2', ruleId: 'r1' },
-      { transactionId: 't3', ruleId: 'r2' },
+      { transactionId: 't1', ruleId: 'r1', categoryId: 'c1' },
+      { transactionId: 't2', ruleId: 'r1', categoryId: 'c1' },
+      { transactionId: 't3', ruleId: 'r2', categoryId: 'c2' },
     ]);
   });
 
   it('desmarcado fica de fora', () => {
     expect(confirmedItems(proposals, new Set(['t2']))).toEqual([
-      { transactionId: 't1', ruleId: 'r1' },
-      { transactionId: 't3', ruleId: 'r2' },
+      { transactionId: 't1', ruleId: 'r1', categoryId: 'c1' },
+      { transactionId: 't3', ruleId: 'r2', categoryId: 'c2' },
     ]);
+  });
+});
+
+describe('previewLimitNotice', () => {
+  it('previa completa nao tem aviso', () => {
+    expect(previewLimitNotice(3, 3)).toBeNull();
+    expect(previewLimitNotice(0, 0)).toBeNull();
+  });
+
+  it('previa cortada no limite avisa quanto falta ver', () => {
+    expect(previewLimitNotice(500, 2300)).toBe(
+      'Mostrando 500 de 2300 lançamentos. Aplique estes e abra a prévia de novo para ver o restante.',
+    );
   });
 });

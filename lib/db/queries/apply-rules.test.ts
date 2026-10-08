@@ -55,6 +55,8 @@ async function createFixture(label: string) {
     ])
     .returning({ id: schema.categories.id });
   if (!account || !card || !member || !mercado || !casa) throw new Error('Fixture incompleta.');
+  const accountId = account.id;
+  const cardId = card.id;
 
   async function rule(pattern: string, categoryId: string, priority: number, extra: { memberId?: string; active?: boolean } = {}) {
     const [row] = await db
@@ -79,11 +81,46 @@ async function createFixture(label: string) {
         rawDescription: description,
         amountCents: cents(-1000),
         kind: 'expense',
-        accountId: account!.id,
+        accountId,
         ...extra,
       })
       .returning({ id: schema.transactions.id });
     if (row === undefined) throw new Error('Lancamento nao criado.');
+    return row.id;
+  }
+
+  async function plan(description: string, installmentsCount: number, categoryId: string | null = null) {
+    const [row] = await db
+      .insert(schema.installmentPlans)
+      .values({
+        householdId,
+        creditCardId: cardId,
+        description,
+        totalCents: cents(-1000 * installmentsCount),
+        installmentsCount,
+        firstCompetence: '2026-09',
+        categoryId,
+        source: 'import',
+      })
+      .returning({ id: schema.installmentPlans.id });
+    if (row === undefined) throw new Error('Plano nao criado.');
+    return row.id;
+  }
+
+  async function recurring(categoryId: string) {
+    const [row] = await db
+      .insert(schema.recurringExpenses)
+      .values({
+        householdId,
+        description: 'IRMAOS BOA',
+        expectedCents: cents(-1000),
+        categoryId,
+        dueDay: 5,
+        startsOn: '2026-01-01',
+        accountId,
+      })
+      .returning({ id: schema.recurringExpenses.id });
+    if (row === undefined) throw new Error('Recorrencia nao criada.');
     return row.id;
   }
 
@@ -99,6 +136,14 @@ async function createFixture(label: string) {
     return row;
   }
 
+  async function planCategory(planId: string) {
+    const [row] = await db
+      .select({ categoryId: schema.installmentPlans.categoryId })
+      .from(schema.installmentPlans)
+      .where(eq(schema.installmentPlans.id, planId));
+    return row?.categoryId;
+  }
+
   async function hits(ruleId: string) {
     const [row] = await db
       .select({ hits: schema.categorizationRules.hits })
@@ -111,13 +156,16 @@ async function createFixture(label: string) {
     db,
     schema,
     householdId,
-    cardId: card.id,
+    cardId,
     memberId: member.id,
     mercadoId: mercado.id,
     casaId: casa.id,
     rule,
     tx,
+    plan,
+    recurring,
     read,
+    planCategory,
     hits,
     cleanup: () => db.delete(schema.households).where(eq(schema.households.id, householdId)),
   };
@@ -137,7 +185,8 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('previewRuleApplication 
       await f.tx('IRMAOS BOA', { amountCents: cents(0) }); // valor zero
       await f.tx('OUTRA LOJA'); // nenhuma regra
 
-      const proposals = await previewRuleApplication(f.householdId, null);
+      const { proposals, total } = await previewRuleApplication(f.householdId, null);
+      expect(total).toBe(2);
       expect(proposals.map((p) => [p.transactionId, p.ruleId, p.categoryId])).toEqual([
         [a, especifica, f.mercadoId],
         [b, geral, f.casaId],
@@ -157,7 +206,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('previewRuleApplication 
       const a = await f.tx('IRMAOS BOA');
       const b = await f.tx('IRMAOS LTDA');
 
-      const proposals = await previewRuleApplication(f.householdId, nova);
+      const { proposals } = await previewRuleApplication(f.householdId, nova);
       expect(proposals.map((p) => [p.transactionId, p.ruleId])).toEqual([
         [a, nova],
         [b, nova],
@@ -177,11 +226,61 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('previewRuleApplication 
       await f.tx('IRMAOS BOA');
 
       await expect(previewRuleApplication(f.householdId, alheia)).rejects.toThrow(RuleToApplyNotFoundError);
-      expect(await previewRuleApplication(f.householdId, inativa)).toEqual([]);
-      expect(await previewRuleApplication(f.householdId, null)).toEqual([]);
+      expect(await previewRuleApplication(f.householdId, inativa)).toEqual({ proposals: [], total: 0 });
+      expect(await previewRuleApplication(f.householdId, null)).toEqual({ proposals: [], total: 0 });
     } finally {
       await f.cleanup();
       await outro.cleanup();
+    }
+  });
+
+  it('previsao de recorrencia nao entra: a categoria dela vem da definicao da recorrencia', async () => {
+    const f = await createFixture('previa-recorrencia');
+    try {
+      const { previewRuleApplication } = await import('./apply-rules');
+      await f.rule('irmaos', f.mercadoId, 1);
+      const recorrencia = await f.recurring(f.casaId);
+      await f.tx('IRMAOS BOA', { status: 'planned', recurringExpenseId: recorrencia });
+      const real = await f.tx('IRMAOS BOA');
+
+      const { proposals } = await previewRuleApplication(f.householdId, null);
+      expect(proposals.map((p) => p.transactionId)).toEqual([real]);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it('parcela de parcelamento JA categorizado nao entra: quem decide e o plano', async () => {
+    const f = await createFixture('previa-plano');
+    try {
+      const { previewRuleApplication } = await import('./apply-rules');
+      await f.rule('geladeira', f.mercadoId, 1);
+      const categorizado = await f.plan('GELADEIRA', 2, f.casaId);
+      const semCategoria = await f.plan('GELADEIRA', 2);
+      const onCard = { accountId: null, creditCardId: f.cardId };
+      await f.tx('GELADEIRA', { ...onCard, installmentPlanId: categorizado, installmentNumber: 1 });
+      const livre = await f.tx('GELADEIRA', { ...onCard, installmentPlanId: semCategoria, installmentNumber: 1 });
+
+      const { proposals } = await previewRuleApplication(f.householdId, null);
+      expect(proposals.map((p) => p.transactionId)).toEqual([livre]);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it('previa limitada: devolve ate o limite e informa o total', async () => {
+    const f = await createFixture('previa-limite');
+    try {
+      const { previewRuleApplication } = await import('./apply-rules');
+      await f.rule('irmaos', f.mercadoId, 1);
+      const ids: string[] = [];
+      for (let n = 0; n < 3; n += 1) ids.push(await f.tx('IRMAOS BOA'));
+
+      const { proposals, total } = await previewRuleApplication(f.householdId, null, 2);
+      expect(total).toBe(3);
+      expect(proposals.map((p) => p.transactionId)).toEqual(ids.slice(0, 2));
+    } finally {
+      await f.cleanup();
     }
   });
 });
@@ -197,8 +296,8 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('applyRuleProposals (F3)
       const naoMarcada = await f.tx('IRMAOS LTDA'); // casaria, mas o usuario desmarcou
 
       const result = await applyRuleProposals(f.householdId, [
-        { transactionId: a, ruleId: regra },
-        { transactionId: b, ruleId: regra },
+        { transactionId: a, ruleId: regra, categoryId: f.mercadoId },
+        { transactionId: b, ruleId: regra, categoryId: f.mercadoId },
       ]);
       expect(result).toEqual({ applied: 2, skipped: 0, propagated: 0 });
       expect(await f.read(a)).toEqual({ categoryId: f.mercadoId, categoryRuleId: regra, memberId: f.memberId });
@@ -222,13 +321,14 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('applyRuleProposals (F3)
       const alheia = await outro.tx('IRMAOS BOA');
       const pagamento = await f.tx('IRMAOS BOA', { kind: 'credit_card_payment' });
       const boa = await f.tx('IRMAOS BOA');
+      const item = (transactionId: string) => ({ transactionId, ruleId: regra, categoryId: f.mercadoId });
 
       const result = await applyRuleProposals(f.householdId, [
-        { transactionId: categorizadaNoMeio, ruleId: regra },
-        { transactionId: naoCasaMais, ruleId: regra },
-        { transactionId: alheia, ruleId: regra },
-        { transactionId: pagamento, ruleId: regra },
-        { transactionId: boa, ruleId: regra },
+        item(categorizadaNoMeio),
+        item(naoCasaMais),
+        item(alheia),
+        item(pagamento),
+        item(boa),
       ]);
       expect(result).toEqual({ applied: 1, skipped: 4, propagated: 0 });
       // Categoria posta a mao nunca e sobrescrita.
@@ -242,22 +342,27 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('applyRuleProposals (F3)
     }
   });
 
-  it('regra desativada ou de outro household entre a previa e o gravar: item pulado', async () => {
+  it('regra desativada, de outro household ou com categoria editada desde a previa: item pulado', async () => {
     const f = await createFixture('regra-mudou');
     const outro = await createFixture('regra-mudou-outro');
     try {
       const { applyRuleProposals } = await import('./apply-rules');
       const inativa = await f.rule('irmaos', f.mercadoId, 1, { active: false });
       const alheia = await outro.rule('irmaos', outro.mercadoId, 1);
+      // A previa mostrou "-> Casa"; a regra foi editada para Mercado antes do gravar.
+      const editada = await f.rule('loja', f.mercadoId, 2);
       const a = await f.tx('IRMAOS BOA');
       const b = await f.tx('IRMAOS LTDA');
+      const c = await f.tx('LOJA X');
 
       const result = await applyRuleProposals(f.householdId, [
-        { transactionId: a, ruleId: inativa },
-        { transactionId: b, ruleId: alheia },
+        { transactionId: a, ruleId: inativa, categoryId: f.mercadoId },
+        { transactionId: b, ruleId: alheia, categoryId: outro.mercadoId },
+        { transactionId: c, ruleId: editada, categoryId: f.casaId },
       ]);
-      expect(result).toEqual({ applied: 0, skipped: 2, propagated: 0 });
+      expect(result).toEqual({ applied: 0, skipped: 3, propagated: 0 });
       expect(await f.read(a)).toEqual({ categoryId: null, categoryRuleId: null, memberId: null });
+      expect(await f.read(c)).toEqual({ categoryId: null, categoryRuleId: null, memberId: null });
       expect(await outro.hits(alheia)).toBe(0);
     } finally {
       await f.cleanup();
@@ -265,39 +370,23 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('applyRuleProposals (F3)
     }
   });
 
-  it('parcela categorizada propaga para o plano e as parcelas futuras; hits conta so a real', async () => {
+  it('parcela gravada leva o plano e as parcelas SEM categoria; hits conta so a real', async () => {
     const f = await createFixture('parcela');
     try {
       const { applyRuleProposals } = await import('./apply-rules');
       const regra = await f.rule('kabum', f.mercadoId, 1);
-      const [plan] = await f.db
-        .insert(f.schema.installmentPlans)
-        .values({
-          householdId: f.householdId,
-          creditCardId: f.cardId,
-          description: 'KaBuM! - NuPay',
-          totalCents: cents(-3000),
-          installmentsCount: 3,
-          firstCompetence: '2026-09',
-          source: 'import',
-        })
-        .returning({ id: f.schema.installmentPlans.id });
-      if (plan === undefined) throw new Error('Plano nao criado.');
-      const onCard = { accountId: null, creditCardId: f.cardId, installmentPlanId: plan.id };
+      const plano = await f.plan('KaBuM! - NuPay', 3);
+      const onCard = { accountId: null, creditCardId: f.cardId, installmentPlanId: plano };
       const p1 = await f.tx('KaBuM! - NuPay', { ...onCard, installmentNumber: 1 });
       const p2 = await f.tx('KaBuM! - NuPay (2/3)', { ...onCard, installmentNumber: 2, status: 'planned', rawDescription: '' });
       const p3 = await f.tx('KaBuM! - NuPay (3/3)', { ...onCard, installmentNumber: 3, status: 'planned', rawDescription: '' });
 
-      const result = await applyRuleProposals(f.householdId, [{ transactionId: p1, ruleId: regra }]);
+      const result = await applyRuleProposals(f.householdId, [{ transactionId: p1, ruleId: regra, categoryId: f.mercadoId }]);
       // p1 gravada pela regra; p2 e p3 seguem o plano.
       expect(result).toEqual({ applied: 1, skipped: 0, propagated: 2 });
-      const [planRow] = await f.db
-        .select({ categoryId: f.schema.installmentPlans.categoryId })
-        .from(f.schema.installmentPlans)
-        .where(eq(f.schema.installmentPlans.id, plan.id));
-      expect(planRow?.categoryId).toBe(f.mercadoId);
+      expect(await f.planCategory(plano)).toBe(f.mercadoId);
       expect(await f.read(p1)).toMatchObject({ categoryId: f.mercadoId, categoryRuleId: regra });
-      // A categoria das futuras vem do plano, nao da regra (CONTRACTS §6.2).
+      // A categoria das outras vem do plano, nao da regra.
       expect(await f.read(p2)).toMatchObject({ categoryId: f.mercadoId, categoryRuleId: null });
       expect(await f.read(p3)).toMatchObject({ categoryId: f.mercadoId, categoryRuleId: null });
       expect(await f.hits(regra)).toBe(1);
@@ -306,32 +395,87 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('applyRuleProposals (F3)
     }
   });
 
-  it('parcela de plano que ja tem categoria nao muda o plano', async () => {
+  it('propagacao NAO mexe em parcela que ja tem categoria, nem com rastro de outra regra', async () => {
+    // Achado do Corvo: parcelas 1-2 categorizadas na importacao pela regra
+    // "loja antiga" (Casa, com rastro); a 3 sem categoria recebe "kabum"
+    // (Mercado). A previa mostrou UMA linha: so ela e as parcelas sem
+    // categoria podem mudar.
+    const f = await createFixture('parcela-irmas');
+    try {
+      const { applyRuleProposals } = await import('./apply-rules');
+      const loja = await f.rule('loja antiga', f.casaId, 1);
+      const regra = await f.rule('kabum', f.mercadoId, 2);
+      const plano = await f.plan('KABUM', 4);
+      const onCard = { accountId: null, creditCardId: f.cardId, installmentPlanId: plano };
+      const p1 = await f.tx('KABUM', { ...onCard, installmentNumber: 1, categoryId: f.casaId, categoryRuleId: loja });
+      const p2 = await f.tx('KABUM', { ...onCard, installmentNumber: 2, categoryId: f.casaId, categoryRuleId: loja });
+      const p3 = await f.tx('KABUM', { ...onCard, installmentNumber: 3 });
+      const p4 = await f.tx('KABUM (4/4)', { ...onCard, installmentNumber: 4, status: 'planned', rawDescription: '' });
+
+      const result = await applyRuleProposals(f.householdId, [{ transactionId: p3, ruleId: regra, categoryId: f.mercadoId }]);
+      expect(result).toEqual({ applied: 1, skipped: 0, propagated: 1 });
+      expect(await f.read(p1)).toMatchObject({ categoryId: f.casaId, categoryRuleId: loja });
+      expect(await f.read(p2)).toMatchObject({ categoryId: f.casaId, categoryRuleId: loja });
+      expect(await f.read(p3)).toMatchObject({ categoryId: f.mercadoId, categoryRuleId: regra });
+      expect(await f.read(p4)).toMatchObject({ categoryId: f.mercadoId, categoryRuleId: null });
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it('parcela de plano ja categorizado e pulada: a categoria e a do plano, nao a da regra', async () => {
     const f = await createFixture('parcela-plano-categorizado');
     try {
       const { applyRuleProposals } = await import('./apply-rules');
-      const regra = await f.rule('kabum', f.mercadoId, 1);
-      const [plan] = await f.db
-        .insert(f.schema.installmentPlans)
-        .values({
-          householdId: f.householdId,
-          creditCardId: f.cardId,
-          description: 'KABUM',
-          totalCents: cents(-2000),
-          installmentsCount: 2,
-          firstCompetence: '2026-09',
-          categoryId: f.casaId,
-          source: 'import',
-        })
-        .returning({ id: f.schema.installmentPlans.id });
-      if (plan === undefined) throw new Error('Plano nao criado.');
-      const onCard = { accountId: null, creditCardId: f.cardId, installmentPlanId: plan.id };
-      const p1 = await f.tx('KABUM', { ...onCard, installmentNumber: 1 });
-      const p2 = await f.tx('KABUM (2/2)', { ...onCard, installmentNumber: 2, categoryId: f.casaId });
+      const regra = await f.rule('geladeira', f.mercadoId, 1);
+      const plano = await f.plan('GELADEIRA', 2, f.casaId);
+      const onCard = { accountId: null, creditCardId: f.cardId, installmentPlanId: plano };
+      const p1 = await f.tx('GELADEIRA', { ...onCard, installmentNumber: 1 });
 
-      const result = await applyRuleProposals(f.householdId, [{ transactionId: p1, ruleId: regra }]);
+      const result = await applyRuleProposals(f.householdId, [{ transactionId: p1, ruleId: regra, categoryId: f.mercadoId }]);
+      expect(result).toEqual({ applied: 0, skipped: 1, propagated: 0 });
+      expect(await f.read(p1)).toMatchObject({ categoryId: null });
+      expect(await f.planCategory(plano)).toBe(f.casaId);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it('regra de categoria de receita numa parcela: a parcela grava, o plano de despesa nao muda', async () => {
+    const f = await createFixture('parcela-receita');
+    try {
+      const { applyRuleProposals } = await import('./apply-rules');
+      const [receita] = await f.db
+        .insert(f.schema.categories)
+        .values({ householdId: f.householdId, name: 'Reembolsos', nature: 'income' })
+        .returning({ id: f.schema.categories.id });
+      if (receita === undefined) throw new Error('Categoria nao criada.');
+      const regra = await f.rule('kabum', receita.id, 1);
+      const plano = await f.plan('KABUM', 2);
+      const onCard = { accountId: null, creditCardId: f.cardId, installmentPlanId: plano };
+      const p1 = await f.tx('KABUM', { ...onCard, installmentNumber: 1 });
+      const p2 = await f.tx('KABUM (2/2)', { ...onCard, installmentNumber: 2, status: 'planned', rawDescription: '' });
+
+      const result = await applyRuleProposals(f.householdId, [{ transactionId: p1, ruleId: regra, categoryId: receita.id }]);
       expect(result).toEqual({ applied: 1, skipped: 0, propagated: 0 });
-      expect(await f.read(p2)).toMatchObject({ categoryId: f.casaId });
+      expect(await f.read(p1)).toMatchObject({ categoryId: receita.id, categoryRuleId: regra });
+      expect(await f.read(p2)).toMatchObject({ categoryId: null });
+      expect(await f.planCategory(plano)).toBeNull();
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it('previsao de recorrencia e pulada', async () => {
+    const f = await createFixture('gravar-recorrencia');
+    try {
+      const { applyRuleProposals } = await import('./apply-rules');
+      const regra = await f.rule('irmaos', f.mercadoId, 1);
+      const recorrencia = await f.recurring(f.casaId);
+      const prevista = await f.tx('IRMAOS BOA', { status: 'planned', recurringExpenseId: recorrencia });
+
+      const result = await applyRuleProposals(f.householdId, [{ transactionId: prevista, ruleId: regra, categoryId: f.mercadoId }]);
+      expect(result).toEqual({ applied: 0, skipped: 1, propagated: 0 });
     } finally {
       await f.cleanup();
     }

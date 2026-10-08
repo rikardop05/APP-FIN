@@ -3,7 +3,12 @@ import {
   ruleApplicationPreviewSchema,
   ruleApplicationResultSchema,
 } from '@/components/transactions/schemas';
-import type { RuleApplicationProposal, RuleApplicationResult } from '@/lib/db/queries/apply-rules';
+import type {
+  RuleApplicationPreview,
+  RuleApplicationProposal,
+  RuleApplicationResult,
+} from '@/lib/db/queries/apply-rules';
+import { APPLY_RULES_LIMIT } from '@/lib/db/queries/apply-rules-limit';
 import { cents } from '@/lib/money';
 import { applyRulesSchema } from './schemas';
 
@@ -21,13 +26,19 @@ describe('applyRulesSchema', () => {
 
   it('gravacao exige a lista de itens confirmados', () => {
     expect(applyRulesSchema.safeParse({ dryRun: false }).success).toBe(false);
-    expect(
-      applyRulesSchema.parse({ dryRun: false, items: [{ transactionId: UUID_A, ruleId: UUID_B }] }),
-    ).toEqual({ dryRun: false, items: [{ transactionId: UUID_A, ruleId: UUID_B }] });
+    const item = { transactionId: UUID_A, ruleId: UUID_B, categoryId: UUID_A };
+    expect(applyRulesSchema.parse({ dryRun: false, items: [item] })).toEqual({ dryRun: false, items: [item] });
+    // Sem a categoria que a previa mostrou, nao da para detectar regra editada.
+    expect(applyRulesSchema.safeParse({ dryRun: false, items: [{ transactionId: UUID_A, ruleId: UUID_B }] }).success).toBe(false);
+  });
+
+  it('gravacao acima do limite da previa e recusada', () => {
+    const item = { transactionId: UUID_A, ruleId: UUID_B, categoryId: UUID_A };
+    expect(applyRulesSchema.safeParse({ dryRun: false, items: Array(APPLY_RULES_LIMIT + 1).fill(item) }).success).toBe(false);
   });
 
   it('recusa id que nao e uuid e corpo sem dryRun', () => {
-    expect(applyRulesSchema.safeParse({ dryRun: false, items: [{ transactionId: 'x', ruleId: UUID_B }] }).success).toBe(false);
+    expect(applyRulesSchema.safeParse({ dryRun: false, items: [{ transactionId: 'x', ruleId: UUID_B, categoryId: UUID_A }] }).success).toBe(false);
     expect(applyRulesSchema.safeParse({ ruleId: UUID_A }).success).toBe(false);
     expect(applyRulesSchema.safeParse(null).success).toBe(false);
   });
@@ -45,7 +56,8 @@ describe('fronteira servidor -> tela da aplicacao de regras', () => {
       categoryId: UUID_A,
       categoryName: 'Mercado',
     };
-    expect(ruleApplicationPreviewSchema.parse({ proposals: [proposal] })).toEqual({ proposals: [proposal] });
+    const preview: RuleApplicationPreview = { proposals: [proposal], total: 1 };
+    expect(ruleApplicationPreviewSchema.parse(preview)).toEqual(preview);
   });
 
   it('o resultado tipado pelo servidor passa pelo schema da tela', () => {

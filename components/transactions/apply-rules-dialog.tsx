@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button, Checkbox, DateText, Money } from '@/components/ui-kit';
-import { confirmedItems } from './apply-rules-presentation';
+import { confirmedItems, previewLimitNotice } from './apply-rules-presentation';
 import { DialogShell } from './transaction-dialogs';
 import type { RuleApplicationProposal } from './schemas';
 
@@ -14,18 +14,22 @@ import type { RuleApplicationProposal } from './schemas';
 export function ApplyRulesDialog({
   title,
   proposals,
+  total,
   busy,
   onClose,
   onConfirm,
 }: {
   title: string;
   proposals: RuleApplicationProposal[];
+  /** Total que as regras pegariam; maior que `proposals.length` quando a previa veio cortada. */
+  total: number;
   busy: boolean;
   onClose: () => void;
-  onConfirm: (items: { transactionId: string; ruleId: string }[]) => Promise<void>;
+  onConfirm: (items: { transactionId: string; ruleId: string; categoryId: string }[]) => Promise<void>;
 }) {
   const [unchecked, setUnchecked] = useState<Set<string>>(() => new Set());
   const items = confirmedItems(proposals, unchecked);
+  const limitNotice = previewLimitNotice(proposals.length, total);
 
   function toggle(transactionId: string) {
     setUnchecked((previous) => {
@@ -49,6 +53,7 @@ export function ApplyRulesDialog({
         </div>
       ) : (
         <form className="flex flex-col gap-4" onSubmit={(event) => { event.preventDefault(); void onConfirm(items); }}>
+          {limitNotice ? <p className="text-sm text-muted-foreground">{limitNotice}</p> : null}
           <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
             {proposals.map((proposal) => (
               <li key={proposal.transactionId} className="flex items-start gap-3 px-3 py-2 text-sm">

@@ -133,6 +133,8 @@ export const ruleApplicationProposalSchema = z.object({
 
 export const ruleApplicationPreviewSchema = z.object({
   proposals: z.array(ruleApplicationProposalSchema),
+  /** Quantas linhas as regras pegariam ao todo; a previa traz ate o limite. */
+  total: z.number().int().nonnegative(),
 });
 
 /** Resposta de `POST /api/rules/apply` com `dryRun: false`. */
@@ -143,4 +145,5 @@ export const ruleApplicationResultSchema = z.object({
 });
 
 export type RuleApplicationProposal = z.infer<typeof ruleApplicationProposalSchema>;
+export type RuleApplicationPreview = z.infer<typeof ruleApplicationPreviewSchema>;
 export type RuleApplicationResult = z.infer<typeof ruleApplicationResultSchema>;

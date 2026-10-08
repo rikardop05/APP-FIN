@@ -20,7 +20,7 @@ import {
   deleteResultSchema,
   ruleApplicationPreviewSchema,
   ruleApplicationResultSchema,
-  type RuleApplicationProposal,
+  type RuleApplicationPreview,
   transactionResponseSchema,
   ruleSuggestionSchema,
   type RuleSuggestion,
@@ -65,7 +65,7 @@ type DialogState =
   | { kind: 'batch' }
   | { kind: 'rule'; transactionId: string }
   | { kind: 'delete'; transactionId: string }
-  | { kind: 'apply'; title: string; proposals: RuleApplicationProposal[] }
+  | { kind: 'apply'; title: string; preview: RuleApplicationPreview }
   | null;
 
 async function readJson<T>(response: Response, schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } }): Promise<T> {
@@ -278,15 +278,15 @@ export function LancamentosScreen({ today }: { today: string }) {
       const created = await readJson(response, idResponseSchema);
       // Oferta logo apos criar (F3): a regra nova so valeria para a proxima
       // importacao; os lancamentos que ela ja reconhece aparecem na previa.
-      const proposals = await previewRules(created.id);
-      if (proposals.length === 0) {
+      const preview = await previewRules(created.id);
+      if (preview.total === 0) {
         setDialog(null);
         setNotice('Regra criada. Nenhum outro lançamento sem categoria é reconhecido por ela.');
       } else {
         setDialog({
           kind: 'apply',
-          title: `A regra reconhece ${String(proposals.length)} lançamento${proposals.length === 1 ? '' : 's'} sem categoria`,
-          proposals,
+          title: `A regra reconhece ${String(preview.total)} lançamento${preview.total === 1 ? '' : 's'} sem categoria`,
+          preview,
         });
       }
     } finally {
@@ -294,13 +294,13 @@ export function LancamentosScreen({ today }: { today: string }) {
     }
   }
 
-  async function previewRules(ruleId: string | null): Promise<RuleApplicationProposal[]> {
+  async function previewRules(ruleId: string | null): Promise<RuleApplicationPreview> {
     const response = await fetch('/api/rules/apply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dryRun: true, ruleId }),
     });
-    return (await readJson(response, ruleApplicationPreviewSchema)).proposals;
+    return readJson(response, ruleApplicationPreviewSchema);
   }
 
   async function openApplyAll() {
@@ -308,7 +308,7 @@ export function LancamentosScreen({ today }: { today: string }) {
     setError(null);
     setNotice(null);
     try {
-      setDialog({ kind: 'apply', title: 'Aplicar regras aos não categorizados', proposals: await previewRules(null) });
+      setDialog({ kind: 'apply', title: 'Aplicar regras aos não categorizados', preview: await previewRules(null) });
     } catch (applyError) {
       setError(applyError instanceof Error ? applyError.message : 'Não foi possível preparar a prévia.');
     } finally {
@@ -316,7 +316,7 @@ export function LancamentosScreen({ today }: { today: string }) {
     }
   }
 
-  async function applyRules(items: { transactionId: string; ruleId: string }[]) {
+  async function applyRules(items: { transactionId: string; ruleId: string; categoryId: string }[]) {
     setBusy(true);
     try {
       const response = await fetch('/api/rules/apply', {
@@ -407,7 +407,7 @@ export function LancamentosScreen({ today }: { today: string }) {
           );
         })()
       ) : null}
-      {dialog?.kind === 'apply' ? <ApplyRulesDialog title={dialog.title} proposals={dialog.proposals} busy={busy} onClose={() => setDialog(null)} onConfirm={applyRules} /> : null}
+      {dialog?.kind === 'apply' ? <ApplyRulesDialog title={dialog.title} proposals={dialog.preview.proposals} total={dialog.preview.total} busy={busy} onClose={() => setDialog(null)} onConfirm={applyRules} /> : null}
       {dialog?.kind === 'rule' ? <RuleDialog suggestion={ruleSuggestion} options={options} busy={busy} loading={loadingRule} onClose={() => setDialog(null)} onSubmit={createRule} /> : null}
     </>
   );

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { APPLY_RULES_LIMIT } from '@/lib/db/queries/apply-rules-limit';
 
 const matchTypeSchema = z.enum(['contains', 'regex', 'exact']);
 
@@ -63,7 +64,8 @@ export const ruleIdSchema = z.string().uuid();
 /**
  * Aplicar regras aos lancamentos existentes (F3), em dois passos:
  * `dryRun: true` devolve a previa (`ruleId` null = todas as regras);
- * `dryRun: false` grava EXATAMENTE os itens confirmados da previa.
+ * `dryRun: false` grava EXATAMENTE os itens confirmados da previa. A
+ * categoria vai no item: se a regra foi editada desde a previa, o item e pulado.
  */
 export const applyRulesSchema = z.discriminatedUnion('dryRun', [
   z.object({
@@ -73,8 +75,14 @@ export const applyRulesSchema = z.discriminatedUnion('dryRun', [
   z.object({
     dryRun: z.literal(false),
     items: z
-      .array(z.object({ transactionId: z.string().uuid(), ruleId: z.string().uuid() }))
-      .max(2000),
+      .array(
+        z.object({
+          transactionId: z.string().uuid(),
+          ruleId: z.string().uuid(),
+          categoryId: z.string().uuid(),
+        }),
+      )
+      .max(APPLY_RULES_LIMIT),
   }),
 ]);
 
