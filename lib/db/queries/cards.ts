@@ -4,6 +4,7 @@ import { COUNTED_STATUSES } from './counted-statuses';
 import type { AccountKind, CardBrand } from '@/lib/db';
 import { accounts, creditCards, members, statements, transactions } from '@/lib/db/schema';
 import type { Cents } from '@/lib/money';
+import { listCardHolders, type CardHolderItem } from './card-holders';
 
 export type AccountMutation = {
   name: string;
@@ -58,6 +59,8 @@ export type CardListItem = {
   dueDay: number;
   active: boolean;
   statements: StatementListItem[];
+  /** Final -> membro (decisao 20), ordenado por final. */
+  holders: CardHolderItem[];
 };
 
 export type MemberListItem = { id: string; name: string };
@@ -137,7 +140,7 @@ export async function listMembers(householdId: string): Promise<MemberListItem[]
 }
 
 export async function listCards(householdId: string): Promise<CardListItem[]> {
-  const [cardRows, statementRows] = await Promise.all([
+  const [cardRows, statementRows, holdersByCard] = await Promise.all([
     db
       .select({
         id: creditCards.id,
@@ -189,6 +192,7 @@ export async function listCards(householdId: string): Promise<CardListItem[]> {
         statements.source,
       )
       .orderBy(desc(statements.period)),
+    listCardHolders(householdId),
   ]);
 
   const statementsByCard = new Map<string, StatementListItem[]>();
@@ -216,6 +220,7 @@ export async function listCards(householdId: string): Promise<CardListItem[]> {
     ...row,
     creditLimitCents: row.creditLimitCents === null ? null : safeCents(row.creditLimitCents),
     statements: statementsByCard.get(row.id) ?? [],
+    holders: holdersByCard.get(row.id) ?? [],
   }));
 }
 

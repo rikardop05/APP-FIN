@@ -101,6 +101,7 @@ export async function POST(request: Request) {
       existingHashes: preparation.existingHashes,
       today: input.today,
       statementCompetence: input.defaultCompetence ?? null,
+      cardHolders: preparation.cardHolders,
     });
 
     return NextResponse.json({

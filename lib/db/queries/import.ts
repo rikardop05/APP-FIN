@@ -28,6 +28,7 @@ import { importedRowsCount } from './import-counts';
 import { kindForAmount } from './import-kind';
 import { incrementRuleHits } from './auto-categorization';
 import { listTransactionDedupeHashes } from './transactions';
+import { cardHoldersByLast4 } from './card-holders';
 
 export type ImportSourceContext = {
   sourceId: string;
@@ -50,6 +51,11 @@ export type ImportPreparation = {
   rules: Rule[];
   existingHashes: Set<string>;
   previousBatches: ImportBatchHistoryItem[];
+  /**
+   * Final -> memberId do cartao da importacao (decisao 20), para
+   * `BuildImportPreviewInput.cardHolders`. Importacao em conta: mapa vazio.
+   */
+  cardHolders: Map<string, string>;
 };
 
 /**
@@ -252,13 +258,16 @@ export async function prepareImport(
   sourceId: string,
   fileHash: string,
 ): Promise<ImportPreparation> {
-  const [source, rules, existingHashes, previousBatches] = await Promise.all([
+  const [source, rules, existingHashes, previousBatches, cardHolders] = await Promise.all([
     sourceContext(householdId, sourceKind, sourceId),
     listImportRules(householdId),
     listTransactionDedupeHashes(householdId),
     listPreviousBatches(householdId, fileHash),
+    sourceKind === 'credit_card'
+      ? cardHoldersByLast4(householdId, sourceId)
+      : Promise.resolve(new Map<string, string>()),
   ]);
-  return { source, rules, existingHashes, previousBatches };
+  return { source, rules, existingHashes, previousBatches, cardHolders };
 }
 
 async function ensureReferences(
