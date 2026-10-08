@@ -57,6 +57,11 @@ export const manualTransactionBodySchema = z
     creditCardId: nullableUuid,
     memberId: nullableUuid,
     note: z.string().trim().max(500).nullable().optional().default(null),
+    /**
+     * Decisão 16a: a previsão que a pessoa CONFIRMOU que este lançamento cumpre. Ausente =
+     * `null` = grava normal; o servidor nunca concilia sozinho.
+     */
+    reconcilePlannedId: z.string().uuid().nullable().optional().default(null),
   })
   .superRefine((value, context) => {
     if ((value.accountId === null) === (value.creditCardId === null)) {
@@ -90,6 +95,18 @@ export const ruleBodySchema = z.object({
   categoryId: z.string().uuid(),
   memberId: z.string().uuid().nullable().default(null),
   priority: z.number().int().min(0).max(100_000).default(100),
+});
+
+/** Resposta de `POST /api/transactions/reconcile-suggestion`: a previsão a perguntar, ou null. */
+export const reconcileSuggestionResponseSchema = z.object({
+  suggestion: z
+    .object({
+      plannedId: z.string().uuid(),
+      description: z.string(),
+      occurredOn: isoDateSchema,
+      amountCents: centsSchema,
+    })
+    .nullable(),
 });
 
 export type TransactionFiltersInput = z.infer<typeof transactionFiltersSchema>;

@@ -7,6 +7,7 @@ import {
   listTransactions,
   type ManualTransactionMutation,
 } from '@/lib/db/queries/transactions';
+import { PlannedNotReconcilableError } from '@/lib/db/queries/manual-reconcile';
 import {
   manualTransactionBodySchema,
   transactionFiltersSchema,
@@ -54,14 +55,16 @@ export async function POST(request: Request) {
     if (!result.success) {
       return NextResponse.json({ error: 'Dados do lançamento inválidos.' }, { status: 400 });
     }
-    const input: ManualTransactionMutation = {
-      ...result.data,
-    };
-    const id = await createManualTransaction(householdId, input);
+    const { reconcilePlannedId, ...input }: ManualTransactionMutation & { reconcilePlannedId: string | null } = result.data;
+    // Decisão 16a: só concilia a previsão que a pessoa confirmou (nunca sozinho).
+    const id = await createManualTransaction(householdId, input, { reconcilePlannedId });
     return NextResponse.json({ id }, { status: 201 });
   } catch (error) {
     if (error instanceof SessionMissingError) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
+    }
+    if (error instanceof PlannedNotReconcilableError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
     if (error instanceof InvalidTransactionReferenceError) {
       return NextResponse.json({ error: 'Conta, cartão, categoria ou responsável inválido.' }, { status: 400 });
