@@ -38,10 +38,11 @@ async function setup(m: Modules, name = 'T-16a manual test') {
   if (household === undefined) throw new Error('Household de teste não foi criado.');
   const householdId = household.id;
   await db.insert(schema.householdSettings).values({ householdId, projectionMonths: 6 });
+  const [card] = await db.insert(schema.creditCards).values({ householdId, name: 'Cartão', closingDay: 25, dueDay: 5 }).returning({ id: schema.creditCards.id });
   const [account] = await db.insert(schema.accounts).values({ householdId, name: 'Conta X', kind: 'checking', openingDate: '2026-01-01' }).returning({ id: schema.accounts.id });
   const [otherAccount] = await db.insert(schema.accounts).values({ householdId, name: 'Conta Y', kind: 'checking', openingDate: '2026-01-01' }).returning({ id: schema.accounts.id });
   const [root] = await db.insert(schema.categories).values({ householdId, name: 'Moradia teste', parentId: null, nature: 'essential' }).returning({ id: schema.categories.id });
-  if (account === undefined || otherAccount === undefined || root === undefined) throw new Error('Seed incompleto.');
+  if (card === undefined || account === undefined || otherAccount === undefined || root === undefined) throw new Error('Seed incompleto.');
   const [luz] = await db.insert(schema.categories).values({ householdId, name: 'Luz teste', parentId: root.id, nature: 'essential' }).returning({ id: schema.categories.id });
   const [agua] = await db.insert(schema.categories).values({ householdId, name: 'Água teste', parentId: root.id, nature: 'essential' }).returning({ id: schema.categories.id });
   const [member] = await db.insert(schema.members).values({ householdId, name: 'Pessoa', email: `t16a-${householdId}@example.test`, color: '#000000' }).returning({ id: schema.members.id });
@@ -98,7 +99,7 @@ async function setup(m: Modules, name = 'T-16a manual test') {
     note: null,
     ...patch,
   });
-  return { householdId, accountId: account.id, otherAccountId: otherAccount.id, luz: luz.id, agua: agua.id, plannedOf, expenseDraft };
+  return { householdId, cardId: card.id, accountId: account.id, otherAccountId: otherAccount.id, luz: luz.id, agua: agua.id, plannedOf, expenseDraft };
 }
 
 async function cleanup(m: Modules, householdId: string) {
@@ -151,6 +152,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('lançamento manual que 
       // A cumprida não é mais sugerida.
       expect(await m.manual.suggestPlannedForManual(s.householdId, s.expenseDraft())).toBeNull();
 
+      // Despesa paga no CARTÃO (sem conta): casa pela categoria, como na importação.
+      const january = await s.plannedOf('expense', '2027-01');
+      const onCard = s.expenseDraft({ occurredOn: '2027-01-04', accountId: null, creditCardId: s.cardId });
+      expect((await m.manual.suggestPlannedForManual(s.householdId, onCard))?.plannedId).toBe(january.id);
+      const cardId = await m.transactions.createManualTransaction(s.householdId, onCard, { reconcilePlannedId: january.id });
+      expect(await s.plannedOf('expense', '2027-01')).toMatchObject({ status: 'reconciled', reconciledByTransactionId: cardId });
+
       // Recusado (sem reconcilePlannedId): grava normal, a previsão de dezembro fica planned.
       const december = await s.plannedOf('expense', '2026-12');
       await m.transactions.createManualTransaction(s.householdId, s.expenseDraft({ occurredOn: '2026-12-05' }));
@@ -178,6 +186,9 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('lançamento manual que 
         .createManualTransaction(s.householdId, s.expenseDraft({ categoryId: s.agua }), { reconcilePlannedId: november.id })
         .catch((error: unknown) => error);
       expect(wrong).toBeInstanceOf(m.manual.PlannedNotReconcilableError);
+      expect((wrong as Error).message).toBe(
+        'Essa previsão não pode mais ser marcada como cumprida por este lançamento (já foi cumprida, mudou ou não combina). Nada foi gravado: lance à parte ou feche e confira a previsão.',
+      );
       // De outra casa.
       const foreign = await other.plannedOf('expense', '2026-11');
       const cross = await m.transactions

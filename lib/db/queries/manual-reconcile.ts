@@ -44,7 +44,7 @@ export type ManualDraft = {
 export class PlannedNotReconcilableError extends Error {
   constructor() {
     super(
-      'Essa previsão não pode mais ser marcada como cumprida por este lançamento (já foi cumprida, mudou ou não combina). Nada foi gravado: tente de novo.',
+      'Essa previsão não pode mais ser marcada como cumprida por este lançamento (já foi cumprida, mudou ou não combina). Nada foi gravado: lance à parte ou feche e confira a previsão.',
     );
     this.name = 'PlannedNotReconcilableError';
   }
