@@ -89,3 +89,21 @@ export const applyRulesSchema = z.discriminatedUnion('dryRun', [
 export type RuleBody = z.infer<typeof ruleBodySchema>;
 export type RuleOrder = z.infer<typeof ruleOrderSchema>;
 export type ApplyRulesBody = z.infer<typeof applyRulesSchema>;
+
+/**
+ * Oferta de regra depois de categorizar a mao (F5): `dryRun: true` devolve a
+ * oferta para as linhas recem-categorizadas; `dryRun: false` aceita, criando a
+ * regra e gravando EXATAMENTE `matchingIds` da oferta.
+ */
+export const ruleOfferSchema = z.discriminatedUnion('dryRun', [
+  z.object({
+    dryRun: z.literal(true),
+    transactionIds: z.array(z.string().uuid()).min(1).max(APPLY_RULES_LIMIT),
+  }),
+  z.object({
+    dryRun: z.literal(false),
+    transactionIds: z.array(z.string().uuid()).min(1).max(APPLY_RULES_LIMIT),
+    pattern: z.string().trim().min(1, 'Informe o padrão.').max(120),
+    matchingIds: z.array(z.string().uuid()).max(APPLY_RULES_LIMIT),
+  }),
+]);

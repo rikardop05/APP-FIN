@@ -2,12 +2,10 @@ import { NextResponse } from 'next/server';
 import { suggestRulePattern } from '@/lib/finance/categorization';
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
 import {
-  createCategorizationRule,
   getTransactionForRule,
-  InvalidTransactionReferenceError,
   TransactionNotFoundError,
-  type RuleMutation,
 } from '@/lib/db/queries/transactions';
+import { createUserRule, InvalidUserRuleError } from '@/lib/db/queries/user-rules';
 import { ruleBodySchema, transactionIdSchema } from '../../schemas';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -48,8 +46,10 @@ export async function POST(request: Request, context: RouteContext) {
     if (!result.success) {
       return NextResponse.json({ error: 'Dados da regra inválidos.' }, { status: 400 });
     }
-    const input: RuleMutation = result.data;
-    const ruleId = await createCategorizationRule(session.householdId, input);
+    // Regra do usuario entra no TOPO da ordem (politica unica, F5): a
+    // `priority` do corpo nao e mais usada.
+    const { pattern, matchType, categoryId, memberId } = result.data;
+    const ruleId = await createUserRule(session.householdId, { pattern, matchType, categoryId, memberId });
     return NextResponse.json({ id: ruleId }, { status: 201 });
   } catch (error) {
     if (error instanceof SessionMissingError) {
@@ -58,8 +58,8 @@ export async function POST(request: Request, context: RouteContext) {
     if (error instanceof TransactionNotFoundError) {
       return NextResponse.json({ error: 'Lançamento não encontrado.' }, { status: 404 });
     }
-    if (error instanceof InvalidTransactionReferenceError) {
-      return NextResponse.json({ error: 'Categoria ou responsável inválido.' }, { status: 400 });
+    if (error instanceof InvalidUserRuleError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
     return NextResponse.json({ error: 'Não foi possível criar a regra.' }, { status: 500 });
   }
