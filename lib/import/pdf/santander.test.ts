@@ -562,7 +562,9 @@ describe('parseSantanderPdf — linha de valor zero e informativa (decisao 8)', 
       statementCompetence: '2026-10',
     });
     const first = preview.rows[0];
-    expect(first?.installment).toBeNull();
+    // A parcela lida fica (para o caso de o usuario corrigir o valor), mas nao
+    // conta como plano; e o finalize que barra o zero, com a parcela junto.
+    expect(first?.installment).toEqual({ current: 1, total: 12 });
     expect(preview.summary.installmentPlansDetected).toBe(0);
 
     const result = finalizeImport({

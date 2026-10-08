@@ -596,11 +596,21 @@ describe('linha de valor zero e informativa (decisao 8)', () => {
     informational: true,
   });
 
-  it('no preview, nao carrega parcela nem conta plano', () => {
+  it('no preview, nao conta plano nem vira estado de parcela', () => {
     const result = preview([anuidade]);
-    expect(result.rows[0]?.installment).toBeNull();
     expect(result.rows[0]?.state).toBe('new');
     expect(result.summary.installmentPlansDetected).toBe(0);
+  });
+
+  it('no preview, mantem a parcela lida: se o usuario corrigir o valor, o plano nao se perde', () => {
+    const result = preview([anuidade]);
+    expect(result.rows[0]?.installment).toEqual({ current: 1, total: 12 });
+
+    const corrigida = finalize([
+      confirmed({ amountCents: cents(-4000), installment: { current: 1, total: 12 } }),
+    ]);
+    expect(corrigida.installmentPlans).toHaveLength(1);
+    expect(corrigida.installmentPlans[0]?.installmentsCount).toBe(12);
   });
 
   it('no preview, segue na contagem (invariante do §15) mas nao pede categoria', () => {

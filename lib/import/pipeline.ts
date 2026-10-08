@@ -257,12 +257,13 @@ export function buildImportPreview(
   input: BuildImportPreviewInput,
 ): ImportPreview {
   const rows: ImportPreviewRow[] = input.parse.rows.map((row, index) => {
-    const resolved = resolveInstallment(row);
-    const description = resolved.description;
+    const { description, installment } = resolveInstallment(row);
     // Linha informativa (decisao 8, R$ 0,00): zero nao e compromisso, entao a
-    // parcela impressa ao lado (`ANUIDADE DIFERENCIADA 01/12`) nao vira plano.
-    // O `finalizeImport` e quem garante que ela nao vira lancamento.
-    const installment = row.informational === true ? null : resolved.installment;
+    // parcela impressa ao lado (`ANUIDADE DIFERENCIADA 01/12`) nao conta como
+    // plano nem vira estado de parcela. A parcela LIDA fica na linha: se o
+    // usuario corrigir o valor, o plano nao se perde. Quem barra o zero, com a
+    // parcela junto, e o `finalizeImport`.
+    const informational = row.informational === true;
 
     const occurredOn = row.occurredOn;
     const amountCents = row.amountCents;
@@ -306,7 +307,7 @@ export function buildImportPreview(
       ? 'duplicate'
       : isCreditCardPayment
         ? 'credit_card_payment'
-        : installment === null
+        : installment === null || informational
           ? 'new'
           : installment.current === 1
             ? 'installment_first'
@@ -331,9 +332,12 @@ export function buildImportPreview(
 
   const notDuplicated = rows.filter((row) => row.state !== 'duplicate');
 
+  const isInformational = (row: ImportPreviewRow): boolean =>
+    input.parse.rows[row.index]?.informational === true;
+
   const planKeys = new Set<string>();
   for (const row of notDuplicated) {
-    if (row.installment !== null) {
+    if (row.installment !== null && !isInformational(row)) {
       planKeys.add(planKey(row.description, row.installment.total));
     }
   }
@@ -355,9 +359,7 @@ export function buildImportPreview(
       totalCents: addCents(...amounts),
       // Linha informativa nao vira lancamento: nao ha o que categorizar.
       uncategorizedCount: notDuplicated.filter(
-        (row) =>
-          row.suggestedCategoryId === null &&
-          input.parse.rows[row.index]?.informational !== true,
+        (row) => row.suggestedCategoryId === null && !isInformational(row),
       ).length,
     },
     diagnostics: input.parse.diagnostics,
