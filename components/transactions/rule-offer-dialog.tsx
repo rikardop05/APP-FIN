@@ -52,7 +52,13 @@ export function RuleOfferDialog({
           setProblem(next === null ? 'O trecho precisa aparecer na descrição dos lançamentos que você categorizou.' : null);
         })
         .catch((error: unknown) => {
-          if (!cancelled) setProblem(error instanceof Error ? error.message : 'Não foi possível recalcular o efeito.');
+          if (cancelled) return;
+          // Marca o trecho como tentado: sem isso o dialogo fica preso em
+          // "Recalculando…" e o erro nao aparece. Sem oferta, o botao segue
+          // desabilitado.
+          setOffer(null);
+          setPreviewedFor(pattern);
+          setProblem(error instanceof Error ? error.message : 'Não foi possível recalcular o efeito.');
         });
     }, PREVIEW_DELAY_MS);
     return () => {
