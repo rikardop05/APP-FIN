@@ -8,8 +8,8 @@ import {
   transactions,
 } from '@/lib/db/schema';
 import {
-  categoryFitsKind,
   previewRule,
+  ruleFitsKind,
   type CategorizationRow,
   type Rule,
 } from '@/lib/finance/categorization';
@@ -185,7 +185,7 @@ export async function previewRuleApplication(
   for (const rule of rules) {
     // Regra cuja categoria nao cabe no tipo da linha (receita x despesa) nao a
     // propoe; a proxima regra por prioridade ainda pode.
-    const fitting = rows.filter((row) => categoryFitsKind(rule.categoryNature, row.kind));
+    const fitting = rows.filter((row) => ruleFitsKind(rule, row.kind));
     for (const id of previewRule(rule, fitting)) {
       if (!winner.has(id)) winner.set(id, rule);
     }
@@ -336,7 +336,7 @@ export async function applyRuleProposals(
       const rule = rules.get(item.ruleId);
       if (row === undefined || rule === undefined) continue;
       if (rule.categoryId !== item.categoryId) continue;
-      if (!categoryFitsKind(rule.categoryNature, row.kind)) continue;
+      if (!ruleFitsKind(rule, row.kind)) continue;
       if (
         row.status === 'reconciled' ||
         row.recurringExpenseId !== null ||

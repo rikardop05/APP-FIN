@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { categories, installmentPlans, transactions } from '@/lib/db/schema';
-import { categoryFitsKind, groupUncategorized, matchRule } from '@/lib/finance/categorization';
+import { categoryFitsKind, groupUncategorized, matchRuleForKind } from '@/lib/finance/categorization';
 import type { CategoryNature } from '@/lib/db/enums';
 import type { Cents } from '@/lib/money';
 import {
@@ -202,8 +202,7 @@ export async function confirmReviewGroup(
     for (const row of locked) {
       // So regra cuja categoria cabe no tipo da linha disputa o rastro: uma
       // "pix" -> Salario de prioridade maior nao rouba o rastro de um Pix enviado.
-      const fitting = rules.filter((rule) => categoryFitsKind(rule.categoryNature, row.kind));
-      const winner = matchRule(fitting, row.description);
+      const winner = matchRuleForKind(rules, row.description, row.kind);
       const traceRuleId = winner !== null && winner.categoryId === input.categoryId ? winner.id : null;
       const updated = await tx
         .update(transactions)

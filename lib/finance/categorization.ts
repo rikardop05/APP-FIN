@@ -279,11 +279,7 @@ export function groupUncategorized(
     // Regra cuja categoria nao cabe no tipo da linha (receita x despesa) e
     // pulada: sugerir Salario para um Pix enviado seria sugestao que o servidor
     // recusa. A proxima regra por prioridade ainda pode casar.
-    const rule = ordered.find(
-      (candidate) =>
-        (candidate.categoryNature === undefined || categoryFitsKind(candidate.categoryNature, row.kind)) &&
-        ruleMatches(candidate, normalized),
-    );
+    const rule = ordered.find((candidate) => ruleFitsKind(candidate, row.kind) && ruleMatches(candidate, normalized));
     const pattern = rule === undefined ? suggestRulePattern(row.description).pattern : rule.pattern;
     // Prefixos distintos: um padrao nunca colide com o id de uma regra.
     const origin = rule === undefined ? `pattern:${pattern}` : `rule:${rule.id}`;
@@ -348,6 +344,26 @@ export function categoryFitsKind(nature: CategoryNature, kind: TransactionKind):
   return true;
 }
 
+/**
+ * A regra pode categorizar uma linha desse tipo? PONTO UNICO da regra "regra
+ * cuja categoria nao cabe no tipo e pulada, e a proxima por prioridade ainda
+ * pode casar": todo lugar que escolhe regra para uma linha passa por aqui.
+ *
+ * Sem conferencia (cabe sempre) quando a regra nao traz `categoryNature` ou o
+ * tipo da linha nao e conhecido (`null`).
+ */
+export function ruleFitsKind(rule: Rule, kind: TransactionKind | null): boolean {
+  return kind === null || rule.categoryNature === undefined || categoryFitsKind(rule.categoryNature, kind);
+}
+
+/**
+ * `matchRule` com a conferencia de `ruleFitsKind`: primeira regra ativa, por
+ * prioridade, que casa a descricao E cabe no tipo. `kind` null = `matchRule`.
+ */
+export function matchRuleForKind(rules: Rule[], description: string, kind: TransactionKind | null): Rule | null {
+  return matchRule(rules.filter((rule) => ruleFitsKind(rule, kind)), description);
+}
+
 /** Linha que o usuario acabou de categorizar a mao. */
 export interface RuleOfferSource {
   id: string;
@@ -395,12 +411,9 @@ export function ruleOfferFor(input: {
   const pattern = input.pattern === undefined ? suggested : normalizeDescription(input.pattern);
   if (pattern === '') return null;
 
-  const covered = input.sources.every((source) => {
-    const fitting = input.rules.filter(
-      (rule) => rule.categoryNature === undefined || categoryFitsKind(rule.categoryNature, source.kind),
-    );
-    return matchRule(fitting, source.description)?.categoryId === first.categoryId;
-  });
+  const covered = input.sources.every(
+    (source) => matchRuleForKind(input.rules, source.description, source.kind)?.categoryId === first.categoryId,
+  );
   if (covered) return null;
 
   const offered: Rule = {

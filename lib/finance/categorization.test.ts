@@ -4,8 +4,10 @@ import {
   categorizeBatch,
   categoryFitsKind,
   groupUncategorized,
+  ruleFitsKind,
   ruleOfferFor,
   matchRule,
+  matchRuleForKind,
   previewRule,
   suggestRulePattern,
   type CategorizationRow,
@@ -712,5 +714,41 @@ describe('ruleOfferFor com padrao editado pelo usuario', () => {
       ruleOfferFor({ rules: [], sources: [fonte], categoryNature: 'essential', candidates: candidatas, pattern: 'outra loja' }),
     ).toBeNull();
     expect(ruleOfferFor({ rules: [], sources: [fonte], categoryNature: 'essential', candidates: candidatas, pattern: '   ' })).toBeNull();
+  });
+});
+
+describe('ruleFitsKind', () => {
+  it('sem natureza na regra ou sem tipo conhecido, sempre cabe', () => {
+    expect(ruleFitsKind(rule({ id: 'r', pattern: 'x' }), 'expense')).toBe(true);
+    expect(ruleFitsKind(rule({ id: 'r', pattern: 'x', categoryNature: 'income' }), null)).toBe(true);
+  });
+
+  it('com natureza e tipo, segue categoryFitsKind', () => {
+    expect(ruleFitsKind(rule({ id: 'r', pattern: 'x', categoryNature: 'income' }), 'expense')).toBe(false);
+    expect(ruleFitsKind(rule({ id: 'r', pattern: 'x', categoryNature: 'income' }), 'income')).toBe(true);
+    expect(ruleFitsKind(rule({ id: 'r', pattern: 'x', categoryNature: 'essential' }), 'income')).toBe(false);
+  });
+});
+
+describe('matchRuleForKind', () => {
+  const salario = rule({ id: 'a', pattern: 'pix', categoryNature: 'income', priority: 1 });
+  const casa = rule({ id: 'b', pattern: 'pix', categoryNature: 'non_essential', priority: 2 });
+
+  it('pula a regra que nao cabe no tipo e cai na proxima por prioridade', () => {
+    expect(matchRuleForKind([salario, casa], 'PIX MARIA', 'expense')?.id).toBe('b');
+    expect(matchRuleForKind([salario, casa], 'PIX MARIA', 'income')?.id).toBe('a');
+  });
+
+  it('tipo null: igual ao matchRule', () => {
+    expect(matchRuleForKind([salario, casa], 'PIX MARIA', null)?.id).toBe('a');
+  });
+
+  it('nenhuma regra que caiba: null', () => {
+    expect(matchRuleForKind([salario], 'PIX MARIA', 'expense')).toBeNull();
+  });
+
+  it('continua ignorando regra inativa', () => {
+    const inativa = rule({ id: 'c', pattern: 'pix', categoryNature: 'non_essential', priority: 0, active: false });
+    expect(matchRuleForKind([inativa, casa], 'PIX', 'expense')?.id).toBe('b');
   });
 });

@@ -41,11 +41,7 @@ import {
   type IsoDate,
 } from '@/lib/date';
 import { billingPeriodFor, type CardCycleConfig } from '@/lib/finance/billing';
-import {
-  categoryFitsKind,
-  matchRule,
-  type Rule,
-} from '@/lib/finance/categorization';
+import { matchRuleForKind, type Rule } from '@/lib/finance/categorization';
 import { dedupeHash, normalizeDescription } from '@/lib/finance/dedupe';
 import { detectInstallment } from '@/lib/import/installments';
 import type {
@@ -58,7 +54,7 @@ import { addCents, cents, type Cents } from '@/lib/money';
 
 /**
  * Primeira regra que casa a descricao **e cuja categoria cabe no sinal da
- * linha** (`categoryFitsKind`): saida nao recebe categoria de receita, entrada
+ * linha** (`ruleFitsKind`, no motor): saida nao recebe categoria de receita, entrada
  * so recebe categoria de receita. A regra incompativel e pulada e a proxima por
  * prioridade ainda pode casar.
  *
@@ -78,15 +74,9 @@ export function matchRuleForAmount(
       : amountCents < 0
         ? 'expense'
         : 'income';
-  const fitting =
-    kind === null
-      ? rules
-      : rules.filter(
-          (rule) =>
-            rule.categoryNature === undefined ||
-            categoryFitsKind(rule.categoryNature, kind),
-        );
-  return matchRule(fitting, description);
+  // A regra de pular a incompativel mora no motor (`ruleFitsKind`); aqui so o
+  // sinal da linha vira tipo.
+  return matchRuleForKind(rules, description, kind);
 }
 
 /**
