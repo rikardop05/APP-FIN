@@ -136,7 +136,14 @@ function futureCommitment(input: CommitmentInput): {
 interface Rule {
   id: string; pattern: string; matchType: 'contains' | 'regex' | 'exact'
   categoryId: string; memberId: string | null; priority: number; active: boolean
+  categoryNature?: CategoryNature  // natureza da categoria da regra, quando quem chama a conhece (ver §6.1)
 }
+
+/**
+ * `priority` pode ser NEGATIVA (adendo de 2026-10-08, F4): a regra criada na revisão (§6.5) entra no topo com
+ * priority = menor atual − 1. A ordem continua priority asc, id asc. A entrada da API de regras segue exigindo
+ * 0..100000, e a reordenação da tela regrava 0..n−1 — o negativo nasce só na revisão e some na próxima reordenação.
+ */
 
 /** Primeira regra que casa, por priority asc, id asc como desempate. Regex inválida é ignorada, nunca lança. */
 function matchRule(rules: Rule[], description: string): Rule | null
@@ -174,9 +181,19 @@ interface UncategorizedGroup {
 }
 
 /**
+ * A categoria cabe no lançamento? expense → qualquer natureza menos income; income → só income; demais kinds → true
+ * (não passam pela revisão). Uma despesa em categoria income viraria receita negativa no painel (KPIs somam pela nature).
+ * Conferida também no servidor: a revisão (§6.5) e a aplicação de regras (§6.3) recusam ou pulam o que não cabe.
+ */
+function categoryFitsKind(nature: CategoryNature, kind: TransactionKind): boolean
+
+/**
  * Agrupa as linhas revisáveis para a tela de revisão. Revisável = categoryId null, kind ∈ {expense, income}, amountCents ≠ 0
  * (fora: credit_card_payment; transfer e investment_contribution, que ficam fora dos totais, RC-03).
  * Linha que uma regra ATIVA casa (mesma ordem do matchRule) vai para o grupo da regra; as demais agrupam por suggestRulePattern.
+ * Regra com categoryNature cuja categoria NÃO cabe no kind da linha (categoryFitsKind) é pulada para aquela linha, e a
+ * próxima por prioridade ainda pode casar. Sem categoryNature, sem essa conferência. Só groupUncategorized olha
+ * categoryNature; matchRule, categorizeBatch e previewRule não.
  * Nunca se fundem: grupo de regra com grupo de padrão (mesmo com o mesmo texto), nem saída com entrada
  * (Pix recebido × enviado têm naturezas diferentes; estorno somado à compra anularia o total).
  * Ordem: |totalCents| desc, pattern asc, saída antes de entrada, grupo com regra antes do sem regra. Não muta a entrada.
@@ -304,6 +321,59 @@ A linha confirmada da importação só traz a categoria, não de onde ela veio. 
    da pessoa: `category_rule_id` null.
 3. `incrementRuleHits` na mesma transação, contando só linha REAL (`raw_description ≠ ''`): parcela projetada
    leva o rastro, mas não é uso (uma compra em 10x contaria 10 vezes). Lote revertido pela transação não soma hits.
+
+### 6.5 Revisão em grupos — `/lib/db/queries/review-groups.ts` e `/api/transactions/review` (F4, 2026-10-08)
+
+Leitura com os MESMOS cortes da aplicação de regras (§6.3: sem categoria, status ≠ `reconciled`, fora de previsão
+de recorrência e de parcela de plano já categorizado) e o agrupamento do motor puro (`groupUncategorized`, com as
+regras carregando `categoryNature`).
+
+```ts
+type ReviewGroup = {
+  key: string                        // `${direction}|rule:${ruleId}` ou `${direction}|pattern:${pattern}`, estável para a tela
+  pattern: string
+  direction: 'out' | 'in'            // sinal do total: saída negativa, entrada positiva
+  transactionIds: string[]
+  count: number
+  totalCents: Cents
+  sampleDescriptions: string[]       // até 3 descrições distintas, na ordem da lista
+  ruleId: string | null
+  suggestedCategoryId: string | null
+  suggestedCategoryName: string | null
+}
+type ReviewGroupConfirmation = { transactionIds: string[]; categoryId: string; newRulePattern: string | null }
+type ReviewGroupResult = {
+  categorized: number
+  skipped: number      // linhas que não valiam mais: categorizadas no meio, de outro household, fora da revisão
+  propagated: number   // parcelas sem categoria que receberam a categoria pelo parcelamento
+  ruleId: string | null  // regra criada; null quando não foi pedida (ou nada valia mais)
+}
+
+class ReviewCategoryInvalidError extends Error  // categoria de outro household ou não folha
+class ReviewCategoryKindError extends Error     // categoryFitsKind falhou para alguma linha: o grupo inteiro é recusado
+
+/** Grupos na ordem do motor (maior |total| primeiro). */
+function listReviewGroups(householdId: string): Promise<ReviewGroup[]>
+
+/**
+ * Numa transação: confere a categoria (folha do household); trava as linhas (FOR UPDATE) que ainda valem
+ * (household, sem categoria, dentro dos cortes, kind ∈ {expense, income}, amount ≠ 0); recusa o grupo inteiro se a
+ * categoria não cabe em alguma (ReviewCategoryKindError) antes de gravar; se nenhuma vale mais, devolve tudo como
+ * skipped e NÃO cria a regra. Com newRulePattern (aparado, não vazio) cria regra 'contains', ativa, hits 0, no TOPO
+ * (priority = menor − 1, ver §6). Rastro: category_rule_id = regra vencedora (matchRule, já com a regra nova) se, e
+ * só se, ela aponta para a categoria escolhida — linha que o padrão editado não casa fica sem rastro. hits soma só
+ * linha `posted` com rastro (incrementRuleHits na mesma transação). Parcela leva a categoria ao plano sem
+ * categoria e às parcelas sem categoria (propagateToUncategorizedPlan, §6.3).
+ */
+function confirmReviewGroup(householdId: string, input: ReviewGroupConfirmation): Promise<ReviewGroupResult>
+```
+
+HTTP (erros como `{ error: string }` em pt-BR):
+
+| rota | corpo | sucesso | erros |
+|---|---|---|---|
+| `GET /api/transactions/review` | — | `{ groups: ReviewGroup[], categories: CategoryFilterOption[] }` (`{ id, name, parentId, nature }`) | 401, 500 |
+| `POST /api/transactions/review` | `reviewGroupConfirmationSchema`: `transactionIds` uuid, 1..`APPLY_RULES_LIMIT`, sem repetição; `categoryId` uuid; `newRulePattern` string aparada 1..120 ou null | `ReviewGroupResult` | 400 corpo inválido, `ReviewCategoryInvalidError` ou `ReviewCategoryKindError` (com a mensagem do erro); 401; 500 |
 
 ## 7. Deduplicação — `/lib/finance/dedupe.ts`
 
