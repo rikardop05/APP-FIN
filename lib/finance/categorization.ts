@@ -334,9 +334,10 @@ export function previewRule(rule: Rule, rows: CategorizationRow[]): string[] {
 
 /**
  * A categoria cabe no lancamento? Despesa nao vai para categoria de receita, e
- * receita so vai para categoria de receita: a natureza da categoria decide em
- * que total o valor entra (KPIs somam pela `nature`), e uma despesa numa
- * categoria `income` viraria receita negativa no painel.
+ * receita so vai para categoria de receita. Os KPIs de receita e despesa somam
+ * pelo `kind`, entao o total nao muda; o dano e outro: uma despesa numa
+ * categoria `income` aparece no gasto por categoria e no orcamento debaixo de
+ * uma categoria de receita, e some do "essencial" (que soma pela `nature`).
  *
  * Os demais tipos (transferencia, aporte, pagamento de fatura) nao passam pela
  * revisao de categoria e nao sao restringidos aqui.
@@ -345,4 +346,67 @@ export function categoryFitsKind(nature: CategoryNature, kind: TransactionKind):
   if (kind === 'expense') return nature !== 'income';
   if (kind === 'income') return nature === 'income';
   return true;
+}
+
+/** Linha que o usuario acabou de categorizar a mao. */
+export interface RuleOfferSource {
+  id: string;
+  description: string;
+  kind: TransactionKind;
+  categoryId: string;
+}
+
+/**
+ * Oferta de regra depois de uma categorizacao manual (F5): "criar a regra
+ * 'irmaos boa' -> Mercado?". Devolve o padrao e as OUTRAS linhas sem categoria
+ * que a regra pegaria (previa: quem grava grava exatamente estes ids), ou
+ * `null` quando nao ha o que oferecer:
+ *
+ * - nenhuma linha, ou linhas com categorias diferentes;
+ * - linhas de lojas diferentes (padroes sugeridos distintos) — num lote de
+ *   varias lojas, uma regra so nao representa a decisao;
+ * - padrao sugerido vazio (descricao so de prefixo de cartao/carteira);
+ * - categoria que nao cabe no tipo de alguma linha (`categoryFitsKind`);
+ * - toda linha ja e coberta: a regra ativa vencedora, entre as que cabem no
+ *   tipo, ja da essa categoria. Se a vencedora da OUTRA categoria, o usuario
+ *   acabou de corrigi-la, e a oferta vale (a regra nova entra no topo).
+ */
+export function ruleOfferFor(input: {
+  rules: Rule[];
+  sources: RuleOfferSource[];
+  categoryNature: CategoryNature;
+  candidates: CategorizationRow[];
+}): { pattern: string; matchingIds: string[] } | null {
+  const [first] = input.sources;
+  if (first === undefined) return null;
+  if (input.sources.some((source) => source.categoryId !== first.categoryId)) return null;
+  if (input.sources.some((source) => !categoryFitsKind(input.categoryNature, source.kind))) return null;
+
+  const patterns = new Set(input.sources.map((source) => suggestRulePattern(source.description).pattern));
+  const [pattern] = [...patterns];
+  if (patterns.size !== 1 || pattern === undefined || pattern === '') return null;
+
+  const covered = input.sources.every((source) => {
+    const fitting = input.rules.filter(
+      (rule) => rule.categoryNature === undefined || categoryFitsKind(rule.categoryNature, source.kind),
+    );
+    return matchRule(fitting, source.description)?.categoryId === first.categoryId;
+  });
+  if (covered) return null;
+
+  const sourceIds = new Set(input.sources.map((source) => source.id));
+  const offered: Rule = {
+    id: 'offer',
+    pattern,
+    matchType: 'contains',
+    categoryId: first.categoryId,
+    memberId: null,
+    priority: 0,
+    active: true,
+    categoryNature: input.categoryNature,
+  };
+  const others = input.candidates.filter(
+    (row) => !sourceIds.has(row.id) && categoryFitsKind(input.categoryNature, row.kind),
+  );
+  return { pattern, matchingIds: previewRule(offered, others) };
 }

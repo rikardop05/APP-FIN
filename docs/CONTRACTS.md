@@ -188,13 +188,29 @@ interface UncategorizedGroup {
  */
 function categoryFitsKind(nature: CategoryNature, kind: TransactionKind): boolean
 
+/** Linha que o usuário acabou de categorizar à mão (F5). */
+interface RuleOfferSource { id: string; description: string; kind: TransactionKind; categoryId: string }
+
+/**
+ * Oferta de regra depois de uma categorização manual (F5): { pattern, matchingIds } ou null.
+ * pattern = suggestRulePattern comum a todas as fontes; matchingIds = previewRule da regra oferecida
+ * (contains, categoria das fontes) sobre as candidatas em que a categoria cabe, SEM as próprias fontes.
+ * null quando: sem fontes; fontes com categorias diferentes; padrões sugeridos diferentes (lote de várias lojas)
+ * ou vazio; categoria que não cabe no kind de alguma fonte; ou toda fonte já coberta — a regra ativa vencedora,
+ * entre as que cabem no kind, já dá essa categoria. Vencedora de OUTRA categoria = o usuário corrigiu: oferece.
+ * Quem grava o aceite grava EXATAMENTE matchingIds (mesma obrigação do previewRule).
+ */
+function ruleOfferFor(input: {
+  rules: Rule[]; sources: RuleOfferSource[]; categoryNature: CategoryNature; candidates: CategorizationRow[]
+}): { pattern: string; matchingIds: string[] } | null
+
 /**
  * Agrupa as linhas revisáveis para a tela de revisão. Revisável = categoryId null, kind ∈ {expense, income}, amountCents ≠ 0
  * (fora: credit_card_payment; transfer e investment_contribution, que ficam fora dos totais, RC-03).
  * Linha que uma regra ATIVA casa (mesma ordem do matchRule) vai para o grupo da regra; as demais agrupam por suggestRulePattern.
  * Regra com categoryNature cuja categoria NÃO cabe no kind da linha (categoryFitsKind) é pulada para aquela linha, e a
- * próxima por prioridade ainda pode casar. Sem categoryNature, sem essa conferência. Só groupUncategorized olha
- * categoryNature; matchRule, categorizeBatch e previewRule não.
+ * próxima por prioridade ainda pode casar. Sem categoryNature, sem essa conferência. Olham categoryNature só
+ * groupUncategorized e ruleOfferFor; matchRule, categorizeBatch e previewRule não (quem chama filtra antes).
  * Nunca se fundem: grupo de regra com grupo de padrão (mesmo com o mesmo texto), nem saída com entrada
  * (Pix recebido × enviado têm naturezas diferentes; estorno somado à compra anularia o total).
  * Ordem: |totalCents| desc, pattern asc, saída antes de entrada, grupo com regra antes do sem regra. Não muta a entrada.

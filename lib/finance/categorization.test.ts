@@ -4,6 +4,7 @@ import {
   categorizeBatch,
   categoryFitsKind,
   groupUncategorized,
+  ruleOfferFor,
   matchRule,
   previewRule,
   suggestRulePattern,
@@ -613,5 +614,80 @@ describe('categoryFitsKind', () => {
     expect(categoryFitsKind('income', 'transfer')).toBe(true);
     expect(categoryFitsKind('investment', 'investment_contribution')).toBe(true);
     expect(categoryFitsKind('essential', 'credit_card_payment')).toBe(true);
+  });
+});
+
+describe('ruleOfferFor', () => {
+  const fonte = (over: Partial<{ id: string; description: string; kind: 'expense' | 'income'; categoryId: string }> = {}) => ({
+    id: 'src',
+    description: '[final 4239] IRMAOS BOA',
+    kind: 'expense' as const,
+    categoryId: 'cat-mercado',
+    ...over,
+  });
+  const candidatas = [
+    row({ id: 'c1', description: 'IRMAOS BOA' }),
+    row({ id: 'c2', description: 'IRMAOS BOA (2/3)' }),
+    row({ id: 'c3', description: 'OUTRA LOJA' }),
+    row({ id: 'c4', description: 'IRMAOS BOA', kind: 'income', amountCents: cents(500) }),
+    row({ id: 'src', description: '[final 4239] IRMAOS BOA' }),
+  ];
+
+  it('oferece o padrao sugerido e as outras sem categoria que ele pegaria', () => {
+    expect(
+      ruleOfferFor({ rules: [], sources: [fonte()], categoryNature: 'essential', candidates: candidatas }),
+    ).toEqual({
+      pattern: 'irmaos boa',
+      // c4 e receita: Mercado nao cabe. src e a propria linha. c3 nao casa.
+      matchingIds: ['c1', 'c2'],
+    });
+  });
+
+  it('nao oferece quando uma regra que cabe ja da essa categoria', () => {
+    const regras = [rule({ id: 'r1', pattern: 'irmaos', categoryId: 'cat-mercado', categoryNature: 'essential' })];
+    expect(ruleOfferFor({ rules: regras, sources: [fonte()], categoryNature: 'essential', candidates: candidatas })).toBeNull();
+  });
+
+  it('oferece quando a regra que casa da OUTRA categoria (o usuario corrigiu)', () => {
+    const regras = [rule({ id: 'r1', pattern: 'irmaos', categoryId: 'cat-casa', categoryNature: 'non_essential' })];
+    expect(
+      ruleOfferFor({ rules: regras, sources: [fonte()], categoryNature: 'essential', candidates: candidatas })?.pattern,
+    ).toBe('irmaos boa');
+  });
+
+  it('regra inativa ou que nao cabe no tipo nao conta como cobertura', () => {
+    const regras = [
+      rule({ id: 'r1', pattern: 'irmaos', categoryId: 'cat-mercado', active: false }),
+      rule({ id: 'r2', pattern: 'irmaos', categoryId: 'cat-mercado', categoryNature: 'income' }),
+    ];
+    expect(ruleOfferFor({ rules: regras, sources: [fonte()], categoryNature: 'essential', candidates: candidatas })).not.toBeNull();
+  });
+
+  it('lote: oferece so se todas as linhas tem o mesmo padrao e a mesma categoria', () => {
+    const mesmo = [fonte({ id: 'a' }), fonte({ id: 'b', description: 'IRMAOS BOA (3/3)' })];
+    expect(ruleOfferFor({ rules: [], sources: mesmo, categoryNature: 'essential', candidates: candidatas })?.matchingIds).toEqual([
+      'c1',
+      'c2',
+      'src',
+    ]);
+    const lojasDiferentes = [fonte({ id: 'a' }), fonte({ id: 'b', description: 'OUTRA LOJA' })];
+    expect(ruleOfferFor({ rules: [], sources: lojasDiferentes, categoryNature: 'essential', candidates: candidatas })).toBeNull();
+    const categoriasDiferentes = [fonte({ id: 'a' }), fonte({ id: 'b', categoryId: 'cat-casa' })];
+    expect(ruleOfferFor({ rules: [], sources: categoriasDiferentes, categoryNature: 'essential', candidates: candidatas })).toBeNull();
+  });
+
+  it('nao oferece sem fonte, sem padrao possivel ou com categoria que nao cabe no tipo', () => {
+    expect(ruleOfferFor({ rules: [], sources: [], categoryNature: 'essential', candidates: candidatas })).toBeNull();
+    expect(
+      ruleOfferFor({ rules: [], sources: [fonte({ description: '[final 4239]' })], categoryNature: 'essential', candidates: candidatas }),
+    ).toBeNull();
+    expect(ruleOfferFor({ rules: [], sources: [fonte()], categoryNature: 'income', candidates: candidatas })).toBeNull();
+  });
+
+  it('sem outras linhas a pegar, ainda oferece (vale para as proximas importacoes)', () => {
+    expect(ruleOfferFor({ rules: [], sources: [fonte()], categoryNature: 'essential', candidates: [] })).toEqual({
+      pattern: 'irmaos boa',
+      matchingIds: [],
+    });
   });
 });
