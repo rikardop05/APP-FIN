@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { z } from 'zod';
+import { cents } from '@/lib/money';
 import { Plus, Tags } from 'lucide-react';
 import { Button, EmptyState, PageHeader } from '@/components/ui-kit';
 import { TransactionFilters, type TransactionFilterValues } from './transaction-filters';
@@ -9,8 +10,10 @@ import {
   BatchCategorizationDialog,
   DeleteTransactionDialog,
   ManualTransactionDialog,
+  ReconcileQuestionDialog,
   RuleDialog,
 } from './transaction-dialogs';
+import type { ReconcileSuggestion } from './reconcile-question';
 import {
   deleteResultSchema,
   transactionResponseSchema,
@@ -43,8 +46,17 @@ const emptyOptions: TransactionOptions = {
 const idResponseSchema = z.object({ id: z.string().uuid() });
 const batchResponseSchema = z.object({ updated: z.number().int() });
 
+type ManualValues = Parameters<NonNullable<React.ComponentProps<typeof ManualTransactionDialog>['onSubmit']>>[0];
+
+const suggestionResponseSchema = z.object({
+  suggestion: z
+    .object({ plannedId: z.string().uuid(), description: z.string(), occurredOn: z.string(), amountCents: z.number().int() })
+    .nullable(),
+});
+
 type DialogState =
   | { kind: 'manual' }
+  | { kind: 'reconcile'; values: ManualValues; suggestion: ReconcileSuggestion }
   | { kind: 'batch' }
   | { kind: 'rule'; transactionId: string }
   | { kind: 'delete'; transactionId: string }
@@ -169,13 +181,37 @@ export function LancamentosScreen({ today }: { today: string }) {
     }
   }
 
-  async function createManual(values: Parameters<NonNullable<React.ComponentProps<typeof ManualTransactionDialog>['onSubmit']>>[0]) {
+  /**
+   * Decisão 16a: antes de gravar, pergunta ao servidor se o lançamento cumpre uma previsão.
+   * Havendo, a pessoa decide no diálogo seguinte; não havendo, grava direto. O servidor nunca
+   * concilia sem o `reconcilePlannedId` que só a resposta "sim" envia.
+   */
+  async function createManual(values: ManualValues) {
+    setBusy(true);
+    try {
+      const response = await fetch('/api/transactions/reconcile-suggestion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      });
+      const { suggestion } = await readJson(response, suggestionResponseSchema);
+      if (suggestion !== null) {
+        setDialog({ kind: 'reconcile', values, suggestion: { ...suggestion, amountCents: cents(suggestion.amountCents) } });
+        return;
+      }
+    } finally {
+      setBusy(false);
+    }
+    await saveManual(values, null);
+  }
+
+  async function saveManual(values: ManualValues, reconcilePlannedId: string | null) {
     setBusy(true);
     try {
       const response = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
+        body: JSON.stringify({ ...values, reconcilePlannedId }),
       });
       await readJson(response, idResponseSchema);
       setDialog(null);
@@ -275,6 +311,14 @@ export function LancamentosScreen({ today }: { today: string }) {
       ) : null}
 
       {dialog?.kind === 'manual' ? <ManualTransactionDialog today={today} options={options} busy={busy} onClose={() => setDialog(null)} onSubmit={createManual} /> : null}
+      {dialog?.kind === 'reconcile' ? (
+        <ReconcileQuestionDialog
+          suggestion={dialog.suggestion}
+          busy={busy}
+          onClose={() => setDialog(null)}
+          onAnswer={(fulfills) => saveManual(dialog.values, fulfills ? dialog.suggestion.plannedId : null)}
+        />
+      ) : null}
       {dialog?.kind === 'batch' ? <BatchCategorizationDialog count={selectedIds.length} options={options} busy={busy} onClose={() => setDialog(null)} onSubmit={categorizeBatch} /> : null}
       {dialog?.kind === 'delete' ? (
         (() => {

@@ -5,6 +5,7 @@ import { parseBRL } from '@/lib/money';
 import { competenceLabel } from '@/components/budget/labels';
 import { isSimpleDelete, reimportNotice, reopensPlannedNotice, withFutureOptionLabel } from './delete-presentation';
 import { signedAmountCents } from './manual-sign';
+import { RECONCILE_EXPLANATION, reconcileQuestion, type ReconcileSuggestion } from './reconcile-question';
 import { Button, DateText, Input, Money, Select } from '@/components/ui-kit';
 import {
   deleteImpactSchema,
@@ -15,7 +16,7 @@ import {
   type TransactionOptions,
 } from './schemas';
 
-function DialogShell({
+export function DialogShell({
   title,
   description,
   children,
@@ -60,6 +61,46 @@ function readTransactionKind(value: string): ManualValues['kind'] {
   if (value === 'credit_card_payment') return 'credit_card_payment';
   if (value === 'investment_contribution') return 'investment_contribution';
   return 'expense';
+}
+
+/**
+ * Decisão 16a: o lançamento manual combina com uma previsão de recorrência. A pessoa decide:
+ * "cumpre" (a previsão vira cumprida e o valor conta uma vez) ou "à parte" (grava normal).
+ * Fechar não grava nada.
+ */
+export function ReconcileQuestionDialog({
+  suggestion,
+  busy,
+  onClose,
+  onAnswer,
+}: {
+  suggestion: ReconcileSuggestion;
+  busy: boolean;
+  onClose: () => void;
+  onAnswer: (fulfills: boolean) => Promise<void>;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  async function answer(fulfills: boolean) {
+    setError(null);
+    try {
+      await onAnswer(fulfills);
+    } catch (answerError) {
+      setError(answerError instanceof Error ? answerError.message : 'Não foi possível criar o lançamento.');
+    }
+  }
+  return (
+    <DialogShell title="Este lançamento cumpre uma previsão?" description={RECONCILE_EXPLANATION} onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        <p className="text-sm font-medium text-foreground">{reconcileQuestion(suggestion)}</p>
+        {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancelar</Button>
+          <Button type="button" variant="outline" onClick={() => void answer(false)} disabled={busy}>Não, lançar à parte</Button>
+          <Button type="button" onClick={() => void answer(true)} disabled={busy}>{busy ? 'Gravando…' : 'Sim, cumpre'}</Button>
+        </div>
+      </div>
+    </DialogShell>
+  );
 }
 
 export function ManualTransactionDialog({
