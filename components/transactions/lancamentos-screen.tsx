@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { z } from 'zod';
 import { cents } from '@/lib/money';
-import { Plus, Tags } from 'lucide-react';
+import { Plus, Tags, Wand2 } from 'lucide-react';
 import { Button, EmptyState, PageHeader } from '@/components/ui-kit';
 import { TransactionFilters, type TransactionFilterValues } from './transaction-filters';
 import {
@@ -14,8 +14,13 @@ import {
   RuleDialog,
 } from './transaction-dialogs';
 import type { ReconcileSuggestion } from './reconcile-question';
+import { ApplyRulesDialog } from './apply-rules-dialog';
+import { applyResultMessage } from './apply-rules-presentation';
 import {
   deleteResultSchema,
+  ruleApplicationPreviewSchema,
+  ruleApplicationResultSchema,
+  type RuleApplicationProposal,
   transactionResponseSchema,
   ruleSuggestionSchema,
   type RuleSuggestion,
@@ -60,6 +65,7 @@ type DialogState =
   | { kind: 'batch' }
   | { kind: 'rule'; transactionId: string }
   | { kind: 'delete'; transactionId: string }
+  | { kind: 'apply'; title: string; proposals: RuleApplicationProposal[] }
   | null;
 
 async function readJson<T>(response: Response, schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } }): Promise<T> {
@@ -105,6 +111,8 @@ export function LancamentosScreen({ today }: { today: string }) {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Resultado de uma acao que deu certo (ex.: "5 lancamentos categorizados").
+  const [notice, setNotice] = useState<string | null>(null);
   // `error` e compartilhado por carga E acoes (criar regra, categorizar, excluir).
   // O estado vazio enganoso so nasce da FALHA DE CARGA, entao ela tem flag
   // propria: uma acao que falha mostra o alerta sem esconder a lista carregada.
@@ -262,8 +270,62 @@ export function LancamentosScreen({ today }: { today: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pattern, matchType: 'contains', categoryId, memberId, priority: 100 }),
       });
-      await readJson(response, idResponseSchema);
+      const created = await readJson(response, idResponseSchema);
+      // Oferta logo apos criar (F3): a regra nova so valeria para a proxima
+      // importacao; os lancamentos que ela ja reconhece aparecem na previa.
+      const proposals = await previewRules(created.id);
+      if (proposals.length === 0) {
+        setDialog(null);
+        setNotice('Regra criada. Nenhum outro lançamento sem categoria é reconhecido por ela.');
+      } else {
+        setDialog({
+          kind: 'apply',
+          title: `A regra reconhece ${String(proposals.length)} lançamento${proposals.length === 1 ? '' : 's'} sem categoria`,
+          proposals,
+        });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function previewRules(ruleId: string | null): Promise<RuleApplicationProposal[]> {
+    const response = await fetch('/api/rules/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dryRun: true, ruleId }),
+    });
+    return (await readJson(response, ruleApplicationPreviewSchema)).proposals;
+  }
+
+  async function openApplyAll() {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      setDialog({ kind: 'apply', title: 'Aplicar regras aos não categorizados', proposals: await previewRules(null) });
+    } catch (applyError) {
+      setError(applyError instanceof Error ? applyError.message : 'Não foi possível preparar a prévia.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function applyRules(items: { transactionId: string; ruleId: string }[]) {
+    setBusy(true);
+    try {
+      const response = await fetch('/api/rules/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun: false, items }),
+      });
+      const result = await readJson(response, ruleApplicationResultSchema);
       setDialog(null);
+      setNotice(applyResultMessage(result));
+      await load(appliedFilters);
+    } catch (applyError) {
+      setDialog(null);
+      setError(applyError instanceof Error ? applyError.message : 'Não foi possível aplicar as regras.');
     } finally {
       setBusy(false);
     }
@@ -283,10 +345,17 @@ export function LancamentosScreen({ today }: { today: string }) {
       <PageHeader
         title="Lançamentos"
         description="Receitas e despesas da família, filtráveis por período, categoria, cartão ou conta, responsável e texto."
-        actions={<Button onClick={() => setDialog({ kind: 'manual' })}><Plus className="mr-2 h-4 w-4" aria-hidden="true" />Novo lançamento</Button>}
+        actions={
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button variant="outline" onClick={() => void openApplyAll()} disabled={busy}><Wand2 className="mr-2 h-4 w-4" aria-hidden="true" />Aplicar regras aos não categorizados</Button>
+            <Button onClick={() => setDialog({ kind: 'manual' })}><Plus className="mr-2 h-4 w-4" aria-hidden="true" />Novo lançamento</Button>
+          </div>
+        }
       />
 
       {error ? <div role="alert" className="flex flex-col gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 sm:flex-row sm:items-center sm:justify-between"><span>{error}</span>{loadFailed ? <Button variant="outline" size="sm" onClick={() => void load(appliedFilters)}>Tentar novamente</Button> : null}</div> : null}
+
+      {notice ? <div role="status" className="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><span>{notice}</span><Button variant="ghost" size="sm" onClick={() => setNotice(null)}>Fechar</Button></div> : null}
 
       <TransactionFilters value={filters} options={options} busy={loading} onChange={(value) => setFilters((previous) => ({ ...previous, ...value }))} onSubmit={submitFilters} onClear={clearFilters} />
 
@@ -333,6 +402,7 @@ export function LancamentosScreen({ today }: { today: string }) {
           );
         })()
       ) : null}
+      {dialog?.kind === 'apply' ? <ApplyRulesDialog title={dialog.title} proposals={dialog.proposals} busy={busy} onClose={() => setDialog(null)} onConfirm={applyRules} /> : null}
       {dialog?.kind === 'rule' ? <RuleDialog suggestion={ruleSuggestion} options={options} busy={busy} loading={loadingRule} onClose={() => setDialog(null)} onSubmit={createRule} /> : null}
     </>
   );
