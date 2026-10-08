@@ -122,6 +122,7 @@ O registro central.
 | kind | transaction_kind not null | |
 | status | transaction_status not null default 'posted' | `planned` = previsto (parcela futura, recorrência) |
 | category_id | uuid references categories(id) on delete restrict | null = não categorizado |
+| category_rule_id | uuid references categorization_rules(id) on delete set null | regra que pôs a categoria; null = posta à mão ou sem categoria (migration 0011) |
 | account_id | uuid references accounts(id) | |
 | credit_card_id | uuid references credit_cards(id) on delete restrict | |
 | statement_id | uuid references statements(id) | |
@@ -166,8 +167,9 @@ Constraints:
 | category_id | uuid not null references categories(id) | |
 | member_id | uuid references members(id) | sugestão de responsável |
 | priority | integer not null default 100 | menor = avaliado primeiro |
-| hits | integer not null default 0 | |
+| hits | integer not null default 0 | incrementado por `incrementRuleHits` |
 | active | boolean not null default true | |
+| created_at | timestamptz not null default now() | regras anteriores à migration 0011 ficam com a data dela |
 
 ### import_mappings
 Mapeamento de colunas salvo por banco (RF-IMP-01).
