@@ -68,7 +68,7 @@ export function BottomNav() {
           <nav
             id={OVERFLOW_PANEL_ID}
             aria-label="Mais opções de navegação"
-            className="absolute inset-x-0 bottom-16 rounded-t-lg border-t border-border bg-background p-3 shadow-lg"
+            className="absolute inset-x-0 bottom-16 max-h-[calc(100dvh-4rem)] overflow-y-auto rounded-t-lg border-t border-border bg-background p-3 shadow-lg"
           >
             <div className="mb-2 flex items-center justify-between px-1">
               <span className="text-sm font-medium text-foreground">

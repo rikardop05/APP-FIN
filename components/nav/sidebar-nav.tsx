@@ -13,7 +13,10 @@ export function SidebarNav() {
   return (
     <nav
       aria-label="Navegação principal"
-      className="hidden shrink-0 border-r border-border md:flex md:w-56 md:flex-col md:gap-1 md:px-3 md:py-6"
+      // Presa à altura da janela (`sticky top-0 h-screen`): o "Sair" do rodapé fica à vista em
+      // QUALQUER página, longa ou curta. Sem isso a barra crescia com o conteúdo e o botão ia
+      // parar abaixo da dobra nas telas longas. Rola por dentro se a janela for baixa.
+      className="hidden shrink-0 border-r border-border md:sticky md:top-0 md:flex md:h-screen md:w-56 md:flex-col md:gap-1 md:overflow-y-auto md:px-3 md:py-6"
     >
       <div className="px-3 pb-4 text-lg font-semibold tracking-tight text-foreground">
         APPFIN
