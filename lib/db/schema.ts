@@ -12,6 +12,7 @@ import {
   smallint,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
   type AnyPgColumn,
@@ -135,6 +136,41 @@ export const creditCards = pgTable('credit_cards', {
   dueDay: smallint('due_day').notNull(),
   active: boolean('active').notNull().default(true),
 });
+
+// ---------------------------------------------------------------------------
+// credit_card_holders — decisao 20
+// ---------------------------------------------------------------------------
+
+/**
+ * Final do cartao -> membro que o usa. A fatura traz o final de cada compra
+ * (`ParsedRow.cardLast4`), e a importacao sugere o membro dono do final.
+ * Dentro do mesmo cartao, um final aponta para um membro so.
+ */
+export const creditCardHolders = pgTable(
+  'credit_card_holders',
+  {
+    id: id(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id, { onDelete: 'cascade' }),
+    creditCardId: uuid('credit_card_id')
+      .notNull()
+      .references(() => creditCards.id, { onDelete: 'cascade' }),
+    /** Exatamente 4 digitos. */
+    last4: text('last4').notNull(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => members.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check('credit_card_holders_last4_format', sql`${t.last4} ~ '^[0-9]{4}$'`),
+    unique('credit_card_holders_credit_card_id_last4_unique').on(t.creditCardId, t.last4),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // statements

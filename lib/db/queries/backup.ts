@@ -13,6 +13,7 @@ import {
   budgets,
   categories,
   categorizationRules,
+  creditCardHolders,
   creditCards,
   goals,
   householdSettings,
@@ -103,6 +104,12 @@ const TABLES: readonly TableSpec[] = [
     table: creditCards,
     scope: 'household',
     fks: { holderMemberId: 'members', paymentAccountId: 'accounts' },
+  },
+  {
+    key: 'credit_card_holders',
+    table: creditCardHolders,
+    scope: 'household',
+    fks: { creditCardId: 'credit_cards', memberId: 'members' },
   },
   { key: 'categories', table: categories, scope: 'household', fks: { parentId: 'categories' } },
   {

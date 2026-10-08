@@ -72,6 +72,7 @@ async function seedEverything(m: Modules, householdId: string, memberId: string)
   await db.insert(schema.householdSettings).values({ householdId, emergencyFundMonths: 9, budgetWarnBp: 7000, projectionMonths: 6, commitmentMonths: 12 });
   const account = await one(db.insert(schema.accounts).values({ householdId, name: 'Corrente', kind: 'checking', openingBalanceCents: 500_000, openingDate: '2026-01-01' }).returning({ id: schema.accounts.id }));
   const card = await one(db.insert(schema.creditCards).values({ householdId, name: 'Cartão', closingDay: 25, dueDay: 5, holderMemberId: memberId, paymentAccountId: account.id, creditLimitCents: 1_000_000 }).returning({ id: schema.creditCards.id }));
+  await db.insert(schema.creditCardHolders).values({ householdId, creditCardId: card.id, last4: '4239', memberId });
   const root = await one(db.insert(schema.categories).values({ householdId, name: 'Moradia', parentId: null, nature: 'essential' }).returning({ id: schema.categories.id }));
   const leaf = await one(db.insert(schema.categories).values({ householdId, name: 'Luz', parentId: root.id, nature: 'essential', sortOrder: 2 }).returning({ id: schema.categories.id }));
   const rule = await one(db.insert(schema.categorizationRules).values({ householdId, pattern: 'ENEL', categoryId: leaf.id, memberId, priority: 10, hits: 3 }).returning({ id: schema.categorizationRules.id }));
