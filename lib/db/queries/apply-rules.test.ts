@@ -268,6 +268,23 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('previewRuleApplication 
     }
   });
 
+  it('lancamento real vem antes da parcela projetada, mesmo com data mais antiga', async () => {
+    // Com o limite, uma previa ordenada so por data poria na frente as
+    // parcelas futuras, e o que ja aconteceu ficaria de fora.
+    const f = await createFixture('previa-ordem');
+    try {
+      const { previewRuleApplication } = await import('./apply-rules');
+      await f.rule('irmaos', f.mercadoId, 1);
+      const futura = await f.tx('IRMAOS BOA (2/2)', { occurredOn: '2026-12-05', competence: '2026-12', status: 'planned', rawDescription: '' });
+      const real = await f.tx('IRMAOS BOA', { occurredOn: '2026-09-05' });
+
+      const { proposals } = await previewRuleApplication(f.householdId, null);
+      expect(proposals.map((p) => p.transactionId)).toEqual([real, futura]);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
   it('previa limitada: devolve ate o limite e informa o total', async () => {
     const f = await createFixture('previa-limite');
     try {
@@ -459,6 +476,29 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('applyRuleProposals (F3)
       const result = await applyRuleProposals(f.householdId, [{ transactionId: p1, ruleId: regra, categoryId: receita.id }]);
       expect(result).toEqual({ applied: 1, skipped: 0, propagated: 0 });
       expect(await f.read(p1)).toMatchObject({ categoryId: receita.id, categoryRuleId: regra });
+      expect(await f.read(p2)).toMatchObject({ categoryId: null });
+      expect(await f.planCategory(plano)).toBeNull();
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it('categoria da regra que virou agrupamento (ganhou filha) nao vai para o plano', async () => {
+    const f = await createFixture('parcela-nao-folha');
+    try {
+      const { applyRuleProposals } = await import('./apply-rules');
+      const regra = await f.rule('kabum', f.mercadoId, 1);
+      // Depois de criada a regra, "Mercado" ganhou uma subcategoria.
+      await f.db
+        .insert(f.schema.categories)
+        .values({ householdId: f.householdId, name: 'Hortifruti', nature: 'essential', parentId: f.mercadoId });
+      const plano = await f.plan('KABUM', 2);
+      const onCard = { accountId: null, creditCardId: f.cardId, installmentPlanId: plano };
+      const p1 = await f.tx('KABUM', { ...onCard, installmentNumber: 1 });
+      const p2 = await f.tx('KABUM (2/2)', { ...onCard, installmentNumber: 2, status: 'planned', rawDescription: '' });
+
+      const result = await applyRuleProposals(f.householdId, [{ transactionId: p1, ruleId: regra, categoryId: f.mercadoId }]);
+      expect(result).toEqual({ applied: 1, skipped: 0, propagated: 0 });
       expect(await f.read(p2)).toMatchObject({ categoryId: null });
       expect(await f.planCategory(plano)).toBeNull();
     } finally {

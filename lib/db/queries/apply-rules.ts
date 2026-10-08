@@ -126,7 +126,14 @@ async function listUncategorized(householdId: string) {
     .from(transactions)
     .leftJoin(installmentPlans, eq(installmentPlans.id, transactions.installmentPlanId))
     .where(and(eq(transactions.householdId, householdId), eligibleForRules))
-    .orderBy(desc(transactions.occurredOn), asc(transactions.createdAt), asc(transactions.id));
+    // O que ja aconteceu antes das parcelas projetadas: com o limite da previa,
+    // ordenar so por data poria as parcelas futuras na frente.
+    .orderBy(
+      sql`${transactions.status} = 'planned'`,
+      desc(transactions.occurredOn),
+      asc(transactions.createdAt),
+      asc(transactions.id),
+    );
 }
 
 function toCategorizationRow(row: {
@@ -205,7 +212,9 @@ export async function previewRuleApplication(
  * so as linhas marcadas — parcela que ja tem categoria, de regra ou a mao, nao
  * pode mudar sem aparecer na previa (achado do Corvo).
  *
- * Categoria de receita nao vai para o plano (parcelamento e despesa).
+ * Categoria de receita nao vai para o plano (parcelamento e despesa), nem
+ * categoria que deixou de ser folha (ganhou subcategoria depois que a regra
+ * foi criada): o plano cai sempre na folha, como em `setInstallmentPlanCategory`.
  */
 async function propagateToUncategorizedPlan(
   tx: Tx,
@@ -215,6 +224,13 @@ async function propagateToUncategorizedPlan(
   categoryNature: string,
 ): Promise<number> {
   if (categoryNature === 'income') return 0;
+  const [child] = await tx
+    .select({ id: categories.id })
+    .from(categories)
+    .where(and(eq(categories.parentId, categoryId), eq(categories.householdId, householdId)))
+    .limit(1);
+  if (child !== undefined) return 0;
+
   const [plan] = await tx
     .select({ categoryId: installmentPlans.categoryId })
     .from(installmentPlans)
