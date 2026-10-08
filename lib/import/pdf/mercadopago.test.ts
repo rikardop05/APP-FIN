@@ -543,3 +543,39 @@ describe('parseMercadoPagoPdf — linha de valor zero e informativa (decisao 8)'
     expect(result.rows[1]?.informational).toBeUndefined();
   });
 });
+
+describe('parseMercadoPagoPdf — final do cartao em campo proprio (decisao 20)', () => {
+  it('fatura de um cartao so: a descricao fica intacta, mas o final vai no campo', () => {
+    const result = parseMercadoPagoPdf([
+      headerRow(),
+      cardHeaderRow(700, '1111'),
+      transactionRow(680, { date: '05/07', description: 'PADARIA SINTETICA', value: 'R$ 20,00' }),
+    ]);
+    expect(result.rows[0]?.rawDescription).toBe('PADARIA SINTETICA');
+    expect(result.rows[0]?.cardLast4).toBe('1111');
+  });
+
+  it('varios cartoes: cada linha leva o final da sua secao (e o prefixo segue)', () => {
+    const result = parseMercadoPagoPdf([
+      headerRow(),
+      cardHeaderRow(700, '1111'),
+      transactionRow(680, { date: '05/07', description: 'PADARIA SINTETICA', value: 'R$ 20,00' }),
+      cardHeaderRow(600, '2222'),
+      transactionRow(580, { date: '12/07', description: 'FARMACIA SINTETICA', value: 'R$ 35,50' }),
+    ]);
+    expect(result.rows.map((row) => row.cardLast4)).toEqual(['1111', '2222']);
+    // O prefixo fica: ele entra no dedupe_hash, e tira-lo duplicaria reimportacoes.
+    expect(result.rows[1]?.rawDescription).toBe('[final 2222] FARMACIA SINTETICA');
+  });
+
+  it('sem secao, ou antes da primeira secao, nao inventa final', () => {
+    const result = parseMercadoPagoPdf([
+      headerRow(),
+      transactionRow(700, { date: '04/07', description: 'ANTES DA SECAO', value: 'R$ 1,00' }),
+      cardHeaderRow(680, '1111'),
+      transactionRow(660, { date: '05/07', description: 'PADARIA SINTETICA', value: 'R$ 20,00' }),
+    ]);
+    expect(result.rows[0]?.cardLast4).toBeUndefined();
+    expect(result.rows[1]?.cardLast4).toBe('1111');
+  });
+});

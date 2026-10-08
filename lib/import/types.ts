@@ -93,6 +93,18 @@ export interface ParsedRow {
    * (valor nao lido) NAO e informativo — e campo a completar.
    */
   informational?: boolean;
+  /**
+   * Final (4 digitos) do cartao a que a linha pertence, quando o documento o
+   * imprime por secao. Hoje so o Mercado Pago (`Cartao final [****9999]`).
+   * Decisao 20 do Ricardo, 2026-10-08: o preview liga o final a um membro
+   * (`BuildImportPreviewInput.cardHolders`).
+   *
+   * Aditivo e opcional: ausente quando o documento nao diz o cartao. NAO
+   * substitui o prefixo `[final 9999]` da `rawDescription` das faturas com
+   * varios cartoes: o prefixo entra no `dedupe_hash`, e tira-lo faria toda
+   * reimportacao parecer nova.
+   */
+  cardLast4?: string;
 }
 
 /**

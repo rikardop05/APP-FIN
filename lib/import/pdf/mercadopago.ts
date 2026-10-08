@@ -532,6 +532,9 @@ export function parseMercadoPagoPdf(
         ...(creditCardPayment ? { creditCardPayment: true } : {}),
         // Decisao 8: linha de R$ 0,00 e informativa.
         ...(isInformationalAmount(amountCents) ? { informational: true } : {}),
+        // Decisao 20: o final da secao em campo proprio, com um cartao ou varios.
+        // Antes da primeira secao nao ha final a dizer.
+        ...(currentCard === null ? {} : { cardLast4: currentCard }),
       };
       parsedRows.push(parsed);
       return;

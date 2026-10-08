@@ -133,6 +133,16 @@ export interface BuildImportPreviewInput {
    * serve so para dar o ANO de uma data sem ano; confundir os dois e facil.
    */
   statementCompetence: Competence | null;
+  /**
+   * Final do cartao -> `memberId`, ja filtrado para o cartao importado (decisao
+   * 20, opcional). Linha com `ParsedRow.cardLast4` mapeado sai com
+   * `suggestedMemberId` do dono do final; o usuario pode trocar na confirmacao.
+   *
+   * Regra com `memberId` explicito VENCE o cartao: ela e a escolha mais
+   * especifica (a escola do filho paga no cartao do pai e do filho). Regra sem
+   * membro deixa o cartao preencher. Ausente = comportamento anterior.
+   */
+  cardHolders?: ReadonlyMap<string, string>;
 }
 
 /** Saida de `buildImportPreview`. */
@@ -321,6 +331,11 @@ export function buildImportPreview(
               : 'installment_part';
 
     const rule = matchRule(input.rules, description);
+    // Decisao 20: o dono do final do cartao, se mapeado. A regra com membro vence.
+    const cardHolder =
+      row.cardLast4 === undefined
+        ? null
+        : (input.cardHolders?.get(row.cardLast4) ?? null);
 
     return {
       index,
@@ -331,7 +346,7 @@ export function buildImportPreview(
       amountCents,
       dedupeHash: hash,
       suggestedCategoryId: rule === null ? null : rule.categoryId,
-      suggestedMemberId: rule === null ? null : rule.memberId,
+      suggestedMemberId: rule?.memberId ?? cardHolder,
       state,
       installment,
     };

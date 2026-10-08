@@ -650,3 +650,59 @@ describe('linha de valor zero e informativa (decisao 8)', () => {
     expect(result.skipped).toEqual([{ index: 1, reason: 'duplicate' }]);
   });
 });
+
+describe('buildImportPreview — membro pelo final do cartao (decisao 20)', () => {
+  const MEMBRO_A = '11111111-1111-4111-8111-111111111111';
+  const MEMBRO_B = '22222222-2222-4222-8222-222222222222';
+  const holders = new Map([['4239', MEMBRO_A], ['2387', MEMBRO_B]]);
+
+  function previewWith(rows: ParsedRow[], rules: Rule[] = []) {
+    return buildImportPreview({
+      parse: parseResult(rows),
+      sourceId: SOURCE_ID,
+      sourceKind: 'credit_card',
+      cardCycle: CARD,
+      rules,
+      existingHashes: new Set<string>(),
+      today: '2026-09-20',
+      statementCompetence: null,
+      cardHolders: holders,
+    });
+  }
+
+  it('preenche suggestedMemberId pelo final mapeado', () => {
+    const result = previewWith([
+      parsed({ cardLast4: '4239' }),
+      parsed({ cardLast4: '2387', rawDescription: 'FARMACIA' }),
+    ]);
+    expect(result.rows.map((row) => row.suggestedMemberId)).toEqual([MEMBRO_A, MEMBRO_B]);
+  });
+
+  it('final sem mapeamento, ou linha sem final, fica sem membro', () => {
+    const result = previewWith([parsed({ cardLast4: '9999' }), parsed({ rawDescription: 'X' })]);
+    expect(result.rows.map((row) => row.suggestedMemberId)).toEqual([null, null]);
+  });
+
+  it('regra com membro explicito vence o cartao; regra sem membro deixa o cartao preencher', () => {
+    const comMembro: Rule = {
+      id: 'r1', matchType: 'contains', pattern: 'PADARIA', categoryId: 'cat-1',
+      memberId: MEMBRO_B, priority: 1, active: true,
+    };
+    const semMembro: Rule = { ...comMembro, id: 'r2', pattern: 'FARMACIA', memberId: null };
+    const result = previewWith(
+      [
+        parsed({ cardLast4: '4239', rawDescription: 'PADARIA ANONIMA' }),
+        parsed({ cardLast4: '4239', rawDescription: 'FARMACIA ANONIMA' }),
+      ],
+      [comMembro, semMembro],
+    );
+    expect(result.rows[0]?.suggestedMemberId).toBe(MEMBRO_B);
+    expect(result.rows[1]?.suggestedMemberId).toBe(MEMBRO_A);
+    expect(result.rows[1]?.suggestedCategoryId).toBe('cat-1');
+  });
+
+  it('sem mapa (opcional), nada muda', () => {
+    const result = preview([parsed({ cardLast4: '4239' })]);
+    expect(result.rows[0]?.suggestedMemberId).toBeNull();
+  });
+});
