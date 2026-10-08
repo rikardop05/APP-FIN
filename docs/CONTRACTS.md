@@ -422,8 +422,13 @@ O Ricardo escolheu a opção (b): a previsão cumprida muda de status. Contrato 
   orçamento, comprometimento, lista de lançamentos nem total de fatura.
 - Os índices únicos de previsão (recorrência e receita por competência) cobrem `planned` **e**
   `reconciled`; sem isso o `topUpPlanned` regeneraria o mês já cumprido.
-- **Quem concilia:** o commit da importação (`lib/db/queries/import-reconcile.ts`), na mesma transação.
-  Lançamento manual não concilia (fora de escopo).
+- **Quem concilia:** o commit da importação (`lib/db/queries/import-reconcile.ts`), na mesma transação,
+  automaticamente. **Lançamento manual concilia só com confirmação** (decisão 16a do Ricardo,
+  2026-10-08): `POST /api/transactions/reconcile-suggestion` devolve a previsão compatível pelos
+  mesmos critérios (`findReconcileMatches`, só leitura), a tela pergunta "isto cumpre …?", e só o
+  "sim" manda `reconcilePlannedId` no `POST /api/transactions`, que revalida e concilia na mesma
+  transação (previsão que não cabe mais → 409, nada gravado). Sem `reconcilePlannedId`, grava normal:
+  o manual nunca concilia sozinho (`lib/db/queries/manual-reconcile.ts`).
 - **Parâmetros (decididos pelo Ricardo em 2026-10-02), em constante:** `toleranceBp = 1000` (10 %),
   `dayWindow = 5`.
 - **Chave de "mesma categoria":** despesa casa por `categoryId`. **Receita casa pela CONTA onde cai**
