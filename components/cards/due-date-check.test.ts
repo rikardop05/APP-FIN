@@ -39,6 +39,23 @@ describe('aviso de vencimento que não bate com o ciclo atual do cartão', () =>
     expect(dueDateWarnings(input, santander, '2026-12-01')).toEqual([]);
   });
 
+  it('o aviso vale enquanto a MAIOR das duas datas (gravada ou esperada) não passou', () => {
+    // Banco gravou dia 7 e o ciclo atual passou a dar dia 10: no dia 08/09 o vencimento pelo ciclo
+    // novo ainda está por vir, então a pessoa ainda precisa do aviso.
+    const stored7 = [statement({ dueDate: '2026-09-07' })];
+    const cycle10 = { closingDay: 1, dueDay: 10 };
+    expect(dueDateWarnings(stored7, cycle10, '2026-09-08')).toHaveLength(1);
+    expect(dueDateWarnings(stored7, cycle10, '2026-09-10')).toHaveLength(1);
+    expect(dueDateWarnings(stored7, cycle10, '2026-09-11')).toEqual([]);
+
+    // Só o fechamento mudou: gravada 10/09, esperada 05/10. Em 15/09 o aviso continua, até 05/10.
+    const cycle28 = { closingDay: 28, dueDay: 5 };
+    const stored = [statement({ period: '2026-09', dueDate: '2026-09-10' })];
+    expect(dueDateWarnings(stored, cycle28, '2026-09-15')).toHaveLength(1);
+    expect(dueDateWarnings(stored, cycle28, '2026-10-05')).toHaveLength(1);
+    expect(dueDateWarnings(stored, cycle28, '2026-10-06')).toEqual([]);
+  });
+
   it('avisa só as que divergem e ainda não venceram, mantendo a ordem recebida', () => {
     const warnings = dueDateWarnings(
       [

@@ -14,8 +14,10 @@ import { statementWindow, type CardCycleConfig } from '@/lib/finance/billing';
  *
  * O recorte é por DATA, não por `status`: o app nunca tira a fatura de "aberta" (`statements.status`
  * só nasce `open`), então filtrar por status avisaria faturas pagas há meses. Só avisa fatura cujo
- * vencimento gravado AINDA NÃO PASSOU (`dueDate >= today`): depois do vencimento ela é história, o
- * ciclo antigo era o correto naquela época, e o aviso some sozinho.
+ * vencimento ainda NÃO PASSOU: vale a MAIOR das duas datas, a gravada e a esperada pelo ciclo atual
+ * (`max(dueDate, esperado) >= today`), porque a pessoa ainda precisa do aviso enquanto qualquer uma
+ * delas está por vir. Depois que as duas passam a fatura é história, o ciclo antigo era o correto
+ * naquela época, e o aviso some sozinho.
  */
 
 export type CheckedStatement = {
@@ -49,10 +51,11 @@ export function dueDateWarnings(
   today: IsoDate,
 ): DueDateWarning[] {
   return statements.flatMap((statement) => {
-    // Comparação de string: 'YYYY-MM-DD' ordena como as datas.
-    if (statement.dueDate < today) return [];
     const expected = expectedDueDate(statement.period, cycle);
     if (expected === null || expected === statement.dueDate) return [];
+    // Comparação de string: 'YYYY-MM-DD' ordena como as datas.
+    const latest = expected > statement.dueDate ? expected : statement.dueDate;
+    if (latest < today) return [];
     return [
       {
         statementId: statement.id,

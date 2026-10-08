@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Badge, DateText, EmptyState, Money } from '@/components/ui-kit';
+import type { IsoDate } from '@/lib/date';
 import type { CardCycleConfig } from '@/lib/finance/billing';
 import { dueDateWarnings } from './due-date-check';
 import type { StatementRecord } from './schemas';
@@ -21,7 +22,7 @@ type StatementListProps = {
   /** Ciclo ATUAL do cartão (fecha/vence): base do aviso de vencimento desatualizado (decisão 11c). */
   cycle?: CardCycleConfig;
   /** Hoje (`YYYY-MM-DD`): o aviso só vale para fatura que ainda não venceu. */
-  today: string;
+  today: IsoDate;
 };
 
 export function StatementList({ statements, cycle, today }: StatementListProps) {
