@@ -13,6 +13,7 @@ import {
 } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { COUNTED_STATUSES } from './counted-statuses';
+import { reconcileManualPosting } from './manual-reconcile';
 import type {
   CategoryNature,
   MatchType,
@@ -470,35 +471,49 @@ export async function categorizeTransactionsBatch(
   return updated.length;
 }
 
+/**
+ * Grava o lançamento manual. Com `reconcilePlannedId` (a pessoa CONFIRMOU que ele cumpre
+ * aquela previsão, decisão 16a), a previsão vira `reconciled` na MESMA transação; se ela não
+ * couber mais, nada é gravado (`PlannedNotReconcilableError`). Sem a opção, grava normal:
+ * nunca concilia sozinho.
+ */
 export async function createManualTransaction(
   householdId: string,
   input: ManualTransactionMutation,
+  options: { reconcilePlannedId?: string | null } = {},
 ): Promise<string> {
   await Promise.all([
     ensureCategoryAndMemberReferences(householdId, input.categoryId, input.memberId),
     ensureAccountOrCardReference(householdId, input.accountId, input.creditCardId),
   ]);
+  const dateFields = await transactionDateFields(householdId, input.occurredOn, input.creditCardId);
+  const plannedId = options.reconcilePlannedId ?? null;
 
-  const [row] = await db
-    .insert(transactions)
-    .values({
-      householdId,
-      occurredOn: input.occurredOn,
-      ...(await transactionDateFields(householdId, input.occurredOn, input.creditCardId)),
-      description: input.description,
-      rawDescription: '',
-      amountCents: input.amountCents,
-      kind: input.kind,
-      status: 'posted',
-      categoryId: input.categoryId,
-      accountId: input.accountId,
-      creditCardId: input.creditCardId,
-      memberId: input.memberId,
-      note: input.note,
-    })
-    .returning({ id: transactions.id });
-  if (!row) throw new Error('Não foi possível criar o lançamento.');
-  return row.id;
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(transactions)
+      .values({
+        householdId,
+        occurredOn: input.occurredOn,
+        ...dateFields,
+        description: input.description,
+        rawDescription: '',
+        amountCents: input.amountCents,
+        kind: input.kind,
+        status: 'posted',
+        categoryId: input.categoryId,
+        accountId: input.accountId,
+        creditCardId: input.creditCardId,
+        memberId: input.memberId,
+        note: input.note,
+      })
+      .returning({ id: transactions.id });
+    if (!row) throw new Error('Não foi possível criar o lançamento.');
+    if (plannedId !== null) {
+      await reconcileManualPosting(tx, householdId, row.id, input, plannedId);
+    }
+    return row.id;
+  });
 }
 
 export async function createCategorizationRule(
