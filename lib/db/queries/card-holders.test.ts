@@ -183,6 +183,22 @@ describe.skipIf(!process.env.DATABASE_URL)('credit_card_holders (integração)',
     }
   });
 
+  it('a resposta { cards, members } do PUT/DELETE passa pelo cardListSchema da tela', async () => {
+    const m = await modules();
+    const { cardListSchema } = await import('@/components/cards/schemas');
+    const s = await seed(m);
+    try {
+      await m.holders.upsertCardHolder(s.householdId, s.card, { last4: '4239', memberId: s.bia });
+      // Mesma montagem do responseFor das rotas, e o mesmo caminho do fio (JSON).
+      const [cards, members] = await Promise.all([m.cards.listCards(s.householdId), m.cards.listMembers(s.householdId)]);
+      const parsed = cardListSchema.parse(JSON.parse(JSON.stringify({ cards, members })));
+      const card = parsed.cards.find((c) => c.id === s.card);
+      expect(card?.holders.map(({ last4, memberId }) => ({ last4, memberId }))).toEqual([{ last4: '4239', memberId: s.bia }]);
+    } finally {
+      await cleanup(m, s.householdId);
+    }
+  });
+
   it('prepareImport devolve cardHolders do cartão da importação; conta devolve mapa vazio', async () => {
     const m = await modules();
     const s = await seed(m);

@@ -108,6 +108,9 @@ export async function upsertCardHolder(
     .onConflictDoUpdate({
       target: [creditCardHolders.creditCardId, creditCardHolders.last4],
       set: { memberId: input.memberId, updatedAt: sql`now()` },
+      // Defesa em profundidade: o banco nao amarra o household do mapeamento ao
+      // do cartao; o cartao ja foi conferido acima, e isto fecha o resto.
+      setWhere: eq(creditCardHolders.householdId, householdId),
     });
 }
 
