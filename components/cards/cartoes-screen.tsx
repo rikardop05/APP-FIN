@@ -18,6 +18,7 @@ import {
   type CardList,
   type CardRecord,
 } from './schemas';
+import { CardHolders } from './card-holders';
 import { StatementList } from './statement-list';
 import { CommitmentSection } from './commitment/commitment-section';
 import type { CommitmentInput } from '@/lib/finance/commitment';
@@ -312,6 +313,14 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
                       <span>Vence dia <strong className="font-medium text-foreground">{card.dueDay}</strong></span>
                       <span>Limite <strong className="font-medium text-foreground">{card.creditLimitCents === null ? 'Não informado' : <Money value={card.creditLimitCents} />}</strong></span>
                     </div>
+                    <CardHolders
+                      card={card}
+                      members={members}
+                      onUpdated={(next) => {
+                        setCards(next.cards);
+                        setMembers(next.members);
+                      }}
+                    />
                     <div className="mt-5 border-t border-border pt-4">
                       <div className="mb-3 flex items-center justify-between gap-3">
                         <h4 className="font-medium">Faturas</h4>

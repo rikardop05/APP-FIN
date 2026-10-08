@@ -95,6 +95,11 @@ export const cardListSchema = z.object({
       closingDay: z.number().int(),
       dueDay: z.number().int(),
       active: z.boolean(),
+      /**
+       * Finais do cartão (4 dígitos) e o responsável de cada um (decisão 20, opcional). `default([])`:
+       * uma resposta sem o campo (API ainda sem a tabela) é "nenhum final", não um erro de parse.
+       */
+      holders: z.array(z.object({ id: z.string().uuid(), last4: z.string(), memberId: z.string().uuid() })).default([]),
       statements: z.array(
         z.object({
           id: z.string().uuid(),
