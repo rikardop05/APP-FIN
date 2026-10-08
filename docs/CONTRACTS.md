@@ -382,14 +382,26 @@ O Ricardo escolheu a opção (b): a previsão cumprida muda de status. Contrato 
 > verde se não houve. A cor usa o **mesmo** `usageBp` arredondado que a tela mostra, para não
 > existir linha com 80,00% pintada de verde.
 
+> **O que a cor mede: o TOTAL ESPERADO do mês** — decisão 10b do Ricardo, 2026-10-07, que
+> substitui "só o realizado". `esperado = realizado (posted) + previsto a realizar (planned)`.
+> `usageBp`, `remainingCents` e `light` saem do esperado; a cor responde "ainda posso gastar nesta
+> categoria?". Realizado e previsto voltam separados (`spentCents`, `upcomingCents`) para a tela
+> mostrar as duas linhas, e cada um passa pelo `max(0, -soma)` do §14 **separado** (um estorno no
+> realizado não come o previsto). Sem `upcoming`, o esperado é o realizado. Custo aceito: um mês com
+> muita recorrente pode nascer amarelo no dia 1. `listOverBudget` (o "estourado" do painel) é o
+> vermelho desse mesmo cálculo e devolve também o `expectedCents`.
+
 ```ts
 function budgetStatus(input: {
   budgets: { categoryId: string; plannedCents: Cents }[]
-  spent: { categoryId: string; amountCents: Cents }[]
+  spent: { categoryId: string; amountCents: Cents }[]      // realizado, com sinal
+  upcoming?: { categoryId: string; amountCents: Cents }[]  // previsto a realizar, com sinal
   warnBp: BasisPoints
 }): {
-  categoryId: string; plannedCents: Cents; spentCents: Cents; remainingCents: Cents
-  usageBp: BasisPoints | null; light: 'green' | 'yellow' | 'red'
+  categoryId: string; plannedCents: Cents
+  spentCents: Cents; upcomingCents: Cents; expectedCents: Cents  // expected = spent + upcoming
+  remainingCents: Cents                                          // planned − expected
+  usageBp: BasisPoints | null; light: 'green' | 'yellow' | 'red' // sobre o expected
 }[]
 
 function suggestBudgetFromHistory(
