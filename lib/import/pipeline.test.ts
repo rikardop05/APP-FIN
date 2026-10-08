@@ -7,6 +7,7 @@ import { dedupeHash } from '@/lib/finance/dedupe';
 import {
   buildImportPreview,
   finalizeImport,
+  matchRuleForAmount,
   type ConfirmedRow,
   type FinalizeInput,
 } from '@/lib/import/pipeline';
@@ -721,5 +722,59 @@ describe('buildImportPreview — cardHolders so vale em cartao (revisao do Corvo
       cardHolders: new Map([['4239', '11111111-1111-4111-8111-111111111111']]),
     });
     expect(result.rows[0]?.suggestedMemberId).toBeNull();
+  });
+});
+
+describe('buildImportPreview — natureza da categoria x sinal da linha', () => {
+  const base = { matchType: 'contains' as const, memberId: null, active: true };
+  const salario: Rule = { ...base, id: 'r-salario', pattern: 'PIX', categoryId: 'cat-salario', priority: 1, categoryNature: 'income' };
+  const mercado: Rule = { ...base, id: 'r-mercado', pattern: 'PIX', categoryId: 'cat-mercado', priority: 2, categoryNature: 'essential' };
+
+  it('despesa pula a regra de categoria de receita e cai na proxima', () => {
+    const result = preview([parsed({ rawDescription: 'PIX ENVIADO', amountCents: cents(-5000) })], { rules: [salario, mercado] });
+    expect(result.rows[0]?.suggestedCategoryId).toBe('cat-mercado');
+  });
+
+  it('receita pula a regra de categoria de despesa', () => {
+    const result = preview([parsed({ rawDescription: 'PIX RECEBIDO', amountCents: cents(5000) })], { rules: [mercado, { ...salario, priority: 3 }] });
+    expect(result.rows[0]?.suggestedCategoryId).toBe('cat-salario');
+  });
+
+  it('sem regra compativel, fica sem sugestao (e sem membro da regra)', () => {
+    const result = preview([parsed({ rawDescription: 'PIX ENVIADO', amountCents: cents(-5000) })], { rules: [{ ...salario, memberId: 'm-1' }] });
+    expect(result.rows[0]?.suggestedCategoryId).toBeNull();
+    expect(result.rows[0]?.suggestedMemberId).toBeNull();
+  });
+
+  it('regra sem natureza conhecida continua valendo (sem conferencia)', () => {
+    const { categoryNature: _ignored, ...semNatureza } = salario;
+    const result = preview([parsed({ rawDescription: 'PIX ENVIADO', amountCents: cents(-5000) })], { rules: [semNatureza] });
+    expect(result.rows[0]?.suggestedCategoryId).toBe('cat-salario');
+  });
+
+  it('valor nao lido ou zero: sinal desconhecido, sem conferencia', () => {
+    const result = preview(
+      [
+        parsed({ rawDescription: 'PIX X', amountCents: null }),
+        parsed({ rawDescription: 'PIX Y', amountCents: cents(0) }),
+      ],
+      { rules: [salario] },
+    );
+    expect(result.rows.map((row) => row.suggestedCategoryId)).toEqual(['cat-salario', 'cat-salario']);
+  });
+});
+
+describe('matchRuleForAmount', () => {
+  const base = { matchType: 'contains' as const, memberId: null, active: true };
+  const salario: Rule = { ...base, id: 'a', pattern: 'PIX', categoryId: 'c-in', priority: 1, categoryNature: 'income' };
+  const mercado: Rule = { ...base, id: 'b', pattern: 'PIX', categoryId: 'c-out', priority: 2, categoryNature: 'non_essential' };
+
+  it('escolhe pela prioridade entre as compativeis com o sinal', () => {
+    expect(matchRuleForAmount([salario, mercado], 'PIX', cents(-1))?.id).toBe('b');
+    expect(matchRuleForAmount([salario, mercado], 'PIX', cents(1))?.id).toBe('a');
+  });
+
+  it('sem regra que case devolve null', () => {
+    expect(matchRuleForAmount([salario], 'OUTRA COISA', cents(-1))).toBeNull();
   });
 });

@@ -41,7 +41,11 @@ import {
   type IsoDate,
 } from '@/lib/date';
 import { billingPeriodFor, type CardCycleConfig } from '@/lib/finance/billing';
-import { matchRule, type Rule } from '@/lib/finance/categorization';
+import {
+  categoryFitsKind,
+  matchRule,
+  type Rule,
+} from '@/lib/finance/categorization';
 import { dedupeHash, normalizeDescription } from '@/lib/finance/dedupe';
 import { detectInstallment } from '@/lib/import/installments';
 import type {
@@ -51,6 +55,39 @@ import type {
   ParseResult,
 } from '@/lib/import/types';
 import { addCents, cents, type Cents } from '@/lib/money';
+
+/**
+ * Primeira regra que casa a descricao **e cuja categoria cabe no sinal da
+ * linha** (`categoryFitsKind`): saida nao recebe categoria de receita, entrada
+ * so recebe categoria de receita. A regra incompativel e pulada e a proxima por
+ * prioridade ainda pode casar.
+ *
+ * Usada pela sugestao do preview e pelo rastro `category_rule_id` do commit,
+ * para os dois escolherem a MESMA regra. Sem conferencia quando o sinal nao e
+ * conhecido (valor nao lido, ou zero, que nao vira lancamento) ou quando a
+ * regra nao traz `categoryNature`.
+ */
+export function matchRuleForAmount(
+  rules: Rule[],
+  description: string,
+  amountCents: Cents | null,
+): Rule | null {
+  const kind =
+    amountCents === null || amountCents === 0
+      ? null
+      : amountCents < 0
+        ? 'expense'
+        : 'income';
+  const fitting =
+    kind === null
+      ? rules
+      : rules.filter(
+          (rule) =>
+            rule.categoryNature === undefined ||
+            categoryFitsKind(rule.categoryNature, kind),
+        );
+  return matchRule(fitting, description);
+}
 
 /** Tipo de origem: cartao de credito ou conta. */
 export type SourceKind = 'credit_card' | 'account';
@@ -330,7 +367,7 @@ export function buildImportPreview(
               ? 'installment_first'
               : 'installment_part';
 
-    const rule = matchRule(input.rules, description);
+    const rule = matchRuleForAmount(input.rules, description, amountCents);
     // Decisao 20: o dono do final do cartao, se mapeado. A regra com membro vence.
     // So em cartao, como o `creditCardPayment`: numa conta o final nao tem dono.
     const cardHolder =
