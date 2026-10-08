@@ -12,11 +12,13 @@
  * `transfer`, `credit_card_payment` e `investment_contribution` ficam de fora
  * (RC-03).
  *
- * `planned` NÃO entra: a previsão de recorrência agora é linha no banco, e somar
- * `planned` ao realizado deixaria o semáforo vermelho no dia 1 do mês. Em vez
- * disso o "previsto a realizar" sai numa coluna à parte (`upcomingCents`), de
- * modo que `realizado + previsto` fecha com o dashboard (`kpis.ts` soma os dois).
- * O semáforo olha só o realizado, como o contrato manda.
+ * O "previsto a realizar" (`planned` de despesa da competência) vai ao motor como
+ * `upcoming`. **A cor mede o TOTAL ESPERADO = realizado + previsto** (decisão 10b do
+ * Ricardo, 2026-10-07, que substituiu a regra "só o realizado" de 2026-10-01): ela
+ * responde "ainda posso gastar?". As duas parcelas saem separadas (`spentCents`,
+ * `upcomingCents`) para a tela mostrar as duas linhas, e `realizado + previsto` fecha
+ * com o dashboard (`kpis.ts` soma os dois). `reconciled` não entra: é a previsão já
+ * cumprida, que o `posted` traz.
  *
  * ## Quem tem orçamento
  *
@@ -63,8 +65,6 @@ export interface BudgetableCategory {
 export interface BudgetMonthRow extends BudgetStatusRow {
   categoryName: string;
   rootName: string;
-  /** Soma das `planned` de despesa da categoria no mês, em módulo. Fora do semáforo. */
-  upcomingCents: Cents;
 }
 
 export interface BudgetMonth {
@@ -77,7 +77,10 @@ export interface OverBudgetItem {
   categoryId: string;
   categoryName: string;
   plannedCents: Cents;
+  /** Realizado. */
   spentCents: Cents;
+  /** Realizado + previsto: o que a cor (e o "estourado") mede, decisão 10b. */
+  expectedCents: Cents;
   /** `null` só quando `plannedCents = 0`. */
   usageBp: BasisPoints | null;
 }
@@ -142,10 +145,15 @@ export async function listBudgetableCategories(householdId: string): Promise<Bud
 type SpentRow = { categoryId: string; amountCents: Cents };
 
 /**
- * Despesa REALIZADA por categoria em UMA competência (`posted`, `expense`,
- * categorizada). A soma é com sinal (saída negativa); o piso em zero é do motor.
+ * Despesa por categoria em UMA competência (`expense`, categorizada), de um status:
+ * `posted` é o REALIZADO, `planned` o PREVISTO A REALIZAR. A soma é com sinal (saída
+ * negativa); o piso em zero é do motor, separado para cada parcela.
  */
-async function readSpent(householdId: string, competence: Competence): Promise<SpentRow[]> {
+async function readExpense(
+  householdId: string,
+  competence: Competence,
+  status: 'posted' | 'planned',
+): Promise<SpentRow[]> {
   const rows = await db
     .select({
       categoryId: transactions.categoryId,
@@ -157,7 +165,7 @@ async function readSpent(householdId: string, competence: Competence): Promise<S
         eq(transactions.householdId, householdId),
         eq(transactions.competence, competence),
         eq(transactions.kind, 'expense'),
-        eq(transactions.status, 'posted'),
+        eq(transactions.status, status),
         isNotNull(transactions.categoryId),
       ),
     )
@@ -165,34 +173,6 @@ async function readSpent(householdId: string, competence: Competence): Promise<S
   return rows.flatMap((row) =>
     row.categoryId === null ? [] : [{ categoryId: row.categoryId, amountCents: cents(Number(row.total)) }],
   );
-}
-
-/** Despesa PREVISTA ainda não realizada por categoria na competência (`planned`). */
-async function readUpcoming(householdId: string, competence: Competence): Promise<Map<string, Cents>> {
-  const rows = await db
-    .select({
-      categoryId: transactions.categoryId,
-      total: sql<string>`COALESCE(SUM(${transactions.amountCents}), 0)`,
-    })
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.householdId, householdId),
-        eq(transactions.competence, competence),
-        eq(transactions.kind, 'expense'),
-        eq(transactions.status, 'planned'),
-        isNotNull(transactions.categoryId),
-      ),
-    )
-    .groupBy(transactions.categoryId);
-  const result = new Map<string, Cents>();
-  for (const row of rows) {
-    if (row.categoryId === null) continue;
-    // Saída é negativa; mostra-se em módulo, com piso em zero (CONTRACTS §14).
-    const net = Number(row.total);
-    result.set(row.categoryId, cents(net < 0 ? -net : 0));
-  }
-  return result;
 }
 
 async function readWarnBp(householdId: string): Promise<BasisPoints> {
@@ -205,7 +185,7 @@ async function readWarnBp(householdId: string): Promise<BasisPoints> {
   return basisPoints(row.budgetWarnBp);
 }
 
-/** Orçamento do mês: semáforo (do motor) sobre o realizado, mais o previsto. */
+/** Orçamento do mês: semáforo (do motor) sobre o esperado = realizado + previsto (decisão 10b). */
 export async function getBudgetMonth(householdId: string, period: Competence): Promise<BudgetMonth> {
   const [budgetRows, spent, upcoming, warnBp] = await Promise.all([
     db
@@ -218,8 +198,8 @@ export async function getBudgetMonth(householdId: string, period: Competence): P
       .from(budgets)
       .innerJoin(categories, eq(categories.id, budgets.categoryId))
       .where(and(eq(budgets.householdId, householdId), eq(budgets.period, period))),
-    readSpent(householdId, period),
-    readUpcoming(householdId, period),
+    readExpense(householdId, period, 'posted'),
+    readExpense(householdId, period, 'planned'),
     readWarnBp(householdId),
   ]);
 
@@ -238,6 +218,7 @@ export async function getBudgetMonth(householdId: string, period: Competence): P
   const status = budgetStatus({
     budgets: ordered.map((row) => ({ categoryId: row.categoryId, plannedCents: cents(row.plannedCents) })),
     spent,
+    upcoming,
     warnBp,
   });
 
@@ -251,7 +232,6 @@ export async function getBudgetMonth(householdId: string, period: Competence): P
         ...row,
         categoryName: meta?.categoryName ?? '',
         rootName: rootNames.get(meta?.parentId ?? '') ?? '',
-        upcomingCents: upcoming.get(row.categoryId) ?? cents(0),
       };
     }),
   };
@@ -273,7 +253,7 @@ async function rootNameMap(householdId: string, ids: string[]): Promise<Map<stri
  * comparação refeita.** Uma segunda comparação divergiria do semáforo da tela de
  * orçamento, e o painel diria "estourado" sobre linha que o orçamento mostra
  * amarela. Isso inclui `plannedCents = 0` com gasto (orçamento explícito de zero
- * violado), coerente com o §10. Mesmo realizado (`posted`) da tela.
+ * violado), coerente com o §10. Mede o mesmo ESPERADO (realizado + previsto) da tela.
  *
  * Ordem: maior uso primeiro; `usageBp = null` (orçamento zero) antes de todos.
  */
@@ -289,6 +269,7 @@ export async function listOverBudget(
       categoryName: row.categoryName,
       plannedCents: row.plannedCents,
       spentCents: row.spentCents,
+      expectedCents: row.expectedCents,
       usageBp: row.usageBp,
     }))
     .sort((a, b) => {

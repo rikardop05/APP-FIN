@@ -4,6 +4,16 @@
  * Modulo puro (CONVENTIONS §5). O eixo de competencia e a aritmetica de mes vem
  * de `lib/date`.
  *
+ * ## O que a cor mede: o TOTAL ESPERADO do mes (decisao 10b do Ricardo, 2026-10-07)
+ *
+ * `esperado = realizado + previsto a realizar`. A cor responde "ainda posso gastar
+ * nesta categoria?", nao "quanto ja gastei". Dia 5, orcamento de 1.000, 100 gastos
+ * e 800 de recorrente ainda por vir: a folga real e 100, e a cor e amarela (90%),
+ * nao verde (10%). `usageBp`, `remainingCents` e `light` saem todos do
+ * esperado; `spentCents` e `upcomingCents` saem separados para a tela mostrar as
+ * duas linhas. Sem `upcoming` o esperado e o realizado. Custo aceito: um mes com
+ * muita recorrente pode nascer amarelo no dia 1.
+ *
  * Semaforo — RF-ORC-05 e §10. O limite de alerta NAO e fixo no motor: chega no
  * parametro `warnBp` (o `budget_warn_bp` do household_settings, default 8000 no
  * seed). Verde/amarelo/vermelho por `usageBp`:
@@ -52,8 +62,15 @@ export type BudgetLight = 'green' | 'yellow' | 'red';
 export interface BudgetStatusRow {
   categoryId: string;
   plannedCents: Cents;
+  /** Realizado (`posted`), em modulo. */
   spentCents: Cents;
+  /** Previsto a realizar (`planned`), em modulo. */
+  upcomingCents: Cents;
+  /** `spentCents + upcomingCents`: o que a cor mede. */
+  expectedCents: Cents;
+  /** `plannedCents - expectedCents`: a folga real do mes (negativa = vai passar). */
   remainingCents: Cents;
+  /** Esperado / orcado, em bp. */
   usageBp: BasisPoints | null;
   light: BudgetLight;
 }
@@ -75,10 +92,10 @@ function usageBp(spent: Cents, planned: Cents): BasisPoints {
   return basisPoints(Number((s * BigInt(FULL_BP) + p / 2n) / p));
 }
 
-function lightFor(usage: BasisPoints | null, spent: Cents, warnBp: BasisPoints): BudgetLight {
+function lightFor(usage: BasisPoints | null, expected: Cents, warnBp: BasisPoints): BudgetLight {
   if (usage === null) {
-    // Orcamento zero: vermelho so quando de fato gastou (ver o cabecalho).
-    return spent > 0 ? 'red' : 'green';
+    // Orcamento zero: vermelho so quando ha gasto, realizado ou previsto (ver o cabecalho).
+    return expected > 0 ? 'red' : 'green';
   }
   if (usage > FULL_BP) return 'red';
   if (usage < warnBp) return 'green';
@@ -91,18 +108,34 @@ function lightFor(usage: BasisPoints | null, spent: Cents, warnBp: BasisPoints):
  * responsabilidade de quem chama). Categoria que so aparece em `spent`, sem
  * orcamento, nao gera linha.
  */
+/** Soma com sinal por categoria. */
+function sumByCategory(entries: readonly { categoryId: string; amountCents: Cents }[]): Map<string, Cents> {
+  const totals = new Map<string, Cents>();
+  for (const entry of entries) {
+    totals.set(entry.categoryId, addCents(totals.get(entry.categoryId) ?? cents(0), entry.amountCents));
+  }
+  return totals;
+}
+
+/** `max(0, -soma)`: estorno que supera o gasto nao vira despesa negativa (§14). */
+function outflow(net: Cents | undefined): Cents {
+  return net !== undefined && net < 0 ? cents(-net) : cents(0);
+}
+
+/**
+ * `spent` e `upcoming` seguem a convencao de sinal do projeto (saida negativa) e cada
+ * um passa por `max(0, -soma)` SEPARADO: um estorno no realizado nao come o previsto.
+ */
 export function budgetStatus(input: {
   budgets: { categoryId: string; plannedCents: Cents }[];
   spent: { categoryId: string; amountCents: Cents }[];
+  /** Previsto a realizar no mes (`planned`). Ausente = nada previsto. */
+  upcoming?: { categoryId: string; amountCents: Cents }[];
   warnBp: BasisPoints;
 }): BudgetStatusRow[] {
   const warnBp = assertWarnBp(input.warnBp);
-
-  const spentByCategory = new Map<string, Cents>();
-  for (const entry of input.spent) {
-    const current = spentByCategory.get(entry.categoryId) ?? cents(0);
-    spentByCategory.set(entry.categoryId, addCents(current, entry.amountCents));
-  }
+  const spentByCategory = sumByCategory(input.spent);
+  const upcomingByCategory = sumByCategory(input.upcoming ?? []);
 
   return input.budgets.map((budget) => {
     const plannedCents = cents(budget.plannedCents);
@@ -112,20 +145,22 @@ export function budgetStatus(input: {
       );
     }
 
-    const net = spentByCategory.get(budget.categoryId) ?? cents(0);
-    // max(0, -soma): estorno que supera o gasto nao vira despesa negativa (§14).
-    const spentCents = net < 0 ? cents(-net) : cents(0);
+    const spentCents = outflow(spentByCategory.get(budget.categoryId));
+    const upcomingCents = outflow(upcomingByCategory.get(budget.categoryId));
+    const expectedCents = addCents(spentCents, upcomingCents);
 
-    const remainingCents = addCents(plannedCents, cents(-spentCents));
-    const usage = plannedCents === 0 ? null : usageBp(spentCents, plannedCents);
+    const remainingCents = addCents(plannedCents, cents(-expectedCents));
+    const usage = plannedCents === 0 ? null : usageBp(expectedCents, plannedCents);
 
     return {
       categoryId: budget.categoryId,
       plannedCents,
       spentCents,
+      upcomingCents,
+      expectedCents,
       remainingCents,
       usageBp: usage,
-      light: lightFor(usage, spentCents, warnBp),
+      light: lightFor(usage, expectedCents, warnBp),
     };
   });
 }

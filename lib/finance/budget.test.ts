@@ -351,3 +351,57 @@ describe('suggestBudgetFromHistory — opts.anchor (a janela ancora no que o cha
     ).toThrow();
   });
 });
+
+describe('budgetStatus — semaforo sobre o TOTAL ESPERADO (decisao 10b, 2026-10-07)', () => {
+  it('o caso do Ricardo: gastou 100, vem 800, orcamento 1.000 -> 90% amarelo, folga de 100', () => {
+    // realizado 10.000 + previsto 80.000 = esperado 90.000; 90.000 / 100.000 = 9.000 bp.
+    const [row] = budgetStatus({
+      budgets: [budget('a', 100000)],
+      spent: [spentEntry('a', -10000)],
+      upcoming: [spentEntry('a', -80000)],
+      warnBp: WARN_8000,
+    });
+    expect(row).toEqual({
+      categoryId: 'a',
+      plannedCents: 100000,
+      spentCents: 10000,
+      upcomingCents: 80000,
+      expectedCents: 90000,
+      remainingCents: 10000,
+      usageBp: 9000,
+      light: 'yellow',
+    });
+  });
+
+  it('dia 1 com recorrente acima do orcamento: nada realizado e ja vermelho', () => {
+    // 0 + 120.000 = 120.000 / 100.000 = 12.000 bp > 10.000.
+    const [row] = budgetStatus({
+      budgets: [budget('a', 100000)],
+      spent: [],
+      upcoming: [spentEntry('a', -120000)],
+      warnBp: WARN_8000,
+    });
+    expect(row).toMatchObject({ spentCents: 0, upcomingCents: 120000, expectedCents: 120000, usageBp: 12000, light: 'red', remainingCents: -20000 });
+  });
+
+  it('sem `upcoming`: esperado = realizado (quem nao manda previsto ve o comportamento antigo)', () => {
+    const [row] = budgetStatus({ budgets: [budget('a', 100000)], spent: [spentEntry('a', -80000)], warnBp: WARN_8000 });
+    expect(row).toMatchObject({ spentCents: 80000, upcomingCents: 0, expectedCents: 80000, usageBp: 8000, light: 'yellow' });
+  });
+
+  it('cada parcela passa por max(0, -soma) separada: estorno no realizado nao come o previsto', () => {
+    // Realizado liquido +5.000 (estorno maior que o gasto) -> 0; previsto 30.000 -> esperado 30.000.
+    const [row] = budgetStatus({
+      budgets: [budget('a', 100000)],
+      spent: [spentEntry('a', -1000), spentEntry('a', 6000)],
+      upcoming: [spentEntry('a', -30000)],
+      warnBp: WARN_8000,
+    });
+    expect(row).toMatchObject({ spentCents: 0, upcomingCents: 30000, expectedCents: 30000, usageBp: 3000 });
+  });
+
+  it('orcamento zero com so previsto: usageBp null e vermelho (o mes vai estourar)', () => {
+    const [row] = budgetStatus({ budgets: [budget('a', 0)], spent: [], upcoming: [spentEntry('a', -500)], warnBp: WARN_8000 });
+    expect(row).toMatchObject({ usageBp: null, expectedCents: 500, light: 'red', remainingCents: -500 });
+  });
+});

@@ -91,7 +91,7 @@ async function cleanup(m: Modules, householdId: string) {
 }
 
 describe.skipIf(process.env.DATABASE_URL === undefined)('orçamento por categoria (banco real)', () => {
-  it('o realizado conta só posted/expense/categorizada da competência; o planned vai para "previsto"', async () => {
+  it('o realizado conta só posted/expense/categorizada; o planned é o "previsto"; a cor mede os dois somados', async () => {
     const m = await modules();
     const s = await seed(m);
     try {
@@ -99,7 +99,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('orçamento por categori
         { categoryId: s.mercado, plannedCents: cents(100000) },
       ]);
       await s.tx('2026-10', s.mercado, -80000); // realizado
-      await s.tx('2026-10', s.mercado, -15000, { status: 'planned' }); // previsto: fora do semáforo
+      await s.tx('2026-10', s.mercado, -15000, { status: 'planned' }); // previsto: entra no esperado
       await s.tx('2026-10', s.mercado, -99999, { kind: 'transfer' }); // RC-03: fora
       await s.tx('2026-10', null, -77777); // sem categoria: fora
       await s.tx('2026-09', s.mercado, -55555); // outra competência: fora
@@ -111,10 +111,12 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('orçamento por categori
         categoryId: s.mercado,
         plannedCents: 100000,
         spentCents: 80000,
-        remainingCents: 20000,
-        usageBp: 8000,
-        light: 'yellow', // 80,00% == warnBp: amarelo (limite inclusivo)
         upcomingCents: 15000,
+        // Decisão 10b: a cor mede o esperado = 80.000 + 15.000 = 95.000 -> 9.500 bp, folga 5.000.
+        expectedCents: 95000,
+        remainingCents: 5000,
+        usageBp: 9500,
+        light: 'yellow',
         categoryName: 'Mercado teste',
         rootName: 'Moradia teste',
       });
@@ -123,7 +125,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('orçamento por categori
     }
   });
 
-  it('planned sozinho NÃO acende o semáforo: no dia 1 com 800 por vir, o realizado é zero e a luz é verde', async () => {
+  it('planned sozinho acende o semáforo (decisão 10b): no dia 1 com 800 por vir num orçamento de 1.000, amarelo', async () => {
     const m = await modules();
     const s = await seed(m);
     try {
@@ -132,7 +134,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('orçamento por categori
       ]);
       await s.tx('2026-10', s.mercado, -80000, { status: 'planned' });
       const [row] = (await m.budgets.getBudgetMonth(s.householdId, '2026-10')).rows;
-      expect(row).toMatchObject({ spentCents: 0, light: 'green', upcomingCents: 80000 });
+      expect(row).toMatchObject({ spentCents: 0, upcomingCents: 80000, expectedCents: 80000, usageBp: 8000, light: 'yellow', remainingCents: 20000 });
     } finally {
       await cleanup(m, s.householdId);
     }
@@ -284,6 +286,21 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('orçamento por categori
       expect(over.map((item) => [item.categoryName, item.usageBp])).toEqual([
         ['Lazer teste', null],
         ['Mercado teste', 10100],
+      ]);
+    } finally {
+      await cleanup(m, s.householdId);
+    }
+  });
+
+  it('listOverBudget: o previsto que fura o orçamento já conta como estourado, com o esperado na resposta', async () => {
+    const m = await modules();
+    const s = await seed(m);
+    try {
+      await m.budgets.replaceBudgets(s.householdId, '2026-10', [{ categoryId: s.mercado, plannedCents: cents(100000) }]);
+      await s.tx('2026-10', s.mercado, -50000); // realizado 50%
+      await s.tx('2026-10', s.mercado, -60000, { status: 'planned' }); // + previsto 60% = 110%
+      expect(await m.budgets.listOverBudget(s.householdId, '2026-10')).toEqual([
+        { categoryId: s.mercado, categoryName: 'Mercado teste', plannedCents: 100000, spentCents: 50000, expectedCents: 110000, usageBp: 11000 },
       ]);
     } finally {
       await cleanup(m, s.householdId);
