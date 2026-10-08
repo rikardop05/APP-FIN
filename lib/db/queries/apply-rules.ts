@@ -39,7 +39,7 @@ import { incrementRuleHits } from './auto-categorization';
  * Toda query filtra `household_id` (CONVENTIONS §7).
  */
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Executor = typeof db | Tx;
 
 export { APPLY_RULES_LIMIT };
@@ -82,9 +82,9 @@ export class RuleToApplyNotFoundError extends Error {
   }
 }
 
-type RuleRow = Rule & { categoryName: string; categoryNature: string };
+export type RuleRow = Rule & { categoryName: string; categoryNature: string };
 
-async function listRulesWithCategory(executor: Executor, householdId: string): Promise<RuleRow[]> {
+export async function listRulesWithCategory(executor: Executor, householdId: string): Promise<RuleRow[]> {
   return executor
     .select({
       id: categorizationRules.id,
@@ -105,7 +105,7 @@ async function listRulesWithCategory(executor: Executor, householdId: string): P
 }
 
 /** Linha que a regra pode categorizar (ver o cabecalho do modulo). */
-const eligibleForRules = and(
+export const eligibleForRules = and(
   isNull(transactions.categoryId),
   ne(transactions.status, 'reconciled'),
   isNull(transactions.recurringExpenseId),
@@ -113,7 +113,7 @@ const eligibleForRules = and(
   or(isNull(transactions.installmentPlanId), isNull(installmentPlans.categoryId)),
 );
 
-async function listUncategorized(householdId: string) {
+export async function listUncategorized(householdId: string) {
   return db
     .select({
       id: transactions.id,
@@ -136,7 +136,7 @@ async function listUncategorized(householdId: string) {
     );
 }
 
-function toCategorizationRow(row: {
+export function toCategorizationRow(row: {
   id: string;
   description: string;
   amountCents: number;
@@ -216,7 +216,7 @@ export async function previewRuleApplication(
  * categoria que deixou de ser folha (ganhou subcategoria depois que a regra
  * foi criada): o plano cai sempre na folha, como em `setInstallmentPlanCategory`.
  */
-async function propagateToUncategorizedPlan(
+export async function propagateToUncategorizedPlan(
   tx: Tx,
   householdId: string,
   planId: string,

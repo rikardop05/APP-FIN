@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { formatDateBR } from '@/lib/date';
 import type { Cents } from '@/lib/money';
+import { APPLY_RULES_LIMIT } from '@/lib/db/queries/apply-rules-limit';
 
 const isoDateSchema = z
   .string()
@@ -112,7 +113,23 @@ export const reconcileSuggestionResponseSchema = z.object({
 export type TransactionFiltersInput = z.infer<typeof transactionFiltersSchema>;
 export type TransactionUpdateInput = z.infer<typeof transactionUpdateSchema>;
 export type ManualTransactionBody = z.infer<typeof manualTransactionBodySchema>;
+/**
+ * Confirmar um grupo da revisao (F4). O grupo pode passar das 100 linhas do
+ * lote manual (uma compra parcelada em 12x de varios meses), entao o teto e o
+ * mesmo da aplicacao de regras. `newRulePattern` null = so categorizar.
+ */
+export const reviewGroupConfirmationSchema = z.object({
+  transactionIds: z
+    .array(transactionIdSchema)
+    .min(1)
+    .max(APPLY_RULES_LIMIT)
+    .refine((ids) => new Set(ids).size === ids.length, 'Lançamento repetido no grupo.'),
+  categoryId: z.string().uuid(),
+  newRulePattern: z.string().trim().min(1, 'Informe o padrão da regra.').max(120).nullable(),
+});
+
 export type BatchCategorizationInput = z.infer<typeof batchCategorizationSchema>;
+export type ReviewGroupConfirmationInput = z.infer<typeof reviewGroupConfirmationSchema>;
 export type RuleBody = z.infer<typeof ruleBodySchema>;
 
 /**
