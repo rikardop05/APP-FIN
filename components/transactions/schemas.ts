@@ -178,3 +178,18 @@ export const reviewResultSchema = z.object({
 export type ReviewGroup = z.infer<typeof reviewGroupSchema>;
 export type ReviewCategory = z.infer<typeof categorySchema>;
 export type ReviewResult = z.infer<typeof reviewResultSchema>;
+
+/** Oferta de regra depois de categorizar a mao (`POST /api/rules/offer`, F5). */
+export const ruleOfferSchema = z.object({
+  pattern: z.string(),
+  categoryId: z.string().uuid(),
+  categoryName: z.string(),
+  matchingIds: z.array(z.string().uuid()),
+});
+
+export const ruleOfferResponseSchema = z.object({ offer: ruleOfferSchema.nullable() });
+
+export const ruleOfferAcceptedSchema = ruleApplicationResultSchema.extend({ ruleId: z.string().uuid() });
+
+export type RuleOffer = z.infer<typeof ruleOfferSchema>;
+export type RuleOfferAccepted = z.infer<typeof ruleOfferAcceptedSchema>;

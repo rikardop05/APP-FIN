@@ -17,11 +17,16 @@ import {
 import type { ReconcileSuggestion } from './reconcile-question';
 import { ApplyRulesDialog } from './apply-rules-dialog';
 import { applyResultMessage } from './apply-rules-presentation';
+import { RuleOfferDialog } from './rule-offer-dialog';
+import { ruleOfferAcceptedMessage, shouldOfferAfterEdit } from './rule-offer-presentation';
 import {
   deleteResultSchema,
   ruleApplicationPreviewSchema,
   ruleApplicationResultSchema,
   type RuleApplicationPreview,
+  ruleOfferAcceptedSchema,
+  ruleOfferResponseSchema,
+  type RuleOffer,
   transactionResponseSchema,
   ruleSuggestionSchema,
   type RuleSuggestion,
@@ -67,6 +72,7 @@ type DialogState =
   | { kind: 'rule'; transactionId: string }
   | { kind: 'delete'; transactionId: string }
   | { kind: 'apply'; title: string; preview: RuleApplicationPreview }
+  | { kind: 'offer'; transactionIds: string[]; offer: RuleOffer }
   | null;
 
 async function readJson<T>(response: Response, schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } }): Promise<T> {
@@ -158,6 +164,7 @@ export function LancamentosScreen({ today }: { today: string }) {
   }
 
   async function saveEdit(id: string, input: TransactionEditValues) {
+    const previousCategoryId = rows.find((row) => row.id === id)?.categoryId;
     setBusy(true);
     try {
       const response = await fetch(`/api/transactions/${id}`, {
@@ -167,6 +174,47 @@ export function LancamentosScreen({ today }: { today: string }) {
       });
       await readJson(response, idResponseSchema);
       await load(appliedFilters);
+      if (shouldOfferAfterEdit(previousCategoryId, input.categoryId)) await offerRule([id]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * F5: depois de categorizar a mao, pergunta se vira regra. Sem oferta (outra
+   * loja no lote, ja coberta por regra, padrao vazio), nao abre nada. Falha da
+   * oferta nao desfaz a categorizacao, que ja foi gravada: so avisa.
+   */
+  async function offerRule(transactionIds: string[]) {
+    try {
+      const response = await fetch('/api/rules/offer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun: true, transactionIds }),
+      });
+      const { offer } = await readJson(response, ruleOfferResponseSchema);
+      if (offer !== null) setDialog({ kind: 'offer', transactionIds, offer });
+    } catch (offerError) {
+      setError(offerError instanceof Error ? offerError.message : 'Não foi possível sugerir uma regra.');
+    }
+  }
+
+  async function acceptOffer(pattern: string) {
+    if (dialog?.kind !== 'offer') return;
+    setBusy(true);
+    try {
+      const response = await fetch('/api/rules/offer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun: false, transactionIds: dialog.transactionIds, pattern, matchingIds: dialog.offer.matchingIds }),
+      });
+      const result = await readJson(response, ruleOfferAcceptedSchema);
+      setDialog(null);
+      setNotice(ruleOfferAcceptedMessage(result));
+      await load(appliedFilters);
+    } catch (offerError) {
+      setDialog(null);
+      setError(offerError instanceof Error ? offerError.message : 'Não foi possível criar a regra.');
     } finally {
       setBusy(false);
     }
@@ -182,9 +230,11 @@ export function LancamentosScreen({ today }: { today: string }) {
         body: JSON.stringify({ transactionIds: selectedIds, categoryId, memberId }),
       });
       await readJson(response, batchResponseSchema);
+      const categorized = selectedIds;
       setSelectedIds([]);
       setDialog(null);
       await load(appliedFilters);
+      await offerRule(categorized);
     } finally {
       setBusy(false);
     }
@@ -274,7 +324,7 @@ export function LancamentosScreen({ today }: { today: string }) {
       const response = await fetch(`/api/transactions/${dialog.transactionId}/rule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pattern, matchType: 'contains', categoryId, memberId, priority: 100 }),
+        body: JSON.stringify({ pattern, matchType: 'contains', categoryId, memberId }),
       });
       const created = await readJson(response, idResponseSchema);
       // Oferta logo apos criar (F3): a regra nova so valeria para a proxima
@@ -409,6 +459,7 @@ export function LancamentosScreen({ today }: { today: string }) {
           );
         })()
       ) : null}
+      {dialog?.kind === 'offer' ? <RuleOfferDialog offer={dialog.offer} busy={busy} onClose={() => setDialog(null)} onAccept={acceptOffer} /> : null}
       {dialog?.kind === 'apply' ? <ApplyRulesDialog title={dialog.title} proposals={dialog.preview.proposals} total={dialog.preview.total} busy={busy} onClose={() => setDialog(null)} onConfirm={applyRules} /> : null}
       {dialog?.kind === 'rule' ? <RuleDialog suggestion={ruleSuggestion} options={options} busy={busy} loading={loadingRule} onClose={() => setDialog(null)} onSubmit={createRule} /> : null}
     </>
