@@ -7,6 +7,7 @@ import { dedupeHash } from '@/lib/finance/dedupe';
 import {
   buildImportPreview,
   finalizeImport,
+  attributeRules,
   matchRuleForAmount,
   type ConfirmedRow,
   type FinalizeInput,
@@ -776,5 +777,34 @@ describe('matchRuleForAmount', () => {
 
   it('sem regra que case devolve null', () => {
     expect(matchRuleForAmount([salario], 'OUTRA COISA', cents(-1))).toBeNull();
+  });
+});
+
+describe('attributeRules — rastro da regra (category_rule_id) com natureza x sinal', () => {
+  const base = { matchType: 'contains' as const, memberId: null, active: true };
+  const salario: Rule = { ...base, id: 'r-in', pattern: 'IRMAOS BOA', categoryId: 'c-salario', priority: 0, categoryNature: 'income' };
+  const mercado: Rule = { ...base, id: 'r-out', pattern: 'IRMAOS BOA', categoryId: 'c-mercado', priority: 1, categoryNature: 'essential' };
+  const rules = [salario, mercado];
+
+  it('despesa aceita na categoria da regra compativel leva o rastro dela, pulando a de receita', () => {
+    expect(attributeRules(rules, [{ description: 'IRMAOS BOA', amountCents: cents(-1000), categoryId: 'c-mercado' }])).toEqual(['r-out']);
+  });
+
+  it('entrada aceita na categoria de receita leva a regra de receita', () => {
+    expect(attributeRules(rules, [{ description: 'IRMAOS BOA', amountCents: cents(2000), categoryId: 'c-salario' }])).toEqual(['r-in']);
+  });
+
+  it('regra incompativel nunca entra no rastro, mesmo com a categoria dela confirmada', () => {
+    expect(attributeRules([salario], [{ description: 'IRMAOS BOA', amountCents: cents(-1000), categoryId: 'c-salario' }])).toEqual([null]);
+  });
+
+  it('categoria trocada a mao, ou vazia, nao leva rastro', () => {
+    expect(
+      attributeRules(rules, [
+        { description: 'IRMAOS BOA', amountCents: cents(-1000), categoryId: 'c-outra' },
+        { description: 'IRMAOS BOA', amountCents: cents(-1000), categoryId: null },
+        { description: 'NADA CASA', amountCents: cents(-1000), categoryId: 'c-mercado' },
+      ]),
+    ).toEqual([null, null, null]);
   });
 });

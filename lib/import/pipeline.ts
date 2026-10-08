@@ -89,6 +89,30 @@ export function matchRuleForAmount(
   return matchRule(fitting, description);
 }
 
+/**
+ * Qual regra deu a categoria de cada linha gravada (`category_rule_id`, F3).
+ *
+ * A linha confirmada so diz a categoria, nao de onde ela veio. Ela veio da
+ * regra quando a regra vencedora — a mesma do preview, `matchRuleForAmount`,
+ * que pula regra de natureza incompativel com o sinal — aponta para EXATAMENTE
+ * a categoria confirmada. Categoria trocada na tela, ou deixada vazia, e
+ * decisao do usuario, e fica sem rastro.
+ */
+export function attributeRules(
+  rules: Rule[],
+  rows: readonly {
+    description: string;
+    amountCents: Cents;
+    categoryId: string | null;
+  }[],
+): (string | null)[] {
+  return rows.map((row) => {
+    if (row.categoryId === null) return null;
+    const rule = matchRuleForAmount(rules, row.description, row.amountCents);
+    return rule !== null && rule.categoryId === row.categoryId ? rule.id : null;
+  });
+}
+
 /** Tipo de origem: cartao de credito ou conta. */
 export type SourceKind = 'credit_card' | 'account';
 
