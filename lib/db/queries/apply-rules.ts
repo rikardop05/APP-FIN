@@ -280,10 +280,13 @@ export async function propagateToUncategorizedPlan(
 export async function applyRuleProposals(
   householdId: string,
   items: readonly RuleApplicationItem[],
+  // A transacao de quem chama (aceite da oferta, F5): regra e linhas entram ou
+  // saem juntas. Dentro de uma tx, `transaction` vira savepoint.
+  executor: typeof db | Tx = db,
 ): Promise<RuleApplicationResult> {
   if (items.length === 0) return { applied: 0, skipped: 0, propagated: 0 };
 
-  return db.transaction(async (tx) => {
+  return executor.transaction(async (tx) => {
     const rules = new Map(
       (await listRulesWithCategory(tx, householdId)).map((rule) => [rule.id, rule]),
     );

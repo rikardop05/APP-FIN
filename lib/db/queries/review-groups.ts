@@ -1,6 +1,6 @@
-import { and, eq, inArray, isNull, min, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { categories, categorizationRules, installmentPlans, transactions } from '@/lib/db/schema';
+import { categories, installmentPlans, transactions } from '@/lib/db/schema';
 import { categoryFitsKind, groupUncategorized, matchRule } from '@/lib/finance/categorization';
 import type { CategoryNature } from '@/lib/db/enums';
 import type { Cents } from '@/lib/money';
@@ -12,6 +12,7 @@ import {
   type RuleRow,
 } from './apply-rules';
 import { incrementRuleHits } from './auto-categorization';
+import { createUserRule } from './user-rules';
 
 /**
  * Revisao dos nao categorizados em grupos (F4 da categorizacao automatica).
@@ -125,26 +126,6 @@ async function ensureLeafCategory(tx: Tx, householdId: string, categoryId: strin
 }
 
 /**
- * Regra criada na revisao entra no TOPO da ordem (priority = menor - 1): e a
- * decisao mais recente do usuario sobre aquela loja, e uma regra antiga e mais
- * ampla ("irmaos" -> Casa) nao pode continuar vencendo nas proximas
- * importacoes. A tela de regras reordena quando quiser.
- */
-async function createTopRule(tx: Tx, householdId: string, pattern: string, categoryId: string): Promise<string> {
-  const [current] = await tx
-    .select({ min: min(categorizationRules.priority) })
-    .from(categorizationRules)
-    .where(eq(categorizationRules.householdId, householdId));
-  const priority = (current?.min ?? 1) - 1;
-  const [created] = await tx
-    .insert(categorizationRules)
-    .values({ householdId, pattern, matchType: 'contains', categoryId, priority, hits: 0, active: true })
-    .returning({ id: categorizationRules.id });
-  if (created === undefined) throw new Error('Não foi possível criar a regra.');
-  return created.id;
-}
-
-/**
  * Confirma um grupo: categoriza as linhas e, com `newRulePattern`, cria a regra.
  *
  * Cada linha e conferida de novo, travada: so muda linha do household, sem
@@ -208,14 +189,21 @@ export async function confirmReviewGroup(
     // Nada a categorizar (tudo mudou desde a tela): nao cria a regra pedida.
     if (locked.length === 0) return { categorized: 0, skipped: transactionIds.length, propagated: 0, ruleId: null };
 
-    const ruleId = pattern === null || pattern === '' ? null : await createTopRule(tx, householdId, pattern, input.categoryId);
+    // Regra do usuario entra no topo da ordem (politica unica, `user-rules.ts`).
+    const ruleId =
+      pattern === null || pattern === ''
+        ? null
+        : await createUserRule(householdId, { pattern, matchType: 'contains', categoryId: input.categoryId, memberId: null }, tx);
     const rules: RuleRow[] = await listRulesWithCategory(tx, householdId);
 
     let categorized = 0;
     const hitsByRuleId: Record<string, number> = {};
     const plans = new Set<string>();
     for (const row of locked) {
-      const winner = matchRule(rules, row.description);
+      // So regra cuja categoria cabe no tipo da linha disputa o rastro: uma
+      // "pix" -> Salario de prioridade maior nao rouba o rastro de um Pix enviado.
+      const fitting = rules.filter((rule) => categoryFitsKind(rule.categoryNature, row.kind));
+      const winner = matchRule(fitting, row.description);
       const traceRuleId = winner !== null && winner.categoryId === input.categoryId ? winner.id : null;
       const updated = await tx
         .update(transactions)
