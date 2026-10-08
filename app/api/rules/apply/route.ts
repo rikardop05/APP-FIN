@@ -21,8 +21,8 @@ export async function POST(request: Request) {
     }
     const body = result.data;
     if (body.dryRun) {
-      const proposals = await previewRuleApplication(householdId, body.ruleId);
-      return NextResponse.json({ proposals });
+      // A prévia vai no TOPO ({ proposals, total }), a forma que a tela lê (CONTRACTS §6.3).
+      return NextResponse.json(await previewRuleApplication(householdId, body.ruleId));
     }
     const applied = await applyRuleProposals(householdId, body.items);
     return NextResponse.json(applied);

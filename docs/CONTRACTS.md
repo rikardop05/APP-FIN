@@ -292,13 +292,6 @@ function applyRuleProposals(householdId: string, items: readonly RuleApplication
 Erros: 400 corpo inválido · 401 sem sessão · 404 `RuleToApplyNotFoundError` (prévia com `ruleId` de outra casa ou
 inexistente) · 500.
 
-> **Divergência aberta (2026-10-08, achada ao escrever esta seção):** no `dryRun: true` a rota hoje responde
-> `NextResponse.json({ proposals })` com `proposals = RuleApplicationPreview`, ou seja,
-> `{ proposals: { proposals, total } }`. A tela (`ruleApplicationPreviewSchema` em
-> `components/transactions/schemas.ts`) lê `{ proposals, total }` no topo, que é o contrato acima. O
-> `apply-shape.test.ts` não pega a diferença porque valida uma prévia montada à mão, sem passar pela rota. A
-> correção é responder `NextResponse.json(preview)`.
-
 ### 6.4 Atribuição de regra na importação — `commitImport` em `/lib/db/queries/import.ts` (F3)
 
 A linha confirmada da importação só traz a categoria, não de onde ela veio. Dentro da transação do commit:
