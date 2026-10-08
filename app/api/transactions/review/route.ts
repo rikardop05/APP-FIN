@@ -4,6 +4,7 @@ import {
   confirmReviewGroup,
   listReviewGroups,
   ReviewCategoryInvalidError,
+  ReviewCategoryKindError,
 } from '@/lib/db/queries/review-groups';
 import { listTransactionFilterOptions } from '@/lib/db/queries/transactions';
 import { reviewGroupConfirmationSchema } from '../schemas';
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
     if (error instanceof SessionMissingError) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
     }
-    if (error instanceof ReviewCategoryInvalidError) {
+    if (error instanceof ReviewCategoryInvalidError || error instanceof ReviewCategoryKindError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     return NextResponse.json({ error: 'Não foi possível confirmar o grupo.' }, { status: 500 });

@@ -458,7 +458,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('applyRuleProposals (F3)
     }
   });
 
-  it('regra de categoria de receita numa parcela: a parcela grava, o plano de despesa nao muda', async () => {
+  it('regra de categoria de receita numa despesa: fora da previa e item pulado (natureza x tipo)', async () => {
     const f = await createFixture('parcela-receita');
     try {
       const { applyRuleProposals } = await import('./apply-rules');
@@ -473,9 +473,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('applyRuleProposals (F3)
       const p1 = await f.tx('KABUM', { ...onCard, installmentNumber: 1 });
       const p2 = await f.tx('KABUM (2/2)', { ...onCard, installmentNumber: 2, status: 'planned', rawDescription: '' });
 
+      const { previewRuleApplication } = await import('./apply-rules');
+      expect(await previewRuleApplication(f.householdId, null)).toEqual({ proposals: [], total: 0 });
+
+      // Despesa numa categoria de receita viraria receita negativa no painel.
       const result = await applyRuleProposals(f.householdId, [{ transactionId: p1, ruleId: regra, categoryId: receita.id }]);
-      expect(result).toEqual({ applied: 1, skipped: 0, propagated: 0 });
-      expect(await f.read(p1)).toMatchObject({ categoryId: receita.id, categoryRuleId: regra });
+      expect(result).toEqual({ applied: 0, skipped: 1, propagated: 0 });
+      expect(await f.read(p1)).toMatchObject({ categoryId: null, categoryRuleId: null });
       expect(await f.read(p2)).toMatchObject({ categoryId: null });
       expect(await f.planCategory(plano)).toBeNull();
     } finally {

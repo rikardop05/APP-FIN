@@ -1,7 +1,8 @@
 import { and, eq, inArray, isNull, min, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { categories, categorizationRules, installmentPlans, transactions } from '@/lib/db/schema';
-import { groupUncategorized, matchRule } from '@/lib/finance/categorization';
+import { categoryFitsKind, groupUncategorized, matchRule } from '@/lib/finance/categorization';
+import type { CategoryNature } from '@/lib/db/enums';
 import type { Cents } from '@/lib/money';
 import {
   listRulesWithCategory,
@@ -60,6 +61,14 @@ export type ReviewGroupResult = {
   ruleId: string | null;
 };
 
+/** A categoria nao cabe no tipo das linhas: receita x despesa (`categoryFitsKind`). */
+export class ReviewCategoryKindError extends Error {
+  constructor() {
+    super('Essa categoria não serve para esses lançamentos: receita vai para categoria de receita, e despesa para as demais.');
+    this.name = 'ReviewCategoryKindError';
+  }
+}
+
 /** A categoria nao e do household ou nao e folha. */
 export class ReviewCategoryInvalidError extends Error {
   constructor() {
@@ -99,9 +108,9 @@ export async function listReviewGroups(householdId: string): Promise<ReviewGroup
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-async function ensureLeafCategory(tx: Tx, householdId: string, categoryId: string): Promise<void> {
+async function ensureLeafCategory(tx: Tx, householdId: string, categoryId: string): Promise<CategoryNature> {
   const [row] = await tx
-    .select({ id: categories.id })
+    .select({ id: categories.id, nature: categories.nature })
     .from(categories)
     .where(and(eq(categories.id, categoryId), eq(categories.householdId, householdId)))
     .limit(1);
@@ -112,6 +121,7 @@ async function ensureLeafCategory(tx: Tx, householdId: string, categoryId: strin
     .where(and(eq(categories.parentId, categoryId), eq(categories.householdId, householdId)))
     .limit(1);
   if (child !== undefined) throw new ReviewCategoryInvalidError();
+  return row.nature;
 }
 
 /**
@@ -149,7 +159,9 @@ async function createTopRule(tx: Tx, householdId: string, pattern: string, categ
  * Parcela de parcelamento sem categoria leva a categoria ao plano e as
  * parcelas sem categoria (mesma propagacao da aplicacao de regras).
  *
- * Lanca `ReviewCategoryInvalidError` antes de gravar qualquer coisa.
+ * Lanca `ReviewCategoryInvalidError` (categoria alheia ou nao folha) e
+ * `ReviewCategoryKindError` (receita x despesa) antes de gravar qualquer coisa.
+ * Se nenhuma linha vale mais, a regra pedida nao e criada.
  */
 export async function confirmReviewGroup(
   householdId: string,
@@ -158,10 +170,7 @@ export async function confirmReviewGroup(
   const pattern = input.newRulePattern === null ? null : input.newRulePattern.trim();
 
   return db.transaction(async (tx) => {
-    await ensureLeafCategory(tx, householdId, input.categoryId);
-    const ruleId = pattern === null || pattern === '' ? null : await createTopRule(tx, householdId, pattern, input.categoryId);
-
-    const rules: RuleRow[] = await listRulesWithCategory(tx, householdId);
+    const nature = await ensureLeafCategory(tx, householdId, input.categoryId);
     const transactionIds = [...new Set(input.transactionIds)];
     const locked =
       transactionIds.length === 0
@@ -193,6 +202,15 @@ export async function confirmReviewGroup(
             )
             .for('update', { of: transactions });
 
+    // Natureza x tipo conferida no servidor, nao so na tela: o grupo inteiro e
+    // recusado antes de qualquer gravacao.
+    if (locked.some((row) => !categoryFitsKind(nature, row.kind))) throw new ReviewCategoryKindError();
+    // Nada a categorizar (tudo mudou desde a tela): nao cria a regra pedida.
+    if (locked.length === 0) return { categorized: 0, skipped: transactionIds.length, propagated: 0, ruleId: null };
+
+    const ruleId = pattern === null || pattern === '' ? null : await createTopRule(tx, householdId, pattern, input.categoryId);
+    const rules: RuleRow[] = await listRulesWithCategory(tx, householdId);
+
     let categorized = 0;
     const hitsByRuleId: Record<string, number> = {};
     const plans = new Set<string>();
@@ -212,13 +230,9 @@ export async function confirmReviewGroup(
       if (row.installmentPlanId !== null) plans.add(row.installmentPlanId);
     }
 
-    const [category] = await tx
-      .select({ nature: categories.nature })
-      .from(categories)
-      .where(and(eq(categories.id, input.categoryId), eq(categories.householdId, householdId)));
     let propagated = 0;
     for (const planId of plans) {
-      propagated += await propagateToUncategorizedPlan(tx, householdId, planId, input.categoryId, category?.nature ?? 'income');
+      propagated += await propagateToUncategorizedPlan(tx, householdId, planId, input.categoryId, nature);
     }
 
     await incrementRuleHits(householdId, hitsByRuleId, tx);

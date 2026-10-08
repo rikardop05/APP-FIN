@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   categorizeBatch,
+  categoryFitsKind,
   groupUncategorized,
   matchRule,
   previewRule,
@@ -565,5 +566,26 @@ describe('previewRule', () => {
     const regra = rule({ id: 'n', pattern: 'irmaos boa', matchType: 'exact' });
     // t2 normaliza para 'irmaos boa' (parcela removida); t1 tem o prefixo.
     expect(previewRule(regra, linhas)).toEqual(['t2']);
+  });
+});
+
+describe('categoryFitsKind', () => {
+  it('despesa aceita qualquer natureza menos receita', () => {
+    expect(categoryFitsKind('essential', 'expense')).toBe(true);
+    expect(categoryFitsKind('non_essential', 'expense')).toBe(true);
+    expect(categoryFitsKind('investment', 'expense')).toBe(true);
+    expect(categoryFitsKind('income', 'expense')).toBe(false);
+  });
+
+  it('receita so aceita natureza receita', () => {
+    expect(categoryFitsKind('income', 'income')).toBe(true);
+    expect(categoryFitsKind('essential', 'income')).toBe(false);
+    expect(categoryFitsKind('investment', 'income')).toBe(false);
+  });
+
+  it('demais tipos nao sao restringidos aqui', () => {
+    expect(categoryFitsKind('income', 'transfer')).toBe(true);
+    expect(categoryFitsKind('investment', 'investment_contribution')).toBe(true);
+    expect(categoryFitsKind('essential', 'credit_card_payment')).toBe(true);
   });
 });

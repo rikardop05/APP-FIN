@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import type { CategoryNature } from '@/lib/db/enums';
 import {
   categories,
   categorizationRules,
@@ -7,6 +8,7 @@ import {
   transactions,
 } from '@/lib/db/schema';
 import {
+  categoryFitsKind,
   previewRule,
   type CategorizationRow,
   type Rule,
@@ -82,7 +84,7 @@ export class RuleToApplyNotFoundError extends Error {
   }
 }
 
-export type RuleRow = Rule & { categoryName: string; categoryNature: string };
+export type RuleRow = Rule & { categoryName: string; categoryNature: CategoryNature };
 
 export async function listRulesWithCategory(executor: Executor, householdId: string): Promise<RuleRow[]> {
   return executor
@@ -181,7 +183,10 @@ export async function previewRuleApplication(
   const rows = candidates.map(toCategorizationRow);
   const winner = new Map<string, RuleRow>();
   for (const rule of rules) {
-    for (const id of previewRule(rule, rows)) {
+    // Regra cuja categoria nao cabe no tipo da linha (receita x despesa) nao a
+    // propoe; a proxima regra por prioridade ainda pode.
+    const fitting = rows.filter((row) => categoryFitsKind(rule.categoryNature, row.kind));
+    for (const id of previewRule(rule, fitting)) {
       if (!winner.has(id)) winner.set(id, rule);
     }
   }
@@ -221,7 +226,7 @@ export async function propagateToUncategorizedPlan(
   householdId: string,
   planId: string,
   categoryId: string,
-  categoryNature: string,
+  categoryNature: CategoryNature,
 ): Promise<number> {
   if (categoryNature === 'income') return 0;
   const [child] = await tx
@@ -328,6 +333,7 @@ export async function applyRuleProposals(
       const rule = rules.get(item.ruleId);
       if (row === undefined || rule === undefined) continue;
       if (rule.categoryId !== item.categoryId) continue;
+      if (!categoryFitsKind(rule.categoryNature, row.kind)) continue;
       if (
         row.status === 'reconciled' ||
         row.recurringExpenseId !== null ||

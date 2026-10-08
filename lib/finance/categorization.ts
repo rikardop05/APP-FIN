@@ -9,7 +9,7 @@
  */
 
 import { normalizeDescription } from '@/lib/finance/dedupe';
-import type { TransactionKind } from '@/lib/finance/enum-mirrors';
+import type { CategoryNature, TransactionKind } from '@/lib/finance/enum-mirrors';
 import { addCents, type Cents } from '@/lib/money';
 
 export interface Rule {
@@ -317,4 +317,19 @@ export function previewRule(rule: Rule, rows: CategorizationRow[]): string[] {
   return rows
     .filter((row) => isReviewable(row) && ruleMatches(rule, normalizeDescription(row.description)))
     .map((row) => row.id);
+}
+
+/**
+ * A categoria cabe no lancamento? Despesa nao vai para categoria de receita, e
+ * receita so vai para categoria de receita: a natureza da categoria decide em
+ * que total o valor entra (KPIs somam pela `nature`), e uma despesa numa
+ * categoria `income` viraria receita negativa no painel.
+ *
+ * Os demais tipos (transferencia, aporte, pagamento de fatura) nao passam pela
+ * revisao de categoria e nao sao restringidos aqui.
+ */
+export function categoryFitsKind(nature: CategoryNature, kind: TransactionKind): boolean {
+  if (kind === 'expense') return nature !== 'income';
+  if (kind === 'income') return nature === 'income';
+  return true;
 }

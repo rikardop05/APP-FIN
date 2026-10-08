@@ -323,6 +323,54 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('confirmReviewGroup (F4)
     }
   });
 
+  it('categoria de receita num grupo de despesa e recusada no servidor, sem gravar nada', async () => {
+    const f = await createFixture('confirmar-natureza');
+    try {
+      const { confirmReviewGroup, ReviewCategoryKindError } = await import('./review-groups');
+      const [receita] = await f.db
+        .insert(f.schema.categories)
+        .values({ householdId: f.householdId, name: 'Reembolsos', nature: 'income' })
+        .returning({ id: f.schema.categories.id });
+      if (receita === undefined) throw new Error('Categoria nao criada.');
+      const despesa = await f.tx('LOJA');
+      const entrada = await f.tx('PIX MARIA', { kind: 'income', amountCents: cents(5000) });
+
+      await expect(
+        confirmReviewGroup(f.householdId, { transactionIds: [despesa], categoryId: receita.id, newRulePattern: 'loja' }),
+      ).rejects.toThrow(ReviewCategoryKindError);
+      await expect(
+        confirmReviewGroup(f.householdId, { transactionIds: [entrada], categoryId: f.mercadoId, newRulePattern: null }),
+      ).rejects.toThrow(ReviewCategoryKindError);
+      expect(await f.read(despesa)).toMatchObject({ categoryId: null });
+      expect(await f.read(entrada)).toMatchObject({ categoryId: null });
+      expect(await f.rules()).toEqual([]);
+
+      // Receita em categoria de receita passa.
+      const ok = await confirmReviewGroup(f.householdId, { transactionIds: [entrada], categoryId: receita.id, newRulePattern: null });
+      expect(ok.categorized).toBe(1);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it('nada a categorizar (todas puladas): a regra pedida NAO e criada', async () => {
+    const f = await createFixture('confirmar-nada');
+    try {
+      const { confirmReviewGroup } = await import('./review-groups');
+      const jaCategorizada = await f.tx('LOJA', { categoryId: f.casaId });
+
+      const result = await confirmReviewGroup(f.householdId, {
+        transactionIds: [jaCategorizada],
+        categoryId: f.mercadoId,
+        newRulePattern: 'loja',
+      });
+      expect(result).toEqual({ categorized: 0, skipped: 1, propagated: 0, ruleId: null });
+      expect(await f.rules()).toEqual([]);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
   it('parcela confirmada leva a categoria ao plano sem categoria e as parcelas sem categoria', async () => {
     const f = await createFixture('confirmar-parcela');
     try {
