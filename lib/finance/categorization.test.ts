@@ -264,8 +264,19 @@ describe('suggestRulePattern', () => {
     expect(suggestRulePattern('FORT ATACADISTA 635').pattern).toBe('fort atacadista');
   });
 
-  it('descricao que e so o prefixo de cartao nao vira padrao vazio', () => {
-    expect(suggestRulePattern('[final 4239]').pattern).toBe('[final 4239]');
+  it('corta o prefixo de cartao desconhecido "[final ?]"', () => {
+    // O parser do Mercado Pago grava "[final ?]" quando nao sabe o cartao.
+    expect(suggestRulePattern('[final ?] LOJA X').pattern).toBe('loja x');
+  });
+
+  it('descricao que e so prefixo de cartao ou so carteira NAO gera sugestao', () => {
+    // "[final 4239]" como padrao 'contains' casaria TODAS as compras do
+    // cartao, e "- nupay" todas as compras via NuPay. Melhor nenhuma
+    // sugestao (string vazia) do que uma regra que pega tudo.
+    expect(suggestRulePattern('[final 4239]').pattern).toBe('');
+    expect(suggestRulePattern('[final ?]').pattern).toBe('');
+    expect(suggestRulePattern('- NuPay').pattern).toBe('');
+    expect(suggestRulePattern('[final 4239] - NuPay').pattern).toBe('');
   });
 
   it('descricao so de digitos nao vira padrao vazio', () => {
@@ -289,8 +300,7 @@ describe('suggestRulePattern', () => {
       'KaBuM! - NuPay',
       'Pichau Informatica - NuPay - Parcela 5/7',
       '[final 4239] NFS PREMIUM ITUPEVA (3/4)',
-      '[final 4239]',
-      '- NuPay',
+      '[final ?] LOJA X',
     ];
 
     for (const descricao of descricoes) {
@@ -379,6 +389,60 @@ describe('groupUncategorized', () => {
     expect(grupos.map((grupo) => grupo.pattern)).toEqual(['a loja', 'b loja']);
   });
 
+  it('entrada e saida da mesma descricao ficam em grupos separados', () => {
+    // Pix recebido e Pix enviado tem naturezas diferentes (receita x
+    // despesa) e nao podem receber uma categoria so. Estorno tambem: separado,
+    // ele nao anula a compra e nao joga o grupo para o fim da fila.
+    const grupos = groupUncategorized(
+      [
+        row({ id: 'in', description: 'PIX MARIA', amountCents: cents(500), kind: 'income' }),
+        row({ id: 'out', description: 'PIX MARIA', amountCents: cents(-300) }),
+        row({ id: 'out2', description: 'PIX MARIA', amountCents: cents(-200) }),
+      ],
+      [],
+    );
+    // Entrada: +500. Saida: -300 + -200 = -500. Mesmo tamanho e mesmo padrao:
+    // a saida vem antes.
+    expect(grupos).toEqual([
+      { pattern: 'pix maria', ids: ['out', 'out2'], totalCents: -500, ruleId: null, suggestedCategoryId: null },
+      { pattern: 'pix maria', ids: ['in'], totalCents: 500, ruleId: null, suggestedCategoryId: null },
+    ]);
+  });
+
+  it('separa por sinal tambem dentro do grupo de uma regra', () => {
+    const regras = [rule({ id: 'r1', pattern: 'kabum', categoryId: 'cat-eletronicos' })];
+    const grupos = groupUncategorized(
+      [
+        row({ id: 'compra', description: 'KABUM', amountCents: cents(-4365) }),
+        row({ id: 'estorno', description: 'KABUM ESTORNO', amountCents: cents(4365) }),
+      ],
+      regras,
+    );
+    expect(grupos.map((grupo) => [grupo.ids, grupo.totalCents])).toEqual([
+      [['compra'], -4365],
+      [['estorno'], 4365],
+    ]);
+  });
+
+  it('exclui transferencia e aporte de investimento: ficam fora dos totais (RC-03)', () => {
+    const grupos = groupUncategorized(
+      [
+        row({ id: 'tr', description: 'TED MESMA TITULARIDADE', amountCents: cents(-100000), kind: 'transfer' }),
+        row({ id: 'inv', description: 'APLICACAO CDB', amountCents: cents(-50000), kind: 'investment_contribution' }),
+      ],
+      [],
+    );
+    expect(grupos).toEqual([]);
+  });
+
+  it('descricao sem sugestao possivel vira grupo de padrao vazio', () => {
+    // O usuario escreve o padrao a mao; a linha nao some da revisao.
+    const grupos = groupUncategorized([row({ id: 'p', description: '[final 4239]' })], []);
+    expect(grupos).toEqual([
+      { pattern: '', ids: ['p'], totalCents: -1000, ruleId: null, suggestedCategoryId: null },
+    ]);
+  });
+
   it('exclui pagamento de fatura, linha de valor zero e linha ja categorizada', () => {
     const grupos = groupUncategorized(
       [
@@ -463,6 +527,8 @@ describe('previewRule', () => {
     row({ id: 'cat', description: 'IRMAOS BOA', categoryId: 'cat-mercado' }),
     row({ id: 'pg', description: 'IRMAOS BOA', kind: 'credit_card_payment' }),
     row({ id: 'zero', description: 'IRMAOS BOA', amountCents: cents(0) }),
+    row({ id: 'tr', description: 'IRMAOS BOA', kind: 'transfer' }),
+    row({ id: 'inv', description: 'IRMAOS BOA', kind: 'investment_contribution' }),
     row({ id: 'out', description: 'OUTRA LOJA' }),
   ];
 
@@ -476,11 +542,13 @@ describe('previewRule', () => {
     expect(previewRule(regra, linhas)).not.toContain('cat');
   });
 
-  it('nao inclui pagamento de fatura nem linha de valor zero', () => {
+  it('nao inclui pagamento de fatura, transferencia, aporte nem linha de valor zero', () => {
     const regra = rule({ id: 'nova', pattern: 'irmaos boa' });
     const ids = previewRule(regra, linhas);
     expect(ids).not.toContain('pg');
     expect(ids).not.toContain('zero');
+    expect(ids).not.toContain('tr');
+    expect(ids).not.toContain('inv');
   });
 
   it('regra que nao casa nada devolve lista vazia', () => {

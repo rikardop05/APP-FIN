@@ -148,8 +148,10 @@ function categorizeBatch(rules: Rule[], rows: { id: string; description: string 
  * Sugere o padrão de uma nova regra a partir de uma descrição: remove parcelas, datas, códigos e dígitos variáveis.
  * Devolve o padrão NORMALIZADO (minúsculo), e `matchRule` compara sem diferenciar caixa.
  * Invariante (RF-CAT-03): a regra sugerida tem de casar com a descrição que a gerou e com outras parcelas da mesma compra.
- * Corta também, só nas pontas: o prefixo de cartão "[final NNNN]" no início e a carteira "- nupay" no fim
- * (adendo de 2026-10-07): a mesma loja aparece com e sem esses pedaços, e o padrão tem de casar as duas formas.
+ * Corta também, só nas pontas: o prefixo de cartão "[final …]" (inclusive "[final ?]") no início e a carteira "- nupay"
+ * no fim (adendo de 2026-10-07): a mesma loja aparece com e sem esses pedaços, e o padrão tem de casar as duas formas.
+ * Única exceção à invariante: descrição que é SÓ prefixo e/ou carteira devolve pattern '' = "sem sugestão" — o que
+ * restaria casaria todas as compras do cartão ou da carteira. Quem consome trata '' como campo a preencher.
  */
 function suggestRulePattern(rawDescription: string): { pattern: string; matchType: 'contains' }
 ```
@@ -164,18 +166,20 @@ interface CategorizationRow {
 }
 
 interface UncategorizedGroup {
-  pattern: string              // padrão da regra que já casa o grupo, ou o de suggestRulePattern
+  pattern: string              // padrão da regra que já casa o grupo, ou o de suggestRulePattern ('' = sem sugestão)
   ids: string[]                // na ordem recebida
-  totalCents: Cents            // soma COM sinal: despesa negativa, receita positiva
+  totalCents: Cents            // soma; todo grupo tem um sinal só (saída negativa OU entrada positiva)
   ruleId: string | null        // regra ativa que já casa o grupo; null = candidato a regra nova
   suggestedCategoryId: string | null  // categoria dessa regra; null sem regra
 }
 
 /**
- * Agrupa as linhas revisáveis para a tela de revisão. Revisável = categoryId null, kind ≠ credit_card_payment, amountCents ≠ 0.
+ * Agrupa as linhas revisáveis para a tela de revisão. Revisável = categoryId null, kind ∈ {expense, income}, amountCents ≠ 0
+ * (fora: credit_card_payment; transfer e investment_contribution, que ficam fora dos totais, RC-03).
  * Linha que uma regra ATIVA casa (mesma ordem do matchRule) vai para o grupo da regra; as demais agrupam por suggestRulePattern.
- * Grupo de regra e grupo de padrão nunca se fundem, mesmo com o mesmo texto.
- * Ordem: |totalCents| desc, depois pattern asc, depois grupo com regra antes do grupo sem regra. Não muta a entrada.
+ * Nunca se fundem: grupo de regra com grupo de padrão (mesmo com o mesmo texto), nem saída com entrada
+ * (Pix recebido × enviado têm naturezas diferentes; estorno somado à compra anularia o total).
+ * Ordem: |totalCents| desc, pattern asc, saída antes de entrada, grupo com regra antes do sem regra. Não muta a entrada.
  */
 function groupUncategorized(rows: CategorizationRow[], rules: Rule[]): UncategorizedGroup[]
 
@@ -183,6 +187,8 @@ function groupUncategorized(rows: CategorizationRow[], rules: Rule[]): Uncategor
  * Ids que a regra categorizaria agora ("esta regra pega N lançamentos"), na ordem recebida.
  * Só linhas revisáveis (mesmo filtro acima): regra NUNCA sobrescreve categoria posta à mão.
  * Avalia só esta regra, sem olhar prioridade de outras. Regra inativa, padrão vazio e regex inválida → [], nunca lança.
+ * OBRIGAÇÃO de quem grava (F3): gravar EXATAMENTE estes ids. Rodar categorizeBatch de novo deixaria uma regra antiga de
+ * prioridade maior pegar a linha, e o "pega N" mostrado ao usuário ficaria errado.
  */
 function previewRule(rule: Rule, rows: CategorizationRow[]): string[]
 ```
@@ -206,9 +212,10 @@ function incrementRuleHits(householdId: string, hitsByRuleId: Record<string, num
 
 /**
  * Grava installment_plans.category_id e propaga para TODAS as parcelas, de qualquer status (inclusive planned).
- * Parcela ACOMPANHA o plano quando sua categoria é null ou igual à que o plano tinha ANTES da chamada; só essas mudam,
- * e perdem category_rule_id. Parcela com outra categoria (à mão, ou regra que caiu noutra) fica como está.
- * categoryId null limpa o plano e as parcelas que o acompanhavam. Categoria precisa ser folha do household.
+ * Parcela ACOMPANHA o plano quando sua categoria é null, igual à que o plano tinha ANTES da chamada, ou veio de regra
+ * (category_rule_id preenchido); só essas mudam, e perdem category_rule_id. Protegida é só a categoria posta à mão.
+ * Parcela já na categoria nova não é tocada nem contada (A → A devolve 0).
+ * categoryId null limpa o plano e as parcelas que o acompanhavam. Categoria: folha do household, natureza ≠ income.
  * Lança InstallmentPlanNotFoundError / InvalidPlanCategoryError. Plano travado (FOR UPDATE) numa transação.
  * Devolve quantas parcelas mudaram.
  */

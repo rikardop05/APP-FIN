@@ -120,7 +120,9 @@ export function categorizeBatch(
  * mesma loja aparece com e sem ele, conforme o cartao: deixa-lo no padrao faria
  * a regra nao casar a outra forma. Cortar do INICIO preserva a contiguidade.
  */
-const CARD_FINAL_PREFIX = /^\[final \d+\]\s*/;
+// `[^\]]*` e nao `\d+`: o parser do Mercado Pago grava "[final ?]" quando nao
+// sabe o cartao.
+const CARD_FINAL_PREFIX = /^\[final [^\]]*\]\s*/;
 
 /** Carteira de pagamento no fim ("KaBuM! - NuPay"): e o meio, nao a loja. */
 const PAYMENT_WALLET_SUFFIX = /\s*-\s*nupay$/;
@@ -146,6 +148,9 @@ function isTrailingCode(token: string): boolean {
  *
  * Pelo mesmo motivo, os cortes especificos de fatura sao nas pontas: o prefixo
  * de cartao "[final NNNN]" no inicio e a carteira "- nupay" no fim.
+ *
+ * Unica excecao a invariante: descricao que e SO prefixo e/ou carteira devolve
+ * padrao vazio, que significa "sem sugestao" — o usuario escreve o padrao.
  *
  * Limite conhecido: codigo variavel que aparece no MEIO da descricao ("nf 1234
  * padaria") e preservado, porque corta-lo quebraria a contiguidade. O usuario
@@ -179,9 +184,11 @@ export function suggestRulePattern(rawDescription: string): {
     .replace(/[^a-z0-9]+$/, '')
     .trim();
 
-  // Se a limpeza comeu tudo (descricao so de digitos), a descricao normalizada
-  // ainda e um padrao melhor do que string vazia, que nao casaria nada.
-  return { pattern: pattern === '' ? normalized : pattern, matchType: 'contains' };
+  // Se a limpeza dos codigos comeu tudo (descricao so de digitos), a loja sem
+  // prefixo nem carteira ainda e um padrao melhor do que nada. Mas se nao sobra
+  // loja nenhuma ("[final 4239]", "- nupay"), a resposta e string vazia = sem
+  // sugestao: o que restaria casaria todas as compras do cartao ou da carteira.
+  return { pattern: pattern === '' ? merchant.trim() : pattern, matchType: 'contains' };
 }
 
 /** Linha candidata a revisao de categoria. */
@@ -210,16 +217,28 @@ export interface UncategorizedGroup {
 
 /**
  * A linha entra na revisao? Precisa estar sem categoria e ser gasto ou receita
- * de verdade: pagamento de fatura e transferencia de dinheiro ja contado, e
- * linha de valor zero (anuidade estornada, "saldo restante") nao muda nenhum
- * total — categoriza-las so poe ruido na fila.
+ * de verdade. Ficam fora: pagamento de fatura (dinheiro ja contado nos itens da
+ * fatura), transferencia e aporte de investimento (fora dos totais, RC-03), e
+ * linha de valor zero (anuidade estornada, "saldo restante"), que nao muda
+ * nenhum total — categoriza-las so poe ruido na fila.
  */
 function isReviewable(row: CategorizationRow): boolean {
   return (
     row.categoryId === null &&
-    row.kind !== 'credit_card_payment' &&
+    (row.kind === 'expense' || row.kind === 'income') &&
     row.amountCents !== 0
   );
+}
+
+/** Saida antes de entrada; regra antes de sem regra; regra por id. */
+function byGroupIdentity(a: UncategorizedGroup, b: UncategorizedGroup): number {
+  const aOut = a.totalCents < 0;
+  const bOut = b.totalCents < 0;
+  if (aOut !== bOut) return aOut ? -1 : 1;
+  if (a.ruleId === b.ruleId) return 0;
+  if (a.ruleId === null) return 1;
+  if (b.ruleId === null) return -1;
+  return a.ruleId < b.ruleId ? -1 : 1;
 }
 
 /**
@@ -231,8 +250,14 @@ function isReviewable(row: CategorizationRow): boolean {
  * Grupo de regra e grupo de padrao nunca se fundem, mesmo com o mesmo texto: um
  * ja tem destino, o outro ainda e decisao do usuario.
  *
+ * Entrada e saida tambem nunca se fundem: Pix recebido e Pix enviado da mesma
+ * pessoa tem naturezas diferentes e nao podem levar uma categoria so, e um
+ * estorno somado a compra anularia o total e esconderia o grupo no fim da fila.
+ * Por isso todo grupo tem um sinal so, e o total dele e tambem o seu tamanho.
+ *
  * Ordem: maior |total| primeiro (o grupo que mais distorce os numeros vem no
- * topo), desempate por padrao e depois por regra, para ser deterministico.
+ * topo); desempate por padrao, depois saida antes de entrada, depois grupo com
+ * regra antes do sem regra — deterministico em qualquer maquina.
  */
 export function groupUncategorized(
   rows: CategorizationRow[],
@@ -248,7 +273,8 @@ export function groupUncategorized(
     const rule = ordered.find((candidate) => ruleMatches(candidate, normalized));
     const pattern = rule === undefined ? suggestRulePattern(row.description).pattern : rule.pattern;
     // Prefixos distintos: um padrao nunca colide com o id de uma regra.
-    const key = rule === undefined ? `pattern:${pattern}` : `rule:${rule.id}`;
+    const origin = rule === undefined ? `pattern:${pattern}` : `rule:${rule.id}`;
+    const key = `${row.amountCents < 0 ? 'out' : 'in'}|${origin}`;
 
     const group = groups.get(key);
     if (group === undefined) {
@@ -269,8 +295,7 @@ export function groupUncategorized(
     const bySize = Math.abs(b.totalCents) - Math.abs(a.totalCents);
     if (bySize !== 0) return bySize;
     if (a.pattern !== b.pattern) return a.pattern < b.pattern ? -1 : 1;
-    // Mesmo texto: o grupo com regra antes do grupo sem regra.
-    return (a.ruleId ?? '￿') < (b.ruleId ?? '￿') ? -1 : 1;
+    return byGroupIdentity(a, b);
   });
 }
 
@@ -279,8 +304,13 @@ export function groupUncategorized(
  * N lancamentos" antes de gravar.
  *
  * So linha SEM categoria: regra nunca sobrescreve categoria posta a mao. Mesmo
- * filtro da revisao (sem pagamento de fatura, sem valor zero). Regra inativa,
+ * filtro da revisao (so gasto e receita, sem valor zero). Regra inativa,
  * padrao vazio e regex invalida devolvem lista vazia, nunca lancam.
+ *
+ * Avalia SO esta regra, sem a prioridade das outras: e a previa da regra nova.
+ * Por isso quem grava tem de gravar EXATAMENTE estes ids. Rodar
+ * `categorizeBatch` de novo deixaria uma regra antiga de prioridade maior pegar
+ * a linha, e o "pega N" mostrado ao usuario ficaria errado.
  */
 export function previewRule(rule: Rule, rows: CategorizationRow[]): string[] {
   if (!rule.active) return [];
