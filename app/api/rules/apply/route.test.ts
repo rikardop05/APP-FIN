@@ -4,6 +4,8 @@ import {
   ruleApplicationPreviewSchema,
   ruleApplicationResultSchema,
 } from '@/components/transactions/schemas';
+import type { RuleApplicationPreview, RuleApplicationResult } from '@/lib/db/queries/apply-rules';
+import { cents } from '@/lib/money';
 
 /**
  * B1 (laudo do Corvo sobre o CONTRACTS §6.3): a resposta REAL de `POST /api/rules/apply`
@@ -55,7 +57,7 @@ describe('POST /api/rules/apply: a resposta da rota passa pelo schema da tela', 
           transactionId: TX,
           occurredOn: '2026-10-05',
           description: 'ENEL',
-          amountCents: -18000,
+          amountCents: cents(-18000),
           ruleId: RULE,
           rulePattern: 'enel',
           categoryId: CATEGORY,
@@ -63,7 +65,7 @@ describe('POST /api/rules/apply: a resposta da rota passa pelo schema da tela', 
         },
       ],
       total: 7,
-    };
+    } satisfies RuleApplicationPreview;
     hoisted.previewRuleApplication.mockResolvedValueOnce(preview);
     const { POST } = await import('./route');
 
@@ -75,7 +77,7 @@ describe('POST /api/rules/apply: a resposta da rota passa pelo schema da tela', 
   });
 
   it('gravar: { applied, skipped, propagated } no topo', async () => {
-    const result = { applied: 3, skipped: 1, propagated: 2 };
+    const result = { applied: 3, skipped: 1, propagated: 2 } satisfies RuleApplicationResult;
     hoisted.applyRuleProposals.mockResolvedValueOnce(result);
     const { POST } = await import('./route');
 
@@ -84,5 +86,14 @@ describe('POST /api/rules/apply: a resposta da rota passa pelo schema da tela', 
     expect(response.status).toBe(200);
     expect(ruleApplicationResultSchema.parse(await response.json())).toEqual(result);
     expect(hoisted.applyRuleProposals).toHaveBeenCalledWith('casa-de-teste', items);
+  });
+
+  it('corpo inválido: 400; regra que não é da casa: 404', async () => {
+    const { POST } = await import('./route');
+    expect((await POST(post({ dryRun: 'sim' }))).status).toBe(400);
+    hoisted.previewRuleApplication.mockRejectedValueOnce(new hoisted.RuleToApplyNotFoundError('Regra não encontrada.'));
+    const response = await POST(post({ dryRun: true, ruleId: RULE }));
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'Regra não encontrada.' });
   });
 });
