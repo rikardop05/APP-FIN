@@ -6,6 +6,8 @@ import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 import { formatDateBR } from '@/lib/date';
 import type { BasisPoints, Cents } from '@/lib/money';
 
+import { OVER_BUDGET_INTRO, OVER_BUDGET_TITLE, overBudgetLine } from './over-budget-text';
+
 export type UncategorizedItem = {
   id: string;
   description: string;
@@ -218,15 +220,14 @@ export function PendenciasList({
           <article aria-labelledby="dashboard-pendencias-budget-heading" className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-3">
               <h3 id="dashboard-pendencias-budget-heading" className="text-sm font-semibold text-foreground">
-                Orçamentos estourados
+                {OVER_BUDGET_TITLE}
               </h3>
               <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
                 {overBudgetItems.length} {overBudgetItems.length === 1 ? 'categoria' : 'categorias'}
               </span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Categorias em vermelho na tela de Orçamento: o realizado mais o previsto a realizar do mês passa do
-              orçado.
+              {OVER_BUDGET_INTRO}
             </p>
             <ul className="flex flex-col gap-1.5">
               {overBudgetItems.map((item) => (
@@ -237,8 +238,7 @@ export function PendenciasList({
                   <div className="flex min-w-0 flex-col">
                     <span className="truncate text-sm font-medium text-foreground">{item.categoryName}</span>
                     <span className="text-xs text-muted-foreground">
-                      <Money value={item.expectedCents} sign="never" className="text-muted-foreground" /> previstos no mês de{' '}
-                      <Money value={item.plannedCents} sign="never" className="text-muted-foreground" /> planejados
+                      {overBudgetLine(item.expectedCents, item.plannedCents)}
                     </span>
                   </div>
                   <span className="shrink-0 text-sm font-semibold tabular text-red-700">

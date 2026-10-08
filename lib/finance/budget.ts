@@ -102,12 +102,6 @@ function lightFor(usage: BasisPoints | null, expected: Cents, warnBp: BasisPoint
   return 'yellow';
 }
 
-/**
- * Situacao do orcamento por categoria. Uma linha por entrada de `budgets`, na
- * ordem recebida (o schema garante categoria unica por periodo; duplicata aqui e
- * responsabilidade de quem chama). Categoria que so aparece em `spent`, sem
- * orcamento, nao gera linha.
- */
 /** Soma com sinal por categoria. */
 function sumByCategory(entries: readonly { categoryId: string; amountCents: Cents }[]): Map<string, Cents> {
   const totals = new Map<string, Cents>();
@@ -123,6 +117,11 @@ function outflow(net: Cents | undefined): Cents {
 }
 
 /**
+ * Situacao do orcamento por categoria. Uma linha por entrada de `budgets`, na
+ * ordem recebida (o schema garante categoria unica por periodo; duplicata aqui e
+ * responsabilidade de quem chama). Categoria que so aparece em `spent` ou
+ * `upcoming`, sem orcamento, nao gera linha.
+ *
  * `spent` e `upcoming` seguem a convencao de sinal do projeto (saida negativa) e cada
  * um passa por `max(0, -soma)` SEPARADO: um estorno no realizado nao come o previsto.
  */

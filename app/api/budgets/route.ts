@@ -10,8 +10,9 @@ import { budgetsQuerySchema, saveBudgetsBodySchema } from './schemas';
  * GET /api/budgets?period=YYYY-MM
  *
  * Orçamento do mês: `plannedCents` gravado, `spentCents` REALIZADO (`posted`),
- * `upcomingCents` PREVISTO (`planned`), semáforo e uso. Tudo vem de
- * `budgetStatus` (CONTRACTS §10); esta rota não calcula nada.
+ * `upcomingCents` PREVISTO (`planned`), `expectedCents` = os dois somados, e o uso, a
+ * folga (`remainingCents`) e o semáforo calculados sobre o esperado (decisão 10b).
+ * Tudo vem de `budgetStatus` (CONTRACTS §10); esta rota não calcula nada.
  */
 export async function GET(request: Request) {
   try {

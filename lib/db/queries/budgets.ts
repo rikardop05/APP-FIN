@@ -247,7 +247,8 @@ async function rootNameMap(householdId: string, ids: string[]): Promise<Map<stri
 }
 
 /**
- * Orçamentos estourados no mês — o que o painel (T-208) consome.
+ * Orçamentos estourados no mês, ou a caminho (o vermelho mede o esperado, decisão 10b) —
+ * o que o painel (T-208) consome.
  *
  * **Estourado = `light === 'red'` devolvido por `budgetStatus`, NÃO uma
  * comparação refeita.** Uma segunda comparação divergiria do semáforo da tela de
