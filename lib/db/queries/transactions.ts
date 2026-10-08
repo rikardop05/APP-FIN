@@ -17,7 +17,6 @@ import { COUNTED_STATUSES } from './counted-statuses';
 import { reconcileManualPosting } from './manual-reconcile';
 import type {
   CategoryNature,
-  MatchType,
   TransactionKind,
   TransactionStatus,
 } from '@/lib/db';
@@ -25,7 +24,6 @@ import { billingPeriodFor } from '@/lib/finance/billing';
 import { toCompetence } from '@/lib/date';
 import {
   accounts,
-  categorizationRules,
   categories,
   creditCards,
   members,
@@ -106,14 +104,6 @@ export type CategorizationBatchMutation = {
   transactionIds: string[];
   categoryId: string;
   memberId: string | null;
-};
-
-export type RuleMutation = {
-  pattern: string;
-  matchType: MatchType;
-  categoryId: string;
-  memberId: string | null;
-  priority: number;
 };
 
 export type RuleSource = {
@@ -543,17 +533,4 @@ export async function createManualTransaction(
     }
     return row.id;
   });
-}
-
-export async function createCategorizationRule(
-  householdId: string,
-  input: RuleMutation,
-): Promise<string> {
-  await ensureCategoryAndMemberReferences(householdId, input.categoryId, input.memberId);
-  const [row] = await db
-    .insert(categorizationRules)
-    .values({ householdId, ...input, active: true, hits: 0 })
-    .returning({ id: categorizationRules.id });
-  if (!row) throw new Error('Não foi possível criar a regra.');
-  return row.id;
 }
