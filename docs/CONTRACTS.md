@@ -937,7 +937,7 @@ function buildImportPreview(input: {
     occurredOn: IsoDate; competence: Competence; description: string; rawDescription: string
     amountCents: Cents; dedupeHash: string
     suggestedCategoryId: string | null; suggestedMemberId: string | null
-    state: 'new' | 'duplicate' | 'installment_first' | 'installment_part'
+    state: 'new' | 'duplicate' | 'installment_first' | 'installment_part' | 'credit_card_payment' | 'informational'
     installment: { current: number; total: number } | null
   }[]
   summary: {
@@ -1018,10 +1018,18 @@ function finalizeImport(input: FinalizeInput): {
     ref: number; description: string; totalCents: Cents
     installmentsCount: number; firstCompetence: Competence; categoryId: string | null
   }[]
-  skipped: { index: number; reason: 'excluded_by_user' | 'duplicate' }[]
+  skipped: { index: number; reason: 'excluded_by_user' | 'duplicate' | 'informational' }[]
   totals: { includedCents: Cents; reportedCents: Cents | null; differenceCents: Cents | null; matches: boolean | null }
 }
 ```
+
+**Linha informativa (decisão 8, 2026-10-07).** Valor CONFIRMADO igual a zero (ex.: `ANUIDADE DIFERENCIADA` de R$ 0,00)
+não é despesa nem receita: o `FinalizeResult` a coloca em `skipped` com `reason: 'informational'`, nunca em
+`transactions`, e a parcela impressa ao lado dela não gera plano. No preview ela é `state: 'informational'` e chega
+**desmarcada**, com o rótulo "Informativa"; o usuário só a inclui se corrigir o valor (aí deixa de ser zero).
+`rowsImported` do lote = linhas confirmadas − TODO o `skipped` (excluídas, duplicatas e informativas). A regra de
+`kind` (`amountCents < 0 ? 'expense' : 'income'`) **recusa zero**: lança erro, porque zero chegando ali seria uma
+receita de R$ 0,00 inventada.
 
 **Invariante de teste obrigatória:** editar a data de uma linha muda sua `competence` e seu `dedupeHash`; editar o valor muda o hash e o total do lote; excluir uma linha a remove de `transactions` e a lista em `skipped`.
 
