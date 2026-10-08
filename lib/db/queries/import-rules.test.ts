@@ -221,3 +221,39 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('importacao grava a regr
     }
   });
 });
+
+describe.skipIf(process.env.DATABASE_URL === undefined)('importacao: rastro da regra respeita natureza x sinal', () => {
+  it('regra de categoria de receita e pulada numa despesa; a proxima compativel leva o rastro', async () => {
+    const f = await createFixture('natureza');
+    try {
+      const [salario] = await f.db
+        .insert(f.schema.categories)
+        .values({ householdId: f.householdId, name: 'Salario', nature: 'income' })
+        .returning({ id: f.schema.categories.id });
+      if (salario === undefined) throw new Error('Categoria de receita nao foi criada.');
+      // Prioridade 0 vence a regra da fixture (1), mas a categoria e de receita.
+      const [regraReceita] = await f.db
+        .insert(f.schema.categorizationRules)
+        .values({ householdId: f.householdId, pattern: 'irmaos boa', matchType: 'contains', categoryId: salario.id, priority: 0, hits: 0 })
+        .returning({ id: f.schema.categorizationRules.id });
+      if (regraReceita === undefined) throw new Error('Regra de receita nao foi criada.');
+
+      const { commitImport } = await import('./import');
+      await commitImport(
+        f.householdId,
+        input(f.cardId, 'f'.repeat(63) + '5', [
+          // Despesa aceita em Mercado: a regra de receita nao cabe, a de Mercado leva.
+          { index: 0, description: 'IRMAOS BOA', amountCents: cents(-1000), categoryId: f.mercadoId },
+          // Entrada aceita em Salario: a regra de receita cabe e vence pela prioridade.
+          { index: 1, description: 'IRMAOS BOA', amountCents: cents(2000), categoryId: salario.id },
+        ]),
+      );
+
+      const rows = await f.transactions();
+      expect(rows.map((row) => row.categoryRuleId)).toEqual([f.ruleId, regraReceita.id]);
+      expect(await f.hits()).toBe(6);
+    } finally {
+      await f.cleanup();
+    }
+  });
+});
