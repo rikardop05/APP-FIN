@@ -331,7 +331,7 @@ describe.skipIf(!process.env.DATABASE_URL)('auto-categorization (integração)',
       }
     });
 
-    it('parcela categorizada por regra, com categoria diferente, também fica (só segue quem estava vazio ou igual ao plano)', async () => {
+    it('parcela categorizada por REGRA acompanha o plano, mesmo em outra categoria (só a mão é protegida)', async () => {
       const m = await modules();
       const s = await seed(m);
       try {
@@ -343,14 +343,40 @@ describe.skipIf(!process.env.DATABASE_URL)('auto-categorization (integração)',
           .set({ categoryId: s.presentes, categoryRuleId: ruleId })
           .where(and(eq(m.schema.transactions.id, first), eq(m.schema.transactions.householdId, s.householdId)));
 
-        await m.auto.setInstallmentPlanCategory(s.householdId, planId, s.eletronicos);
+        const updated = await m.auto.setInstallmentPlanCategory(s.householdId, planId, s.eletronicos);
 
+        expect(updated).toBe(4);
         expect(await categoriesOf(m, s.householdId, installmentIds)).toEqual([
-          s.presentes,
+          s.eletronicos,
           s.eletronicos,
           s.eletronicos,
           s.eletronicos,
         ]);
+      } finally {
+        await cleanup(m, s.householdId);
+      }
+    });
+
+    it('reaplicar a mesma categoria não muda nada nem apaga o rastro da regra', async () => {
+      const m = await modules();
+      const s = await seed(m);
+      try {
+        const ruleId = await s.rule('TV', s.eletronicos);
+        const { planId, installmentIds } = await s.plan(null);
+        const first = installmentIds[0] ?? '';
+        await m.db
+          .update(m.schema.transactions)
+          .set({ categoryId: s.eletronicos, categoryRuleId: ruleId })
+          .where(and(eq(m.schema.transactions.id, first), eq(m.schema.transactions.householdId, s.householdId)));
+        // 1a vez: so as 3 vazias mudam; a da regra ja esta na categoria.
+        expect(await m.auto.setInstallmentPlanCategory(s.householdId, planId, s.eletronicos)).toBe(3);
+        expect(await m.auto.setInstallmentPlanCategory(s.householdId, planId, s.eletronicos)).toBe(0);
+
+        const [row] = await m.db
+          .select({ ruleId: m.schema.transactions.categoryRuleId })
+          .from(m.schema.transactions)
+          .where(and(eq(m.schema.transactions.id, first), eq(m.schema.transactions.householdId, s.householdId)));
+        expect(row?.ruleId).toBe(ruleId);
       } finally {
         await cleanup(m, s.householdId);
       }
@@ -429,6 +455,23 @@ describe.skipIf(!process.env.DATABASE_URL)('auto-categorization (integração)',
       } finally {
         await cleanup(m, s.householdId);
         await cleanup(m, other.householdId);
+      }
+    });
+
+    it('recusa categoria de receita (parcelamento é despesa)', async () => {
+      const m = await modules();
+      const s = await seed(m);
+      try {
+        const [income] = await m.db
+          .insert(m.schema.categories)
+          .values({ householdId: s.householdId, name: 'Salário teste', parentId: null, nature: 'income' })
+          .returning({ id: m.schema.categories.id });
+        const { planId } = await s.plan(null);
+        await expect(
+          m.auto.setInstallmentPlanCategory(s.householdId, planId, income?.id ?? ''),
+        ).rejects.toBeInstanceOf(m.auto.InvalidPlanCategoryError);
+      } finally {
+        await cleanup(m, s.householdId);
       }
     });
 

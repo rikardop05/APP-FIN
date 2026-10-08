@@ -1,4 +1,4 @@
-import { and, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   categories,
@@ -28,7 +28,10 @@ export class InstallmentPlanNotFoundError extends Error {
   }
 }
 
-/** A categoria nao pertence ao household, ou tem filhas (nao e folha). */
+/**
+ * A categoria nao pertence ao household, tem filhas (nao e folha) ou e de
+ * receita (parcelamento e despesa).
+ */
 export class InvalidPlanCategoryError extends Error {
   constructor() {
     super('Escolha uma categoria válida, que não tenha subcategorias.');
@@ -67,17 +70,17 @@ export async function incrementRuleHits(
   return updated;
 }
 
-async function ensureLeafCategory(
+async function ensureExpenseLeafCategory(
   executor: Executor,
   householdId: string,
   categoryId: string,
 ): Promise<void> {
   const [row] = await executor
-    .select({ id: categories.id })
+    .select({ nature: categories.nature })
     .from(categories)
     .where(and(eq(categories.id, categoryId), eq(categories.householdId, householdId)))
     .limit(1);
-  if (!row) throw new InvalidPlanCategoryError();
+  if (!row || row.nature === 'income') throw new InvalidPlanCategoryError();
 
   const [child] = await executor
     .select({ id: categories.id })
@@ -94,14 +97,16 @@ async function ensureLeafCategory(
  *
  * ## Regra de propagacao
  *
- * Uma parcela **acompanha o plano** quando a categoria dela e `null` ou e igual
- * a categoria que o plano tinha ANTES desta chamada. So essas recebem a nova.
- * Parcela com qualquer outra categoria foi decidida a parte — a mao, ou por uma
- * regra que caiu em categoria diferente — e fica como esta.
+ * Uma parcela **acompanha o plano** quando a categoria dela e `null`, e igual
+ * a categoria que o plano tinha ANTES desta chamada, ou veio de uma regra
+ * (`category_rule_id` preenchido). So essas recebem a nova. Protegida e so a
+ * categoria posta a mao: diferente da do plano e sem rastro de regra.
  *
  * Consequencias, de proposito:
- * - Troca A -> B: parcelas em A (que seguiam o plano) vao para B; a parcela
- *   posta a mao em C fica em C.
+ * - Troca A -> B: parcelas em A (que seguiam o plano) e as categorizadas por
+ *   regra vao para B; a parcela posta a mao em C fica em C.
+ * - Parcela que ja esta na categoria nova nao e tocada (nem perde o rastro da
+ *   regra) e nao conta: reaplicar A -> A devolve 0.
  * - Parcela posta a mao na MESMA categoria do plano e indistinguivel de uma que
  *   seguia o plano, e passa a segui-lo. Nao ha perda: no momento ela concordava.
  * - `categoryId = null` limpa o plano e as parcelas que o seguiam.
@@ -126,17 +131,18 @@ export async function setInstallmentPlanCategory(
       .limit(1);
     if (!plan) throw new InstallmentPlanNotFoundError();
 
-    if (categoryId !== null) await ensureLeafCategory(tx, householdId, categoryId);
+    if (categoryId !== null) await ensureExpenseLeafCategory(tx, householdId, categoryId);
 
     await tx
       .update(installmentPlans)
       .set({ categoryId })
       .where(and(eq(installmentPlans.id, planId), eq(installmentPlans.householdId, householdId)));
 
-    const followsPlan =
-      plan.categoryId === null
-        ? isNull(transactions.categoryId)
-        : or(isNull(transactions.categoryId), eq(transactions.categoryId, plan.categoryId));
+    const followsPlan = or(
+      isNull(transactions.categoryId),
+      isNotNull(transactions.categoryRuleId),
+      plan.categoryId === null ? undefined : eq(transactions.categoryId, plan.categoryId),
+    );
 
     const changed = await tx
       .update(transactions)
@@ -146,13 +152,10 @@ export async function setInstallmentPlanCategory(
           eq(transactions.householdId, householdId),
           eq(transactions.installmentPlanId, planId),
           followsPlan,
-          // Ja na categoria nova (e sem rastro de regra): nada a fazer, nao conta.
-          or(
-            categoryId === null
-              ? sql`${transactions.categoryId} is not null`
-              : sql`${transactions.categoryId} is distinct from ${categoryId}`,
-            sql`${transactions.categoryRuleId} is not null`,
-          ),
+          // Ja na categoria nova: nada a fazer, nao conta.
+          categoryId === null
+            ? isNotNull(transactions.categoryId)
+            : sql`${transactions.categoryId} is distinct from ${categoryId}`,
         ),
       )
       .returning({ id: transactions.id });
