@@ -147,3 +147,34 @@ export const ruleApplicationResultSchema = z.object({
 export type RuleApplicationProposal = z.infer<typeof ruleApplicationProposalSchema>;
 export type RuleApplicationPreview = z.infer<typeof ruleApplicationPreviewSchema>;
 export type RuleApplicationResult = z.infer<typeof ruleApplicationResultSchema>;
+
+/** Grupo da tela "Revisar sem categoria" (`GET /api/transactions/review`, F4). */
+export const reviewGroupSchema = z.object({
+  key: z.string(),
+  pattern: z.string(),
+  direction: z.enum(['out', 'in']),
+  transactionIds: z.array(z.string().uuid()),
+  count: z.number().int().positive(),
+  totalCents: centsSchema,
+  sampleDescriptions: z.array(z.string()),
+  ruleId: z.string().uuid().nullable(),
+  suggestedCategoryId: z.string().uuid().nullable(),
+  suggestedCategoryName: z.string().nullable(),
+});
+
+export const reviewResponseSchema = z.object({
+  groups: z.array(reviewGroupSchema),
+  categories: z.array(categorySchema),
+});
+
+/** Resposta de `POST /api/transactions/review`. */
+export const reviewResultSchema = z.object({
+  categorized: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+  propagated: z.number().int().nonnegative(),
+  ruleId: z.string().uuid().nullable(),
+});
+
+export type ReviewGroup = z.infer<typeof reviewGroupSchema>;
+export type ReviewCategory = z.infer<typeof categorySchema>;
+export type ReviewResult = z.infer<typeof reviewResultSchema>;
