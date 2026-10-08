@@ -140,9 +140,10 @@ interface Rule {
 }
 
 /**
- * `priority` pode ser NEGATIVA (adendo de 2026-10-08, F4): a regra criada na revisão (§6.5) entra no topo com
- * priority = menor atual − 1. A ordem continua priority asc, id asc. A entrada da API de regras segue exigindo
- * 0..100000, e a reordenação da tela regrava 0..n−1 — o negativo nasce só na revisão e some na próxima reordenação.
+ * `priority` pode ser NEGATIVA (adendo de 2026-10-08, F4/F5): toda regra criada pelo usuário FORA da tela de regras
+ * — revisão em grupos (§6.5), "criar regra a partir do lançamento" e oferta de regra (§6.6) — entra no topo com
+ * priority = menor atual − 1, via createUserRule. A ordem continua priority asc, id asc. A tela de regras
+ * (/api/rules) segue exigindo 0..100000 na entrada, e a reordenação regrava 0..n−1 — o negativo some ali.
  */
 
 /** Primeira regra que casa, por priority asc, id asc como desempate. Regex inválida é ignorada, nunca lança. */
@@ -318,7 +319,11 @@ function previewRuleApplication(householdId: string, ruleId: string | null, limi
  * items vazio → { 0, 0, 0 }. skipped = items.length − applied (item repetido conta como pulado).
  * propagated = parcelas que receberam a categoria pelo plano.
  */
-function applyRuleProposals(householdId: string, items: readonly RuleApplicationItem[]): Promise<RuleApplicationResult>
+function applyRuleProposals(
+  householdId: string,
+  items: readonly RuleApplicationItem[],
+  executor?: typeof db | Tx,  // F5: a transação de quem chama (aceite da oferta, §6.6); dentro dela vira savepoint
+): Promise<RuleApplicationResult>
 ```
 
 **Rota — `POST /api/rules/apply`** (`app/api/rules/apply/route.ts`, corpo em `applyRulesSchema`):
@@ -380,9 +385,10 @@ function listReviewGroups(householdId: string): Promise<ReviewGroup[]>
  * Numa transação: confere a categoria (folha do household); trava as linhas (FOR UPDATE) que ainda valem
  * (household, sem categoria, cortes do §6.3, kind ∈ {expense, income}, amount ≠ 0); recusa o grupo inteiro se a
  * categoria não cabe em alguma (ReviewCategoryKindError) antes de gravar; se nenhuma vale mais, devolve tudo como
- * skipped e NÃO cria a regra. Com newRulePattern (aparado, não vazio) cria regra 'contains', ativa, hits 0, no TOPO
- * (priority = menor − 1, ver §6). Rastro: category_rule_id = regra vencedora (matchRule, já com a regra nova) se, e
- * só se, ela aponta para a categoria escolhida — linha que o padrão editado não casa fica sem rastro. hits soma só
+ * skipped e NÃO cria a regra. Com newRulePattern (aparado, não vazio) cria regra 'contains', sem membro, pelo
+ * createUserRule (§6.6: topo, priority = menor − 1). Rastro: category_rule_id = regra vencedora (matchRule, já com a
+ * regra nova, entre as regras cuja categoria cabe no kind da linha — categoryFitsKind) se, e só se, ela aponta para a
+ * categoria escolhida — linha que o padrão editado não casa fica sem rastro. hits soma só
  * linha `posted` com rastro (incrementRuleHits na mesma transação). Parcela leva a categoria ao plano sem
  * categoria e às parcelas sem categoria (propagateToUncategorizedPlan, §6.3).
  */
@@ -395,6 +401,67 @@ HTTP (erros como `{ error: string }` em pt-BR):
 |---|---|---|---|
 | `GET /api/transactions/review` | — | `{ groups: ReviewGroup[], categories: CategoryFilterOption[] }` (`{ id, name, parentId, nature }`) | 401, 500 |
 | `POST /api/transactions/review` | `reviewGroupConfirmationSchema`: `transactionIds` uuid, 1..`APPLY_RULES_LIMIT`, sem repetição; `categoryId` uuid; `newRulePattern` string aparada 1..120 ou null | `ReviewGroupResult` | 400 corpo inválido, `ReviewCategoryInvalidError` ou `ReviewCategoryKindError` (com a mensagem do erro); 401; 500 |
+
+### 6.6 Regra criada pelo usuário e oferta de regra — `/lib/db/queries/user-rules.ts` (F5, 2026-10-08)
+
+Política ÚNICA para regra criada fora da tela de regras: entra no TOPO da ordem (§6). `confirmReviewGroup` (§6.5),
+`POST /api/transactions/[id]/rule` e o aceite da oferta passam todos por `createUserRule`.
+
+```ts
+type Executor = typeof db | Tx
+type UserRuleInput = { pattern: string; matchType: MatchType; categoryId: string; memberId: string | null }
+
+/** Categoria fora do household ou com subcategorias, ou responsável de outro household. */
+class InvalidUserRuleError extends Error
+/** O padrão (editado) não casa as linhas que o usuário categorizou. */
+class RuleOfferPatternError extends Error
+/** As linhas da oferta não estão mais todas categorizadas, na mesma categoria. */
+class RuleOfferNoLongerValidError extends Error
+
+/**
+ * Confere as referências (categoria folha do household; membro, quando há, do household → InvalidUserRuleError)
+ * e cria a regra com priority = min(priority do household) − 1 (sem regras: 0), hits 0, ativa. Devolve o id.
+ * Sem trava: duas criações simultâneas podem empatar a priority; o desempate por id (§6) mantém a ordem determinística.
+ */
+function createUserRule(householdId: string, input: UserRuleInput, executor?: Executor): Promise<string>
+
+type RuleOffer = {
+  pattern: string
+  categoryId: string; categoryName: string  // da categoria das linhas de origem
+  matchingIds: string[]                     // outras linhas sem categoria que a regra pegaria, até o limite; o aceite grava estas
+  total: number                             // quantas pegaria ao todo (pode passar do limite)
+}
+
+/**
+ * Oferta para as linhas recém-categorizadas à mão (ruleOfferFor, §6.1), ou null. Toda linha de origem precisa ser do
+ * household e ter categoria — faltou uma, null. Candidatas = os cortes de eligibleForRules (§6.3).
+ * options.pattern = padrão editado no diálogo: o efeito é recalculado para ele; padrão que não casa as origens → null.
+ * options.limit (default APPLY_RULES_LIMIT) corta matchingIds; total conta todas. Só leitura.
+ */
+function getRuleOffer(householdId: string, transactionIds: readonly string[],
+  options?: { pattern?: string; limit?: number }): Promise<RuleOffer | null>
+
+/**
+ * Numa transação: relê as origens (todas do household, todas categorizadas, numa MESMA categoria, senão
+ * RuleOfferNoLongerValidError); padrão aparado vazio ou que não casa TODAS as origens → RuleOfferPatternError.
+ * Cria a regra ('contains', sem membro, categoria das origens) por createUserRule e grava EXATAMENTE matchingIds por
+ * applyRuleProposals(…, tx), que confere cada linha de novo e pula o que mudou (§6.3). Erro → nada gravado.
+ */
+function acceptRuleOffer(householdId: string,
+  input: { transactionIds: string[]; pattern: string; matchingIds: string[] }
+): Promise<RuleApplicationResult & { ruleId: string }>
+```
+
+HTTP (erros como `{ error: string }` em pt-BR; quando há classe de erro, a mensagem é a dela):
+
+| rota | corpo | sucesso | erros |
+|---|---|---|---|
+| `POST /api/rules/offer` (prévia) | `ruleOfferSchema`: `{ dryRun: true, transactionIds: uuid[1..APPLY_RULES_LIMIT], pattern?: string aparada 1..120 }` | 200 `{ offer: RuleOffer \| null }` | 400 corpo inválido · 401 · 500 |
+| `POST /api/rules/offer` (aceite) | `{ dryRun: false, transactionIds: uuid[1..APPLY_RULES_LIMIT], pattern: string aparada 1..120, matchingIds: uuid[0..APPLY_RULES_LIMIT] }` | 201 `RuleApplicationResult & { ruleId }` | 400 corpo inválido ou `RuleOfferPatternError` · 409 `RuleOfferNoLongerValidError` ou `InvalidUserRuleError` (a categoria das origens deixou de ser folha) · 401 · 500 |
+| `POST /api/transactions/[id]/rule` | `ruleBodySchema`: `{ pattern 1..120, matchType = 'contains', categoryId, memberId = null, priority? }` | 201 `{ id }` | 400 id ou corpo inválido, ou `InvalidUserRuleError` · 404 lançamento de outro household · 401 · 500 |
+
+> `priority` do corpo de `POST /api/transactions/[id]/rule` **não vale mais** (F5): o schema ainda a aceita
+> (0..100000, default 100) por compatibilidade, mas a rota a ignora e a regra entra no topo via `createUserRule`.
 
 ## 7. Deduplicação — `/lib/finance/dedupe.ts`
 
