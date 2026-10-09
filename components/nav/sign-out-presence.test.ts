@@ -31,8 +31,8 @@ describe('layout das telas autenticadas', () => {
   const layout = read('app/(app)/layout.tsx');
 
   it('monta a barra lateral (desktop) e a inferior (celular) para TODAS as rotas do grupo', () => {
-    expect(layout).toContain('<SidebarNav />');
-    expect(layout).toContain('<BottomNav />');
+    expect(layout).toContain('<SidebarNav theme={theme} />');
+    expect(layout).toContain('<BottomNav theme={theme} />');
   });
 
   it('só existe um layout dentro de app/(app): nenhuma subárvore escapa do shell com a navegação', () => {

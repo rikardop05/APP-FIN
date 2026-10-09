@@ -188,6 +188,7 @@ export default async function DashboardPage() {
         lastCommittedCompetence: commitment.lastCommittedCompetence,
         windowEnd,
         breakdown: commitment.breakdown,
+        overdueCompetences: [...commitment.overdueCompetences],
         byCompetence: commitment.byCompetence.map((entry) => ({
           competence: entry.competence,
           totalCents: entry.totalCents,

@@ -16,7 +16,7 @@ import {
   type OverdueRecurringListItem,
   type UncategorizedItem,
 } from './pendencias-list';
-import { monthName, nextMonthCommitment, pendingSummary } from './presentation';
+import { monthName, pendingSummary } from './presentation';
 import { ProjectedBalance, type ProjectedState } from './projected-balance';
 import { SpendingByCategory } from './spending-by-category';
 
@@ -45,7 +45,14 @@ type DashboardScreenProps = {
     lastCommittedCompetence: Competence | null;
     windowEnd: Competence;
     /** `futureCommitment().breakdown`: as três linhas fecham exatamente com `totalCents`. */
-    breakdown: { currentStatementCents: Cents; laterInstallmentsCents: Cents; laterPurchasesCents: Cents };
+    breakdown: {
+      overdueUnpaidCents: Cents;
+      currentStatementCents: Cents;
+      laterInstallmentsCents: Cents;
+      laterPurchasesCents: Cents;
+    };
+    /** `futureCommitment().overdueCompetences`: os meses das faturas vencidas e não pagas. */
+    overdueCompetences: Competence[];
     /** `futureCommitment().byCompetence`: alimenta os canhotos presos e o "mês que vem". */
     byCompetence: CommittedMonth[];
   };
@@ -105,30 +112,29 @@ export function DashboardScreen({
         incomeCents={kpis.incomeCents}
         expenseCents={kpis.expenseCents}
         surplusCents={kpis.surplusCents}
+        contributionsCents={kpis.contributionsCents}
+        plannedContributionCents={kpis.plannedContributionCents}
         projected={projected}
-        nextMonth={nextMonthCommitment(commitment.byCompetence)}
         pending={pending}
         pendingUnavailable={pendencias.overBudget === null}
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <CommittedCard
-          competence={competence}
+      <CommittedCard
+        competence={competence}
           windowEnd={commitment.windowEnd}
           totalCents={commitment.totalCents}
           lastCommittedCompetence={commitment.lastCommittedCompetence}
           breakdown={commitment.breakdown}
+          overdueCompetences={commitment.overdueCompetences}
           byCompetence={commitment.byCompetence}
         />
-        <ProjectedBalance state={projected} />
-      </div>
+
+      <ProjectedBalance state={projected} />
 
       <MonthSummary
         competence={competence}
         incomeCents={kpis.incomeCents}
         expenseCents={kpis.expenseCents}
-        contributionsCents={kpis.contributionsCents}
-        plannedContributionCents={kpis.plannedContributionCents}
         savingsRateBp={kpis.savingsRateBp}
         essentialShareBp={kpis.essentialShareBp}
       />

@@ -108,10 +108,10 @@ describe('barras animam transform, não width/height', () => {
 });
 
 describe('Lançamentos: célula truncada ganha o texto completo', () => {
-  it('cartão do celular: descrição e origem truncadas têm title', () => {
+  it('canhoto: descrição e origem truncadas têm title', () => {
     const list = read('components/transactions/transaction-list.tsx');
-    expect(list).toContain('<p className="truncate font-medium" title={row.description}>');
-    expect(list).toContain('<dd className="truncate" title={sourceLabel(row)}>');
+    expect(list).toContain('<span className="truncate" title={title}>{title}</span>');
+    expect(list).toContain('title={sourceLabel(row)}');
   });
 
   it('prévia de regras e revisão: o trecho truncado tem title', () => {

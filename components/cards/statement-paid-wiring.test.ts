@@ -34,4 +34,12 @@ describe('fatura paga na tela de cartões', () => {
   it('rótulo de mês do gráfico na escala (12px), sem 10px', () => {
     expect(read('components/cards/commitment/commitment-section.tsx')).not.toContain('text-[' + '10px]');
   });
+
+  it('a fatura mostra UM estado só (nunca Aberta junto de Vencida) e o total devido sem sinal', () => {
+    const list = read('components/cards/statement-list.tsx');
+    expect(list).toContain('if (overdue) return <Badge');
+    expect(list).not.toContain('{overdue ? <Badge');
+    expect(list).not.toContain('<Money value={statement.computedTotalCents} />');
+    expect(list).not.toContain('<Money value={statement.reportedTotalCents} />');
+  });
 });

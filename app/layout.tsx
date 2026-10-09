@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
+import { cookies } from 'next/headers';
 import localFont from 'next/font/local';
 import { PwaRegister } from '@/components/pwa/pwa-register';
+import { THEME_COOKIE, THEME_COLOR, resolveTheme } from '@/components/nav/theme';
 import './globals.css';
 
 /**
@@ -36,25 +38,30 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: 'APPFIN', statusBarStyle: 'default' },
 };
 
-export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  // Ocupa a tela inteira do iPhone (inclusive a faixa do indicador de início), para o
-  // BottomNav poder somar `env(safe-area-inset-bottom)`: sem `cover` o env() vale 0.
-  viewportFit: 'cover',
-  // A barra do navegador acompanha o papel (claro) ou a tinta (escuro) do mundo.
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#F1F6F4' },
-    { media: '(prefers-color-scheme: dark)', color: '#0D1717' },
-  ],
-  colorScheme: 'light dark',
-};
+/**
+ * Viewport por pedido (lê o cookie de tema): a barra do navegador acompanha a mesa (escuro, o
+ * padrão) ou o papel (claro, por escolha da pessoa).
+ */
+export async function generateViewport(): Promise<Viewport> {
+  const theme = resolveTheme((await cookies()).get(THEME_COOKIE)?.value);
+  return {
+    width: 'device-width',
+    initialScale: 1,
+    // Ocupa a tela inteira do iPhone (inclusive a faixa do indicador de início), para o
+    // BottomNav poder somar `env(safe-area-inset-bottom)`: sem `cover` o env() vale 0.
+    viewportFit: 'cover',
+    themeColor: THEME_COLOR[theme],
+    colorScheme: theme,
+  };
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // O tema vem do cookie, lido no servidor: a página já chega no tema certo, sem piscar.
+  const theme = resolveTheme((await cookies()).get(THEME_COOKIE)?.value);
   return (
-    <html lang="pt-BR" className={`${uiFont.variable} ${numeralFont.variable}`}>
+    <html lang="pt-BR" data-theme={theme} className={`${uiFont.variable} ${numeralFont.variable}`}>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         <PwaRegister />
         {children}

@@ -14,6 +14,8 @@ type CanhotoProps = {
   stub?: ReactNode;
   /** Estados em selo com letra (um ou mais). */
   marcas?: Array<{ label: string; tone?: SeloTone; letter?: string }>;
+  /** Um estado só (atalho de `marcas`). */
+  marca?: { label: string; tone?: SeloTone; letter?: string };
   /** Canhoto ainda PRESO (parcela futura): atenuado e com borda tracejada. */
   preso?: boolean;
   /** Valor, alinhado à direita (use `<Money />`). */
@@ -36,7 +38,8 @@ export function Canhoto({
   id,
   ariaLabel,
   stub,
-  marcas,
+  marcas: marcasProp,
+  marca,
   preso = false,
   valor,
   destaque,
@@ -44,6 +47,7 @@ export function Canhoto({
   children,
   className,
 }: CanhotoProps) {
+  const marcas = marca ? [marca, ...(marcasProp ?? [])] : marcasProp;
   return (
     <Tag
       id={id}

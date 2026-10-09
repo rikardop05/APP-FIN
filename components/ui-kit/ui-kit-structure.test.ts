@@ -53,12 +53,13 @@ describe('estrutura do ui-kit e do shell', () => {
     expect(layout).toContain("from 'next/font/local'");
     expect(layout).toContain('--font-ui');
     expect(layout).toContain('--font-numeral');
-    expect(layout).toContain('prefers-color-scheme: dark');
+    expect(layout).toContain('data-theme={theme}');
+    expect(layout).toContain('resolveTheme');
   });
 
-  it('o Tailwind segue o sistema no escuro e tem cantos retos', () => {
+  it('o Tailwind usa o atributo de tema (escuro padrão) e tem cantos retos', () => {
     const config = read('tailwind.config.ts');
-    expect(config).toContain("darkMode: 'media'");
+    expect(config).toContain('data-theme="light"');
     const radius = /borderRadius: {([^}]*)}/.exec(config)?.[1] ?? '';
     expect(radius).not.toBe('');
     expect(radius).not.toMatch(/: '(?!0px)/);
@@ -97,7 +98,7 @@ describe('Token, Not Palette', () => {
   it('o guilhochê lê o token (máscara), sem cor fixa no CSS', () => {
     const css = read('app/globals.css');
     expect(css).not.toMatch(/2E8C7A|5FD0BA/i);
-    expect(css).toContain('hsl(var(--primary) / 0.22)');
+    expect(css).toContain('hsl(var(--primary) / var(--guilhoche-paper))');
     expect(css).toContain('mask-image');
   });
 
@@ -110,5 +111,36 @@ describe('Token, Not Palette', () => {
   it('PAGO é verde: o CSS não diz que o vermelho é para PAGO', () => {
     expect(read('app/globals.css')).not.toMatch(/divergência e PAGO/);
     expect(read('tailwind.config.ts')).not.toMatch(/divergência e PAGO/);
+  });
+});
+
+describe('tema escuro por padrão e Lançamentos em canhotos', () => {
+  it('o servidor lê o cookie de tema e o padrão é o escuro', async () => {
+    const { resolveTheme } = await import('@/components/nav/theme');
+    expect(resolveTheme(undefined)).toBe('dark');
+    expect(resolveTheme('qualquer')).toBe('dark');
+    expect(resolveTheme('light')).toBe('light');
+    expect(read('app/layout.tsx')).toContain('THEME_COOKIE');
+  });
+
+  it('o seletor de tema está na lombada e no painel Mais', () => {
+    expect(read('components/nav/sidebar-nav.tsx')).toContain('<ThemeToggle variant="sidebar" initialTheme={theme} />');
+    expect(read('components/nav/bottom-nav.tsx')).toContain('<ThemeToggle variant="panel" initialTheme={theme} />');
+  });
+
+  it('o CSS não segue o sistema: sem prefers-color-scheme', () => {
+    expect(read('app/globals.css')).not.toContain('prefers-color-scheme');
+  });
+
+  it('a lombada marca o ativo só pelo preenchimento, sem faixa lateral', () => {
+    expect(read('components/nav/sidebar-nav.tsx')).not.toMatch(/border-l-/);
+  });
+
+  it('Lançamentos usa Canhoto, com a parcela no talão e as ações no editor aberto', () => {
+    const list = read('components/transactions/transaction-list.tsx');
+    expect(list).toContain('<Canhoto');
+    expect(list).toContain('stripInstallmentSuffix');
+    expect(list).toContain('footer={');
+    expect(list).not.toContain('<table');
   });
 });

@@ -141,11 +141,11 @@ components:
 
 **Creative North Star: "O Carnê de Prestações"**
 
-O futuro comprometido é um carnê. Cada lançamento é um canhoto, cada parcela futura é um canhoto ainda preso, e a interface inteira é papel de carnê: verde-água muito claro, tinta verde-escura quase preta, réguas de 1px e cantos retos. O mundo foi construído primeiro na revisão da fatura (Importar) e cobre todas as telas autenticadas: Painel, Lançamentos, Cartões, Fluxo, Orçamento, Metas, Investimentos e Config.
+O futuro comprometido é um carnê. Cada lançamento é um canhoto, cada parcela futura é um canhoto ainda preso, e a interface inteira é papel de carnê: uma mesa de tinta verde-escura com o canhoto em papel um pouco mais claro sobre ela (tema ESCURO, o padrão), ou, por escolha da pessoa, papel verde-água muito claro sobre tinta quase preta (tema claro); réguas de 1px e cantos retos. O mundo foi construído primeiro na revisão da fatura (Importar) e cobre todas as telas autenticadas: Painel, Lançamentos, Cartões, Fluxo, Orçamento, Metas, Investimentos e Config.
 
 A densidade é de documento de trabalho, não de app de banco: linhas de 44px, texto corrido em 14px, rótulos em 12px, valores em numerais condensados tabulares que alinham em coluna. A identidade mora em poucos lugares e é impressa, não iluminada: o guilhochê (fundo de segurança) só nas áreas de identidade, o picote tracejado entre canhoto e corpo, e o carimbo de moldura dupla para CONFERE e DIVERGE. O vermelho é tinta de carimbo e nunca marca despesa; a direção do dinheiro vem do sinal.
 
-O modo escuro é automático (`prefers-color-scheme`), sem classe `dark`: os mesmos tokens trocam para uma mesa de tinta profunda com papel verde-claro como texto. O contraste de texto (4,5:1 ou mais) é verificado por teste em `components/ui-kit/tokens.test.ts`. A interface rejeita a cara de fintech (roxo, neon, cartão brilhante) e a de ERP frio.
+O tema ESCURO é o padrão para todos, independente do sistema (decisão do Ricardo, 2026-10-09). O claro só entra por escolha da pessoa, no seletor Escuro / Claro da lombada e do painel Mais. A escolha vai para o cookie `theme`, lido no servidor em `app/layout.tsx`, que escreve `data-theme` no `<html>`: a página já chega no tema certo, sem piscar. Os mesmos tokens trocam de valor; não há variantes `dark:`. O contraste de texto (4,5:1 ou mais) é verificado por teste em `components/ui-kit/tokens.test.ts`. A interface rejeita a cara de fintech (roxo, neon, cartão brilhante) e a de ERP frio.
 
 **Key Characteristics:**
 - Papel verde-água, tinta verde-escura, um verde-carnê de identidade; vermelho só como carimbo.
@@ -226,7 +226,7 @@ O mundo é papel plano. A profundidade vem de tom (papel do canhoto mais claro q
 ### Named Rules
 **The Ruled Paper Rule.** Superfície em repouso não tem sombra. Separação é régua (1px), régua de tinta (2px) ou picote; sombra só para o que flutua acima da página.
 
-**The Guilhoché Rule.** O fundo de segurança (ondas de 56 por 28px, traço de 0,8px a 22% de opacidade, 10% sobre a tinta, 12% no escuro) aparece só em área de identidade: capa do lote, bloco de título do placar, marca da lombada. Nunca atrás de número ou texto corrido; o que se escreve sobre ele ganha uma tarja sólida de papel do canhoto.
+**The Guilhoché Rule.** O fundo de segurança (ondas de 56 por 28px, traço de 0,8px pintado pelo token `primary` por máscara, a 22% de opacidade no claro e 40% no escuro, e 10% / 18% sobre a tinta) aparece só em área de identidade: capa do lote, bloco de título do placar, marca da lombada. Nunca atrás de número ou texto corrido; o que se escreve sobre ele ganha uma tarja sólida de papel do canhoto.
 
 ## Shapes
 
@@ -270,7 +270,7 @@ Aviso em bloco: régua de 1px no tom (a 60%), fundo suave, ícone de 16px no tom
 `PageHeader`: título headline, descrição em tinta atenuada, ações à direita, fechado por um picote. `DataTable`: cabeçalho em label de caixa alta sobre régua de tinta de 2px, ordenação por coluna com seta, paginação no cliente. `EmptyState`: caixa tracejada na cor de campo, ícone de 40px atenuado, título, uma ação primária obrigatória.
 
 ### Navigation
-- **Lombada (desktop, a partir de `md`):** coluna de 240px em tinta, presa à altura da janela. Topo com a marca APPFIN (18px, 600, tracking largo) sobre guilhochê claro. Itens de 44px, 14px 500, ícone de 16px, recuo esquerdo de 2px: inativo em lombada atenuada com hover a 10% de papel; ativo em papel com texto tinta e régua esquerda de papel. Sair fixo no rodapé.
+- **Lombada (desktop, a partir de `md`):** coluna de 240px em tinta, presa à altura da janela. Topo com a marca APPFIN (18px, 600, tracking largo) sobre guilhochê claro. Itens de 44px, 14px 500, ícone de 16px, inativo em lombada atenuada com hover a 10% de papel; ativo só pelo preenchimento (papel com texto tinta), sem faixa lateral. No rodapé, o seletor de tema (Escuro / Claro) e o Sair fixo.
 - **Barra inferior (celular):** fixa, papel da mesa com régua de topo, altura `--bottom-nav-h`. Quatro abas diretas (Painel, Lançamentos, Cartões, Fluxo) mais "Mais"; aba de 44px ou mais, ícone de 20px, rótulo de 12px. Ativo em verde-carnê com uma régua de 2px no topo da aba.
 - **Painel "Mais":** navegação revelada (não menu), sobre véu de tinta a 30%, régua de tinta de 2px no topo, picote sob o título, grade de três blocos com régua; ativo com borda e texto verde-carnê. Fecha com Escape e devolve o foco.
 

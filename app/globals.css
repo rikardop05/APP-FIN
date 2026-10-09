@@ -5,18 +5,84 @@
 /*
  * Mundo CARNÊ DE PRESTAÇÕES (Fase C, onda 1 do redesenho).
  *
- * Papel de carnê em verde-água claro, tinta verde-escura quase preta, verde-carnê como cor de
- * identidade. O vermelho é CARIMBO: só perigo, erro e divergência. PAGO é carimbo VERDE (ok). Despesa NÃO é vermelha.
+ * Mesa de tinta verde-escura com o canhoto em papel um pouco mais claro (tema ESCURO, o padrão);
+ * no tema claro, papel de carnê em verde-água. Verde-carnê é a cor de identidade. O vermelho é CARIMBO: só perigo, erro e divergência. PAGO é carimbo VERDE (ok). Despesa NÃO é vermelha.
  * Réguas de 1px, cantos retos, picote tracejado entre canhotos, numerais condensados tabulares.
  *
  * Ficam FORA de `@layer base` de propósito. Dentro da layer, o Tailwind descarta a regra de tema
- * escuro porque a string não aparece em nenhum arquivo de `content` (verificado em 2026-09-10:
- * o escuro cai em silêncio nos valores do claro). Fora da layer, os tokens sempre saem.
+ * porque a string não aparece em nenhum arquivo de `content` (verificado em 2026-09-10).
+ * Fora da layer, os tokens sempre saem. O tema vem do atributo `data-theme` do <html>.
  *
  * Cada token é um triplo HSL ("H S% L%"), para o Tailwind compor opacidade (`bg-primary/90`).
  * Contraste conferido por teste (`components/ui-kit/tokens.test.ts`): texto >= 4,5:1.
  */
+/* ESCURO é o PADRÃO (decisão do Ricardo, 2026-10-09): vale para todos, independente do sistema. O claro
+   só entra por escolha da pessoa (`data-theme="light"` no <html>, vindo do cookie `theme`). A mesa é
+   tinta profunda; o canhoto (card) é papel um pouco mais claro sobre ela, e as réguas e o picote têm
+   luz suficiente para aparecer. */
 :root {
+  color-scheme: dark;
+
+  /* Papel e tinta: a mesa é o fundo; o canhoto é o card, mais claro */
+  --background: 180 32% 6%;
+  --foreground: 156 20% 92%;
+  --card: 178 22% 14%;
+  --card-foreground: 156 20% 92%;
+  --popover: 178 22% 16%;
+  --popover-foreground: 156 20% 92%;
+
+  /* Identidade: verde-carnê */
+  --primary: 166 45% 52%;
+  --primary-foreground: 180 30% 7%;
+
+  /* Faixas e fundos de apoio */
+  --secondary: 178 20% 18%;
+  --secondary-foreground: 156 20% 92%;
+  --muted: 178 20% 18%;
+  --muted-foreground: 160 12% 68%;
+  --accent: 178 20% 21%;
+  --accent-foreground: 156 20% 92%;
+
+  /* Carimbo vermelho: perigo, erro e divergência. Nunca despesa, nunca PAGO. */
+  --destructive: 4 72% 62%;
+  --destructive-foreground: 180 30% 7%;
+  --destructive-soft: 4 40% 13%;
+
+  /* Estados */
+  --success: 152 45% 58%;
+  --success-foreground: 180 30% 7%;
+  --success-soft: 160 35% 15%;
+  --warning: 40 80% 62%;
+  --warning-foreground: 180 30% 7%;
+  --warning-soft: 38 40% 16%;
+
+  /* Réguas e campos */
+  --border: 178 16% 28%;
+  --input: 175 14% 50%;
+  --ring: 166 45% 52%;
+
+  /* Lombada do carnê: a navegação lateral */
+  --sidebar: 180 34% 4%;
+  --sidebar-foreground: 156 20% 92%;
+  --sidebar-muted: 160 12% 66%;
+  --sidebar-accent: 180 22% 17%;
+  --sidebar-accent-foreground: 156 20% 92%;
+  --sidebar-border: 180 18% 18%;
+
+  /* Intensidade do guilhochê (traço pintado pelas máscaras de .guilhoche): mais forte no escuro. */
+  --guilhoche-paper: 0.4;
+  --guilhoche-ink: 0.18;
+
+  /* Cantos retos em todo o mundo. */
+  --radius: 0px;
+
+  /* Altura da barra inferior do celular (com a área segura do iPhone): o rodapé fixo da tela
+     (Placar) e o painel do "Mais" somam a mesma medida. */
+  --bottom-nav-h: calc(4rem + env(safe-area-inset-bottom));
+}
+
+/* CLARO: só por escolha da pessoa. Mesmos tokens, papel de carnê verde-água sobre tinta. */
+:root[data-theme="light"] {
   color-scheme: light;
 
   /* Papel e tinta */
@@ -65,58 +131,9 @@
   --sidebar-accent-foreground: 180 47% 11%;
   --sidebar-border: 180 25% 24%;
 
-  /* Cantos retos em todo o mundo. */
-  --radius: 0px;
-
-  /* Altura da barra inferior do celular (com a área segura do iPhone): o rodapé fixo da tela
-     (Placar) e o painel do "Mais" somam a mesma medida. */
-  --bottom-nav-h: calc(4rem + env(safe-area-inset-bottom));
-}
-
-/* Modo escuro de verdade: segue o sistema (antes os tokens .dark existiam e nunca eram usados). */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-
-    --background: 180 30% 7%;
-    --foreground: 156 20% 92%;
-    --card: 180 26% 10%;
-    --card-foreground: 156 20% 92%;
-    --popover: 180 26% 10%;
-    --popover-foreground: 156 20% 92%;
-
-    --primary: 166 45% 52%;
-    --primary-foreground: 180 30% 7%;
-
-    --secondary: 180 18% 14%;
-    --secondary-foreground: 156 20% 92%;
-    --muted: 180 18% 14%;
-    --muted-foreground: 160 12% 66%;
-    --accent: 180 18% 17%;
-    --accent-foreground: 156 20% 92%;
-
-    --destructive: 4 72% 62%;
-    --destructive-foreground: 180 30% 7%;
-    --destructive-soft: 4 40% 16%;
-
-    --success: 152 45% 58%;
-    --success-foreground: 180 30% 7%;
-    --success-soft: 160 35% 14%;
-    --warning: 40 80% 62%;
-    --warning-foreground: 180 30% 7%;
-    --warning-soft: 38 40% 15%;
-
-    --border: 180 14% 22%;
-    --input: 175 12% 42%;
-    --ring: 166 45% 52%;
-
-    --sidebar: 180 30% 5%;
-    --sidebar-foreground: 156 20% 92%;
-    --sidebar-muted: 160 12% 62%;
-    --sidebar-accent: 180 20% 15%;
-    --sidebar-accent-foreground: 156 20% 92%;
-    --sidebar-border: 180 18% 16%;
-  }
+  /* Intensidade do guilhochê: mais discreto no papel claro. */
+  --guilhoche-paper: 0.22;
+  --guilhoche-ink: 0.1;
 }
 
 @layer base {
@@ -256,11 +273,11 @@
   }
 
   .guilhoche::before {
-    background-color: hsl(var(--primary) / 0.22);
+    background-color: hsl(var(--primary) / var(--guilhoche-paper));
   }
 
   .guilhoche-ink::before {
-    background-color: hsl(var(--sidebar-foreground) / 0.1);
+    background-color: hsl(var(--sidebar-foreground) / var(--guilhoche-ink));
   }
 }
 

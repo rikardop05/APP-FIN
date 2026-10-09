@@ -25,8 +25,9 @@ function tokens(block: string): Record<string, string> {
   return out;
 }
 
-const light = tokens(blockAfter(':root {'));
-const dark = tokens(blockAfter('@media (prefers-color-scheme: dark) {'));
+// ESCURO é o padrão (`:root`); o claro só por escolha da pessoa (`data-theme="light"`).
+const dark = tokens(blockAfter(':root {'));
+const light = tokens(blockAfter(':root[data-theme="light"] {'));
 
 function hsl(triple: string): [number, number, number] {
   const m = /^(\d+(?:\.\d+)?) (\d+(?:\.\d+)?)% (\d+(?:\.\d+)?)%/.exec(triple);
@@ -98,7 +99,7 @@ describe('tokens do carnê (globals.css)', () => {
   });
 
   it('cantos retos e altura da barra inferior em variável', () => {
-    expect(light.radius).toBe('0px');
-    expect(light['bottom-nav-h']).toContain('env(safe-area-inset-bottom)');
+    expect(dark.radius).toBe('0px');
+    expect(dark['bottom-nav-h']).toContain('env(safe-area-inset-bottom)');
   });
 });

@@ -114,13 +114,13 @@ export function PwaRegister() {
   return (
     <div
       role="status"
-      className="sticky top-0 z-50 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-amber-300 bg-amber-100 px-4 py-2 text-center text-sm text-amber-950"
+      className="sticky top-0 z-50 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-warning/50 bg-warning-soft px-4 py-2 text-center text-sm text-foreground"
     >
       <span>{text}</span>
       {state.reconnected ? (
         <button
           type="button"
-          className="rounded-md border border-amber-400 bg-amber-50 px-2 py-0.5 text-xs font-medium hover:bg-amber-200"
+          className="inline-flex min-h-11 items-center border border-warning/50 bg-card px-3 text-xs font-medium hover:bg-secondary sm:min-h-8"
           onClick={() => window.location.reload()}
         >
           Recarregar

@@ -536,6 +536,8 @@ describe('futureCommitment: detalhamento do card "Comprometido nos cartoes"', ()
   it('breakdown: fatura do mes corrente + parcelas seguintes + compras ja lancadas em faturas futuras = total', () => {
     const result = futureCommitment({ fromCompetence: '2026-10', months: 3, cards: [CARD_A], transactions: linhas });
     expect(result.breakdown).toEqual({
+      // Nenhuma fatura vencida antes da janela.
+      overdueUnpaidCents: 0,
       // Mes corrente inteiro: -13000.
       currentStatementCents: -13000,
       // Parcelas de nov e dez: -3000 + -3000 = -6000.
@@ -565,7 +567,7 @@ describe('futureCommitment: detalhamento do card "Comprometido nos cartoes"', ()
     const result = futureCommitment({ fromCompetence: '2026-10', months: 3, cards: [CARD_A], transactions: novembroPago });
     // -21000 sem novembro (-5500) = -15500.
     expect(result.totalCents).toBe(-15500);
-    expect(result.breakdown).toEqual({ currentStatementCents: -13000, laterInstallmentsCents: -3000, laterPurchasesCents: 500 });
+    expect(result.breakdown).toEqual({ overdueUnpaidCents: 0, currentStatementCents: -13000, laterInstallmentsCents: -3000, laterPurchasesCents: 500 });
   });
 
   it('sem os campos novos: compra a vista e nao paga (compatibilidade)', () => {
@@ -580,6 +582,81 @@ describe('futureCommitment: detalhamento do card "Comprometido nos cartoes"', ()
 
   it('janela vazia: breakdown zerado', () => {
     const result = futureCommitment({ fromCompetence: '2026-10', months: 0, cards: [], transactions: linhas });
-    expect(result.breakdown).toEqual({ currentStatementCents: 0, laterInstallmentsCents: 0, laterPurchasesCents: 0 });
+    expect(result.breakdown).toEqual({ overdueUnpaidCents: 0, currentStatementCents: 0, laterInstallmentsCents: 0, laterPurchasesCents: 0 });
+  });
+});
+
+describe('futureCommitment: faturas vencidas nao pagas (decisao do Ricardo, 2026-10-08)', () => {
+  const tx = (over: Partial<Tx> & Pick<Tx, 'competence' | 'amountCents'>): Tx => ({
+    creditCardId: 'card-a',
+    status: 'posted',
+    installment: false,
+    statementPaid: false,
+    ...over,
+  });
+
+  // Jul/26 vencida e nao paga: -1.469,01 (compra) e -100,00 (parcela).
+  // Set/26 vencida e nao paga: -2.874,49. Out/26 (corrente): -766,09 de parcela.
+  const linhas: Tx[] = [
+    tx({ competence: '2026-07', amountCents: cents(-146901), statementOverdue: true }),
+    tx({ competence: '2026-07', amountCents: cents(-10000), installment: true, statementOverdue: true }),
+    tx({ competence: '2026-09', amountCents: cents(-287449), statementOverdue: true }),
+    tx({ competence: '2026-10', amountCents: cents(-76609), installment: true, status: 'planned' }),
+  ];
+
+  it('competencia anterior de fatura nao paga entra no total, numa linha propria do breakdown', () => {
+    const result = futureCommitment({ fromCompetence: '2026-10', months: 2, cards: [CARD_A], transactions: linhas });
+    // -146901 + -10000 + -287449 = -444350.
+    expect(result.breakdown.overdueUnpaidCents).toBe(-444350);
+    expect(result.overdueCompetences).toEqual(['2026-07', '2026-09']);
+    // -444350 + -76609 = -520959.
+    expect(result.totalCents).toBe(-520959);
+    const { overdueUnpaidCents, currentStatementCents, laterInstallmentsCents, laterPurchasesCents } = result.breakdown;
+    expect(overdueUnpaidCents + currentStatementCents + laterInstallmentsCents + laterPurchasesCents).toBe(result.totalCents);
+  });
+
+  it('vencida nao paga consome o limite do cartao', () => {
+    const result = futureCommitment({ fromCompetence: '2026-10', months: 2, cards: [CARD_A], transactions: linhas });
+    // Limite A 500000; usado 520959 -> 520959 / 500000 * 10000 = 10419,18 -> 10419 bp.
+    expect(result.limitUsage[0]).toEqual({ cardId: 'card-a', usedCents: -520959, usageBp: 10419 });
+  });
+
+  it('byCompetence e lastCommittedCompetence continuam so na janela', () => {
+    const result = futureCommitment({ fromCompetence: '2026-10', months: 2, cards: [CARD_A], transactions: linhas });
+    expect(result.byCompetence.map((m) => [m.competence, m.totalCents])).toEqual([
+      ['2026-10', -76609],
+      ['2026-11', 0],
+    ]);
+    expect(result.lastCommittedCompetence).toBe('2026-10');
+  });
+
+  it('marcada como paga sai, mesmo vencida', () => {
+    const julhoPago = linhas.map((linha) => (linha.competence === '2026-07' ? { ...linha, statementPaid: true } : linha));
+    const result = futureCommitment({ fromCompetence: '2026-10', months: 2, cards: [CARD_A], transactions: julhoPago });
+    expect(result.breakdown.overdueUnpaidCents).toBe(-287449);
+    expect(result.overdueCompetences).toEqual(['2026-09']);
+  });
+
+  it('linha do passado SEM a marca de vencida continua fora (como antes)', () => {
+    const result = futureCommitment({
+      fromCompetence: '2026-10',
+      months: 1,
+      cards: [CARD_A],
+      transactions: [tx({ competence: '2026-07', amountCents: cents(-1000) })],
+    });
+    expect(result.breakdown.overdueUnpaidCents).toBe(0);
+    expect(result.overdueCompetences).toEqual([]);
+    expect(result.totalCents).toBe(0);
+  });
+
+  it('a marca de vencida em competencia da janela nao duplica: conta so no mes', () => {
+    const result = futureCommitment({
+      fromCompetence: '2026-10',
+      months: 1,
+      cards: [CARD_A],
+      transactions: [tx({ competence: '2026-10', amountCents: cents(-1000), statementOverdue: true })],
+    });
+    expect(result.breakdown).toMatchObject({ overdueUnpaidCents: 0, currentStatementCents: -1000 });
+    expect(result.totalCents).toBe(-1000);
   });
 });

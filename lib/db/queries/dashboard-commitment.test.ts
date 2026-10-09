@@ -127,6 +127,8 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('comprometido nos cartoe
       // Outubro pago sai inteiro. Nov: -3000 + -2500 = -5500. Dez: -3000. Total -8500.
       expect(result.totalCents).toBe(-8500);
       expect(result.breakdown).toEqual({
+        // Nenhuma competencia anterior com fatura em aberto.
+        overdueUnpaidCents: 0,
         currentStatementCents: 0,
         // Parcelas de nov e dez: -3000 + -3000.
         laterInstallmentsCents: -6000,
@@ -192,6 +194,55 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('comprometido nos cartoe
       expect(kpis.plannedContributionCents).toBe(50000);
     } finally {
       await f.cleanup();
+    }
+  });
+});
+
+describe.skipIf(process.env.DATABASE_URL === undefined)('faturas vencidas nao pagas de competencia anterior (2026-10-08)', () => {
+  it('entram com statementOverdue; mes sem fatura e fatura paga ficam fora; soma fecha no motor', async () => {
+    const f = await createFixture('vencida');
+    try {
+      const { listCommitmentTransactions } = await import('./dashboard');
+      const { futureCommitment } = await import('@/lib/finance/commitment');
+      const julho = await f.statement('2026-07', 'open'); // vencida, nao paga
+      const setembro = await f.statement('2026-09', 'paid');
+      await f.tx('2026-07', -146901, { statementId: julho });
+      await f.tx('2026-08', -5000); // mes antigo SEM fatura cadastrada: fora
+      await f.tx('2026-09', -287449, { statementId: setembro }); // paga: fora
+      await f.tx('2026-10', -76609); // janela
+
+      const rows = await listCommitmentTransactions(f.householdId, '2026-10', 2);
+      expect(
+        rows
+          .map((row) => [row.competence, row.amountCents, row.statementOverdue])
+          .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+      ).toEqual([
+        ['2026-07', -146901, true],
+        ['2026-10', -76609, false],
+      ]);
+
+      const result = futureCommitment({ fromCompetence: '2026-10', months: 2, cards: [], transactions: rows });
+      expect(result.breakdown.overdueUnpaidCents).toBe(-146901);
+      expect(result.overdueCompetences).toEqual(['2026-07']);
+      // -146901 + -76609 = -223510.
+      expect(result.totalCents).toBe(-223510);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it('fatura aberta de OUTRO cartao no mes antigo nao puxa as linhas deste cartao', async () => {
+    const f = await createFixture('vencida-outro');
+    const outro = await createFixture('vencida-outro-2');
+    try {
+      const { listCommitmentTransactions } = await import('./dashboard');
+      await outro.statement('2026-07', 'open');
+      await f.tx('2026-07', -1000); // este cartao nao tem fatura em julho
+      const rows = await listCommitmentTransactions(f.householdId, '2026-10', 1);
+      expect(rows).toEqual([]);
+    } finally {
+      await f.cleanup();
+      await outro.cleanup();
     }
   });
 });

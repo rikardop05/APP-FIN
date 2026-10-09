@@ -97,15 +97,14 @@ function StatementTableRow({ statement, staleDueDate, overdue, onChanged }: { st
     <tr className="border-b border-border last:border-0">
       <td className="px-3 py-3 align-middle font-medium">{competenceShort(statement.period)}</td>
       <td className="px-3 py-3 align-middle"><DateText value={statement.dueDate} /></td>
-      <td className="px-3 py-3 text-right align-middle"><Money value={statement.computedTotalCents} /></td>
+      <td className="px-3 py-3 text-right align-middle"><Money value={statement.computedTotalCents} sign="never" /></td>
       <td className="px-3 py-3 text-right align-middle">
-        {statement.reportedTotalCents === null ? '—' : <Money value={statement.reportedTotalCents} />}
+        {statement.reportedTotalCents === null ? '—' : <Money value={statement.reportedTotalCents} sign="never" />}
       </td>
       <td className="px-3 py-3 align-middle">
         <div className="flex flex-wrap items-center gap-2">
-          <StatusMark status={statement.status} />
+          <StatusMark status={statement.status} overdue={overdue} />
           {mismatch ? <Badge variant="danger">Divergência</Badge> : null}
-          {overdue ? <Badge variant="warning" title={OVERDUE_UNPAID_HINT}>Vencida, não marcada como paga</Badge> : null}
           {staleDueDate ? <Badge variant="warning">Vencimento desatualizado</Badge> : null}
         </div>
       </td>
@@ -117,10 +116,11 @@ function StatementTableRow({ statement, staleDueDate, overdue, onChanged }: { st
 }
 
 /** PAGO é carimbo; os demais estados seguem como etiqueta. */
-function StatusMark({ status }: { status: StatementRecord['status'] }) {
-  return status === 'paid' ? (
-    <Carimbo tone="ok">Pago</Carimbo>
-  ) : (
+function StatusMark({ status, overdue }: { status: StatementRecord['status']; overdue: boolean }) {
+  // UM estado só: paga (carimbo), vencida e não paga, ou o status da fatura. Nunca "Aberta" junto de "Vencida".
+  if (status === 'paid') return <Carimbo tone="ok">Pago</Carimbo>;
+  if (overdue) return <Badge variant="warning" title={OVERDUE_UNPAID_HINT}>Vencida, não marcada como paga</Badge>;
+  return (
     <Badge variant={statusVariant[status]}>{statusLabel[status]}</Badge>
   );
 }
@@ -134,20 +134,19 @@ function StatementCard({ statement, staleDueDate, overdue, onChanged }: { statem
       // Dentro do card da fatura o canhoto não vira caixa (card dentro de card): só a régua de cima.
       className="border-0 border-t border-border"
       stub={competenceShort(statement.period)}
-      valor={<Money value={statement.computedTotalCents} />}
+      valor={<Money value={statement.computedTotalCents} sign="never" />}
     >
       <p className="text-sm text-muted-foreground">
         Vencimento <DateText value={statement.dueDate} />
         {statement.reportedTotalCents === null ? null : (
           <>
-            {' '}· informado <Money value={statement.reportedTotalCents} />
+            {' '}· informado <Money value={statement.reportedTotalCents} sign="never" />
           </>
         )}
       </p>
       <div className="flex flex-wrap items-center gap-2">
-        <StatusMark status={statement.status} />
+        <StatusMark status={statement.status} overdue={overdue} />
         {mismatch ? <Badge variant="danger">Divergência</Badge> : null}
-          {overdue ? <Badge variant="warning" title={OVERDUE_UNPAID_HINT}>Vencida, não marcada como paga</Badge> : null}
         {staleDueDate ? <Badge variant="warning">Vencimento desatualizado</Badge> : null}
       </div>
       {mismatch ? (

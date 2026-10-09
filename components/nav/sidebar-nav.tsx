@@ -5,12 +5,14 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { NAV_ITEMS, isNavItemActive } from './nav-items';
 import { SignOutButton } from './sign-out-button';
+import { ThemeToggle } from './theme-toggle';
+import type { Theme } from './theme';
 
 /**
  * Lombada do carnê: navegação lateral em tinta escura, visível a partir de `md`. Abaixo disso quem
  * navega é `BottomNav`. A marca é a única área de identidade da lombada (guilhochê sobre a tinta).
  */
-export function SidebarNav() {
+export function SidebarNav({ theme }: { theme: Theme }) {
   const pathname = usePathname();
 
   return (
@@ -34,10 +36,10 @@ export function SidebarNav() {
               href={item.href}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex min-h-11 items-center gap-3 border-l-2 px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-foreground',
+                'flex min-h-11 items-center gap-3 px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-foreground',
                 active
-                  ? 'border-sidebar-foreground bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'border-transparent text-sidebar-muted hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground',
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-muted hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground',
               )}
             >
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -46,8 +48,11 @@ export function SidebarNav() {
           );
         })}
       </div>
-      <div className="mt-auto border-t border-sidebar-border px-3 pt-3">
-        <SignOutButton variant="sidebar" />
+      <div className="mt-auto flex flex-col gap-2 border-t border-sidebar-border pt-3">
+        <ThemeToggle variant="sidebar" initialTheme={theme} />
+        <div className="px-3">
+          <SignOutButton variant="sidebar" />
+        </div>
       </div>
     </nav>
   );

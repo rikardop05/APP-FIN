@@ -4,7 +4,8 @@ import tailwindcssAnimate from 'tailwindcss-animate';
 /**
  * Mundo CARNÊ DE PRESTAÇÕES. Cores são os tokens de `app/globals.css` (triplos HSL, com opacidade
  * por `<alpha-value>`), cantos são retos e a escala de tipo é real. O modo escuro segue o sistema
- * (`prefers-color-scheme`): os tokens trocam sozinhos, sem classe `dark`.
+ * é o PADRÃO; o claro entra por `data-theme="light"` no <html> (escolha da pessoa, cookie `theme`).
+ * Os tokens trocam sozinhos, sem variantes `dark:`.
  */
 const withAlpha = (token: string) => `hsl(var(${token}) / <alpha-value>)`;
 
@@ -27,7 +28,7 @@ function stateScale(token: string): Record<string, string> {
 }
 
 const config: Config = {
-  darkMode: 'media',
+  darkMode: ['selector', ':root:not([data-theme="light"])'],
   content: [
     './app/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',

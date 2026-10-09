@@ -381,7 +381,7 @@
       "sidebarWidth": "240px",
       "bottomNavHeight": "calc(4rem + env(safe-area-inset-bottom))",
       "touchTarget": "44px mobile, 36px from sm",
-      "darkMode": "prefers-color-scheme (automatic, no class)"
+      "darkMode": "data-theme attribute on <html>; DARK is the default for everyone, light only by the person's choice (cookie `theme`, read on the server)"
     },
     "patterns": [
       {
@@ -471,7 +471,7 @@
   ],
   "narrative": {
     "northStar": "O Carnê de Prestações",
-    "overview": "O futuro comprometido é um carnê. Cada lançamento é um canhoto, cada parcela futura é um canhoto ainda preso, e a interface inteira é papel de carnê: verde-água muito claro, tinta verde-escura quase preta, réguas de 1px e cantos retos. O mundo foi construído primeiro na revisão da fatura (Importar) e cobre todas as telas autenticadas: Painel, Lançamentos, Cartões, Fluxo, Orçamento, Metas, Investimentos e Config.\n\nA densidade é de documento de trabalho, não de app de banco: linhas de 44px, texto corrido em 14px, rótulos em 12px, valores em numerais condensados tabulares que alinham em coluna. A identidade mora em poucos lugares e é impressa, não iluminada: o guilhochê (fundo de segurança) só nas áreas de identidade, o picote tracejado entre canhoto e corpo, e o carimbo de moldura dupla para CONFERE e DIVERGE. O vermelho é tinta de carimbo e nunca marca despesa; a direção do dinheiro vem do sinal.\n\nO modo escuro é automático (`prefers-color-scheme`), sem classe `dark`: os mesmos tokens trocam para uma mesa de tinta profunda com papel verde-claro como texto. O contraste de texto (4,5:1 ou mais) é verificado por teste em `components/ui-kit/tokens.test.ts`. A interface rejeita a cara de fintech (roxo, neon, cartão brilhante) e a de ERP frio.",
+    "overview": "O futuro comprometido é um carnê. Cada lançamento é um canhoto, cada parcela futura é um canhoto ainda preso, e a interface inteira é papel de carnê: verde-água muito claro, tinta verde-escura quase preta, réguas de 1px e cantos retos. O mundo foi construído primeiro na revisão da fatura (Importar) e cobre todas as telas autenticadas: Painel, Lançamentos, Cartões, Fluxo, Orçamento, Metas, Investimentos e Config.\n\nA densidade é de documento de trabalho, não de app de banco: linhas de 44px, texto corrido em 14px, rótulos em 12px, valores em numerais condensados tabulares que alinham em coluna. A identidade mora em poucos lugares e é impressa, não iluminada: o guilhochê (fundo de segurança) só nas áreas de identidade, o picote tracejado entre canhoto e corpo, e o carimbo de moldura dupla para CONFERE e DIVERGE. O vermelho é tinta de carimbo e nunca marca despesa; a direção do dinheiro vem do sinal.\n\nO tema ESCURO é o padrão para todos, independente do sistema; o claro só entra por escolha da pessoa (seletor na lombada e no painel Mais, cookie `theme` lido no servidor, atributo `data-theme` no `<html>`). Os mesmos tokens trocam de valor. O contraste de texto (4,5:1 ou mais) é verificado por teste em `components/ui-kit/tokens.test.ts`. A interface rejeita a cara de fintech (roxo, neon, cartão brilhante) e a de ERP frio.",
     "keyCharacteristics": [
       "Papel verde-água, tinta verde-escura, um verde-carnê de identidade; vermelho só como carimbo.",
       "Cantos retos em tudo (raio 0, inclusive `full`).",

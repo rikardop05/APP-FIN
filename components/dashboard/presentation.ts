@@ -110,10 +110,24 @@ export type CommitmentRow = { key: string; label: string; valueCents: Cents };
  * "Compras já lançadas em faturas futuras" só aparece quando não é zero.
  */
 export function commitmentRows(
-  breakdown: { currentStatementCents: Cents; laterInstallmentsCents: Cents; laterPurchasesCents: Cents },
+  breakdown: {
+    /** Faturas vencidas e não pagas (já dentro do total); 0 quando não há. */
+    overdueUnpaidCents: Cents;
+    currentStatementCents: Cents;
+    laterInstallmentsCents: Cents;
+    laterPurchasesCents: Cents;
+  },
   competence: Competence,
 ): CommitmentRow[] {
-  const rows: CommitmentRow[] = [
+  const rows: CommitmentRow[] = [];
+  if (breakdown.overdueUnpaidCents !== 0) {
+    rows.push({
+      key: 'overdue',
+      label: 'Faturas anteriores não pagas',
+      valueCents: -breakdown.overdueUnpaidCents as Cents,
+    });
+  }
+  rows.push(
     {
       key: 'current',
       label: `Faturas de ${competenceShort(competence)}`,
@@ -124,7 +138,7 @@ export function commitmentRows(
       label: 'Parcelas das faturas seguintes',
       valueCents: -breakdown.laterInstallmentsCents as Cents,
     },
-  ];
+  );
   if (breakdown.laterPurchasesCents !== 0) {
     rows.push({
       key: 'purchases',

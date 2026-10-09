@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 
 import { addCompetence, toCompetence, type Competence, type IsoDate } from '@/lib/date';
 import { db } from '@/lib/db';
@@ -56,6 +56,8 @@ export type DashboardCommitmentTransaction = {
   installment: boolean;
   /** A fatura da linha esta marcada como paga (`statements.status = 'paid'`): sai do comprometido. */
   statementPaid: boolean;
+  /** Linha de competencia anterior a janela, de fatura existente e nao paga: "Faturas vencidas nao pagas". */
+  statementOverdue: boolean;
 };
 
 export type DashboardCategory = {
@@ -378,6 +380,15 @@ export async function listCommitmentTransactions(
   months: number,
 ): Promise<DashboardCommitmentTransaction[]> {
   const to = addCompetence(fromCompetence, months - 1);
+  // Fatura EXISTENTE e nao paga da linha (pela propria ou pelo cartao + competencia).
+  // Mesmo cuidado do `statementPaid` abaixo: nomes qualificados e alias proprio.
+  const unpaidStatement = sql`exists (
+  select 1 from "statements" as "unpaid_s"
+  where "unpaid_s"."status" <> 'paid'
+    and ("unpaid_s"."id" = "transactions"."statement_id"
+      or ("unpaid_s"."credit_card_id" = "transactions"."credit_card_id"
+        and "unpaid_s"."period" = "transactions"."competence"))
+)`;
   const rows = await db
     .select({
       competence: transactions.competence,
@@ -400,6 +411,9 @@ export async function listCommitmentTransactions(
             or ("paid_s"."credit_card_id" = "transactions"."credit_card_id"
               and "paid_s"."period" = "transactions"."competence"))
       )`,
+      // Linha de competencia ANTERIOR a janela que so esta aqui por ter fatura vencida e
+      // nao paga (decisao do Ricardo, 2026-10-08, para qualquer competencia passada).
+      statementOverdue: sql<boolean>`${transactions.competence} < ${fromCompetence}`,
     })
     .from(transactions)
     .where(
@@ -410,7 +424,13 @@ export async function listCommitmentTransactions(
         // transferência não são, mesmo se gravados com `credit_card_id` (RC-03).
         notInArray(transactions.kind, ['credit_card_payment', 'transfer']),
         inArray(transactions.status, COUNTED_STATUSES),
-        gte(transactions.competence, fromCompetence),
+        // A janela, e antes dela so o que pertence a fatura existente e NAO paga: fatura
+        // vencida continua comprometida ate ser marcada paga. Mes antigo sem fatura
+        // cadastrada nao entra (nao ha fatura para estar em aberto).
+        or(
+          gte(transactions.competence, fromCompetence),
+          and(lt(transactions.competence, fromCompetence), unpaidStatement),
+        ),
         lte(transactions.competence, to),
         or(eq(transactions.status, 'posted'), isNotNull(transactions.installmentPlanId)),
       ),
@@ -424,6 +444,7 @@ export async function listCommitmentTransactions(
       status: row.status,
       installment: row.installment === true,
       statementPaid: row.statementPaid === true,
+      statementOverdue: row.statementOverdue === true,
     }));
 }
 

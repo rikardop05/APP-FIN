@@ -97,6 +97,7 @@ interface CommitmentInput {
     competence: Competence; amountCents: Cents; creditCardId: string; status: 'posted' | 'planned'
     installment?: boolean      // parcela de parcelamento; ausente = compra lançada (ou estorno)
     statementPaid?: boolean    // fatura (cartão + competência) marcada como PAGA: a linha sai de tudo; ausente = não paga
+    statementOverdue?: boolean // linha ANTES de fromCompetence com fatura existente e NÃO paga: entra em overdueUnpaidCents
   }[]
   fromCompetence: Competence
   months: number
@@ -109,13 +110,15 @@ function futureCommitment(input: CommitmentInput): {
     installmentCents: Cents; purchaseCents: Cents   // installmentCents + purchaseCents = totalCents
     byCardId: Record<string, Cents>
   }[]
-  // As três linhas do card "Comprometido nos cartões"; a soma é EXATAMENTE totalCents.
+  // As quatro linhas do card "Comprometido nos cartões"; a soma é EXATAMENTE totalCents.
   breakdown: {
+    overdueUnpaidCents: Cents       // "Faturas vencidas não pagas": competências ANTERIORES, fatura existente e não paga
     currentStatementCents: Cents    // fatura de fromCompetence inteira (parcela e compra)
     laterInstallmentsCents: Cents   // parcelas das competências seguintes da janela
     laterPurchasesCents: Cents      // compras já lançadas (e estornos) nas competências seguintes
   }
-  totalCents: Cents
+  overdueCompetences: Competence[]  // competências anteriores que entraram em overdueUnpaidCents, em ordem
+  totalCents: Cents                 // janela + overdueUnpaidCents (byCompetence continua só a janela)
   lastCommittedCompetence: Competence | null   // ULTIMO mes da janela com saldo DEVEDOR
   limitUsage: { cardId: string; usedCents: Cents; usageBp: BasisPoints | null }[]
 }
@@ -127,6 +130,12 @@ function futureCommitment(input: CommitmentInput): {
 > 'paid'`) a tira. O feed `listCommitmentTransactions` (`/lib/db/queries/dashboard.ts`, Painel e
 > `/cartoes`) preenche `statementPaid` pela fatura da própria linha (`statement_id`) ou, na parcela
 > projetada sem `statement_id`, pela fatura do mesmo cartão e competência.
+>
+> **Vencida e não paga de QUALQUER competência anterior** (decisão do Ricardo, 2026-10-08) continua
+> comprometida: o feed traz, antes de `fromCompetence`, só as linhas de fatura EXISTENTE com `status`
+> diferente de `'paid'`, marcadas `statementOverdue`; o motor as soma em `breakdown.overdueUnpaidCents`, no
+> `totalCents` e no uso de limite. Mês antigo sem fatura cadastrada não entra. `byCompetence` e
+> `lastCommittedCompetence` seguem só a janela.
 
 > **Semantica de `lastCommittedCompetence`** — fixada em 2026-09-16, apos conflito entre tres fontes
 > apontado pelo Esquadro no T-110 e confirmado pelo Corvo.

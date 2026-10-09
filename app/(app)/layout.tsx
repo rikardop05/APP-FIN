@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
+import { cookies } from 'next/headers';
 import { SidebarNav } from '@/components/nav/sidebar-nav';
 import { BottomNav } from '@/components/nav/bottom-nav';
+import { THEME_COOKIE, resolveTheme } from '@/components/nav/theme';
 
 /**
  * Shell das telas autenticadas: nav lateral no desktop, inferior no celular.
@@ -13,7 +15,9 @@ import { BottomNav } from '@/components/nav/bottom-nav';
  * laterais usam `max(margem, env(safe-area-inset-left/right))` para o entalhe do iPhone deitado
  * (o iOS ignora a trava de retrato do manifesto). Sem entalhe, os valores são os de antes.
  */
-export default function AppLayout({ children }: { children: ReactNode }) {
+export default async function AppLayout({ children }: { children: ReactNode }) {
+  // Mesmo cookie que o layout raiz lê: o seletor já nasce marcado no tema certo.
+  const theme = resolveTheme((await cookies()).get(THEME_COOKIE)?.value);
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <a
@@ -22,7 +26,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       >
         Pular para o conteúdo
       </a>
-      <SidebarNav />
+      <SidebarNav theme={theme} />
       <main
         id="conteudo"
         tabIndex={-1}
@@ -30,7 +34,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       >
         {children}
       </main>
-      <BottomNav />
+      <BottomNav theme={theme} />
     </div>
   );
 }

@@ -1,19 +1,17 @@
 import Link from 'next/link';
 
-import { competenceShort } from '@/components/cashflow/labels';
-import { Money, Selo } from '@/components/ui-kit';
+import { Money, Picote, Selo } from '@/components/ui-kit';
 import type { Competence } from '@/lib/date';
 import type { Cents } from '@/lib/money';
 
 import {
-  monthName,
+  contributionsTitle,
+  pendingTitle,
   surplusBaseLine,
   surplusLabel,
   verdictLine,
-  type NextMonthCommitment,
   type PendingSummary,
 } from './presentation';
-import { pendingTitle } from './presentation';
 import type { ProjectedState } from './projected-balance';
 
 type HeadlineProps = {
@@ -21,26 +19,31 @@ type HeadlineProps = {
   incomeCents: Cents;
   expenseCents: Cents;
   surplusCents: Cents;
+  /** Só o LANÇADO; o planejado vem ao lado. */
+  contributionsCents: Cents;
+  /** Aporte mensal planejado do plano de investimento; `null` = sem plano. */
+  plannedContributionCents: Cents | null;
   projected: ProjectedState;
-  nextMonth: NextMonthCommitment;
   pending: PendingSummary;
-  /** `null` na contagem de orçamento = a consulta falhou; a faixa avisa que não deu para conferir. */
+  /** A consulta de orçamento falhou: a faixa avisa que não deu para conferir. */
   pendingUnavailable: boolean;
 };
 
 /**
- * A resposta de 10 segundos: uma linha principal com TRÊS números, lida de cima para baixo no celular
- * e lado a lado no desktop. Sobra do mês (com a base visível), o veredito de 12 meses e o que já vem
- * comprometido no mês seguinte. Régua de 1px entre as colunas, sem cartão dentro de cartão. As
- * pendências vêm logo abaixo, só como contagem com link.
+ * O primeiro olhar do Painel: começa pelo VEREDITO como frase (o que acontece com o saldo nos próximos
+ * 12 meses), e logo abaixo os dois números do mês corrente, a sobra com a base visível e os aportes
+ * lançados contra o planejado. Nada de faixa de indicadores nem de cartões lado a lado: um bloco só,
+ * dividido por um picote. O comprometido fica no carnê logo abaixo, e as pendências são só a contagem
+ * com link.
  */
 export function Headline({
   competence,
   incomeCents,
   expenseCents,
   surplusCents,
+  contributionsCents,
+  plannedContributionCents,
   projected,
-  nextMonth,
   pending,
   pendingUnavailable,
 }: HeadlineProps) {
@@ -55,52 +58,58 @@ export function Headline({
 
   return (
     <div className="flex flex-col gap-3">
-      <section aria-label="O mês em três números" className="border border-border bg-card">
-        <div className="grid grid-cols-1 divide-y divide-border lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-          <div className="flex flex-col gap-2 p-4 sm:p-5">
-            <h2 className="text-sm font-medium text-muted-foreground">{surplusLabel(competence, surplusCents)}</h2>
-            <p className="text-3xl font-semibold text-foreground">
+      <section aria-labelledby="dashboard-verdict-heading" className="flex flex-col gap-4 border border-border bg-card p-4 sm:p-5">
+        <div className="flex flex-col items-start gap-2">
+          {verdict.tone === 'neutral' ? null : (
+            <Selo
+              tone={verdict.tone === 'danger' ? 'danger' : 'ok'}
+              label={verdict.tone === 'danger' ? 'Saldo negativo' : 'Sem saldo negativo'}
+            />
+          )}
+          <h2 id="dashboard-verdict-heading" className="max-w-3xl text-2xl font-semibold text-foreground">
+            {verdict.text}
+          </h2>
+          <Link href="/fluxo" className="min-h-11 text-sm text-primary underline underline-offset-2 sm:min-h-0">
+            Ver o fluxo e simular
+          </Link>
+        </div>
+
+        <Picote />
+
+        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1">
+            <dt className="text-sm text-muted-foreground">{surplusLabel(competence, surplusCents)}</dt>
+            <dd className="text-3xl font-semibold text-foreground">
               <Money value={surplusCents} />
-            </p>
-            <p className="text-sm text-muted-foreground">
+            </dd>
+            <dd className="text-sm text-muted-foreground">
               Receita <Money value={incomeCents} sign="never" /> menos despesa{' '}
               <Money value={expenseCents} sign="never" />
-            </p>
-            <p className="text-xs text-muted-foreground">{surplusBaseLine(competence)}</p>
+            </dd>
+            <dd className="text-xs text-muted-foreground">{surplusBaseLine(competence)}</dd>
           </div>
 
-          <div className="flex flex-col items-start gap-2 p-4 sm:p-5">
-            <h2 className="text-sm font-medium text-muted-foreground">Próximos 12 meses</h2>
-            {verdict.tone === 'neutral' ? null : (
-              <Selo
-                tone={verdict.tone === 'danger' ? 'danger' : 'ok'}
-                label={verdict.tone === 'danger' ? 'Saldo negativo' : 'Sem saldo negativo'}
-              />
-            )}
-            <p className="text-lg font-semibold text-foreground">{verdict.text}</p>
-            <Link href="/fluxo" className="min-h-11 text-sm text-primary underline underline-offset-2 sm:min-h-0">
-              Ver o fluxo e simular
-            </Link>
+          <div className="flex flex-col gap-1">
+            <dt className="text-sm text-muted-foreground">{contributionsTitle(competence)}</dt>
+            <dd className="text-3xl font-semibold text-foreground">
+              <Money value={contributionsCents} sign="never" />
+            </dd>
+            <dd className="text-sm text-muted-foreground">
+              {plannedContributionCents !== null && plannedContributionCents > 0 ? (
+                <>
+                  lançados, de <Money value={plannedContributionCents} sign="never" /> planejados
+                </>
+              ) : (
+                <>
+                  Sem aporte planejado.{' '}
+                  <Link href="/investimentos" className="underline underline-offset-2">
+                    Definir no plano
+                  </Link>
+                </>
+              )}
+            </dd>
           </div>
-
-          <div className="flex flex-col gap-2 p-4 sm:p-5">
-            <h2 className="text-sm font-medium text-muted-foreground">
-              {nextMonth === null ? 'Mês que vem' : `Comprometido em ${monthName(nextMonth.competence)}`}
-            </h2>
-            {nextMonth === null ? (
-              <p className="text-lg font-semibold text-foreground">Nada comprometido nos cartões.</p>
-            ) : (
-              <>
-                <p className="text-3xl font-semibold text-foreground">
-                  <Money value={nextMonth.cents} sign="never" />
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Faturas de {competenceShort(nextMonth.competence)} já lançadas e parcelas.
-                </p>
-              </>
-            )}
-          </div>
-        </div>
+        </dl>
       </section>
 
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" aria-label="Pendências">

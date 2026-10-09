@@ -34,7 +34,7 @@ export function SignOutButton({ variant }: SignOutButtonProps) {
       disabled={pending}
       className={cn(
         variant === 'sidebar'
-          ? 'flex min-h-11 w-full items-center gap-3 border-l-2 border-transparent px-3 text-sm font-medium text-sidebar-muted transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-foreground disabled:opacity-50'
+          ? 'flex min-h-11 w-full items-center gap-3 px-3 text-sm font-medium text-sidebar-muted transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-foreground disabled:opacity-50'
           : 'flex min-h-[44px] flex-col items-center justify-center gap-1 border border-border bg-card px-2 py-3 text-xs font-medium text-foreground hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
       )}
     >

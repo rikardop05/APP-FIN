@@ -89,3 +89,21 @@ describe('installmentLabel', () => {
     expect(installmentLabel(11, 10)).toEqual({ total: null, text: 'parcela 11' });
   });
 });
+
+import { stripInstallmentSuffix } from './list-presentation';
+
+describe('stripInstallmentSuffix: a parcela não aparece duas vezes', () => {
+  it('tira o sufixo que bate com a parcela da linha', () => {
+    expect(stripInstallmentSuffix('LOJA SINTETICA (03/10)', 3, 10)).toBe('LOJA SINTETICA');
+    expect(stripInstallmentSuffix('LOJA SINTETICA 03/10', 3, 10)).toBe('LOJA SINTETICA');
+    expect(stripInstallmentSuffix('LOJA SINTETICA PARC 3/10', 3, 10)).toBe('LOJA SINTETICA');
+    expect(stripInstallmentSuffix('LOJA SINTETICA PARCELA 3 DE 10', 3, 10)).toBe('LOJA SINTETICA');
+  });
+
+  it('não mexe no que não bate, nem sem total, nem se sobraria vazio', () => {
+    expect(stripInstallmentSuffix('LOJA (04/10)', 3, 10)).toBe('LOJA (04/10)');
+    expect(stripInstallmentSuffix('LOJA (03/10)', 3, null)).toBe('LOJA (03/10)');
+    expect(stripInstallmentSuffix('03/10', 3, 10)).toBe('03/10');
+    expect(stripInstallmentSuffix('MERCADO 12/2026', 3, 10)).toBe('MERCADO 12/2026');
+  });
+});

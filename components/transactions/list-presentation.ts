@@ -72,3 +72,20 @@ export function installmentLabel(number: number, total: number | null): { total:
   }
   return { total: null, text: `parcela ${String(number).padStart(2, '0')}` };
 }
+
+/**
+ * Tira da descrição o "(03/10)" ou "PARC 03/10" que o banco imprime quando o talão da linha JÁ mostra a
+ * parcela (`Parcela`): a numeração não aparece duas vezes. Só tira o sufixo que bate com a parcela da
+ * própria linha (número e total); qualquer outro texto fica como está.
+ */
+export function stripInstallmentSuffix(description: string, number: number, total: number | null): string {
+  if (total === null) return description;
+  const n = String(number);
+  const t = String(total);
+  const suffix = new RegExp(
+    String.raw`\s*(?:\b(?:PARC(?:ELA)?\.?)\s*)?[(\[]?\s*0*${n}\s*(?:/|\s+DE\s+)\s*0*${t}\s*[)\]]?\s*$`,
+    'i',
+  );
+  const stripped = description.replace(suffix, '').trimEnd();
+  return stripped === '' ? description : stripped;
+}

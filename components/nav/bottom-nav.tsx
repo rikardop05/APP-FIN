@@ -7,6 +7,8 @@ import { MoreHorizontal, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NAV_ITEMS, isNavItemActive } from './nav-items';
 import { SignOutButton } from './sign-out-button';
+import { ThemeToggle } from './theme-toggle';
+import type { Theme } from './theme';
 
 const OVERFLOW_PANEL_ID = 'bottom-nav-overflow';
 
@@ -26,7 +28,7 @@ const TAB_CLASS =
  * `viewport-fit=cover` do layout raiz). A altura total é a variável `--bottom-nav-h` (globals.css),
  * a mesma que o painel do "Mais" e o rodapé fixo das telas (`Placar`) somam.
  */
-export function BottomNav() {
+export function BottomNav({ theme }: { theme: Theme }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -106,6 +108,9 @@ export function BottomNav() {
                 );
               })}
               <SignOutButton variant="tile" />
+            </div>
+            <div className="mt-3 border-t border-border pt-3">
+              <ThemeToggle variant="panel" initialTheme={theme} />
             </div>
           </nav>
         </div>

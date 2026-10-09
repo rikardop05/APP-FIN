@@ -55,7 +55,7 @@ describe('comprometimento', () => {
   });
   it('as linhas fecham exatamente com o total, inclusive com estorno', () => {
     const breakdown = {
-      currentStatementCents: c(-76609),
+      overdueUnpaidCents: c(0), currentStatementCents: c(-76609),
       laterInstallmentsCents: c(-236615),
       laterPurchasesCents: c(1500),
     };
@@ -64,9 +64,20 @@ describe('comprometimento', () => {
     const total = commitmentTotal(c(-76609 - 236615 + 1500));
     expect(rows.reduce((sum, r) => sum + r.valueCents, 0)).toBe(total);
   });
+  it('faturas anteriores nao pagas entram na soma exata quando existem', () => {
+    const breakdown = {
+      overdueUnpaidCents: c(-107482),
+      currentStatementCents: c(-76609),
+      laterInstallmentsCents: c(-236615),
+      laterPurchasesCents: c(0),
+    };
+    const rows = commitmentRows(breakdown, '2026-10');
+    expect(rows.map((r) => r.key)).toEqual(['overdue', 'current', 'installments']);
+    expect(rows.reduce((sum, r) => sum + r.valueCents, 0)).toBe(commitmentTotal(c(-107482 - 76609 - 236615)));
+  });
   it('compras ja lancadas somem quando zero', () => {
     const rows = commitmentRows(
-      { currentStatementCents: c(-100), laterInstallmentsCents: c(-200), laterPurchasesCents: c(0) },
+      { overdueUnpaidCents: c(0), currentStatementCents: c(-100), laterInstallmentsCents: c(-200), laterPurchasesCents: c(0) },
       '2026-10',
     );
     expect(rows.map((r) => r.key)).toEqual(['current', 'installments']);

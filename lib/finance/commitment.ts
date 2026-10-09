@@ -60,9 +60,18 @@
  *    fatura do mes corrente (inteira), as parcelas dos meses seguintes e as
  *    compras ja lancadas em faturas futuras (compra feita depois do
  *    fechamento, e estorno). Linha sem `installment` conta como compra.
+ *
+ * 8. **Fatura vencida e NAO paga de competencia ANTERIOR continua comprometida**
+ *    (decisao do Ricardo, 2026-10-08, para qualquer competencia passada). Linha
+ *    antes de `fromCompetence` marcada `statementOverdue` (o feed so marca a de
+ *    fatura existente e nao paga) entra em `breakdown.overdueUnpaidCents`, no
+ *    `totalCents` e no uso de limite, e o mes vai para `overdueCompetences`.
+ *    `byCompetence` e `lastCommittedCompetence` continuam so a janela. Linha do
+ *    passado sem a marca fica fora, como antes; a marca numa competencia da
+ *    janela nao muda nada (a linha ja conta no mes dela).
  */
 
-import { competenceRange, type Competence } from '@/lib/date';
+import { competenceRange, diffMonths, type Competence } from '@/lib/date';
 import type { TransactionStatus } from '@/lib/finance/enum-mirrors';
 import {
   addCents,
@@ -82,6 +91,11 @@ export interface CommitmentInput {
     installment?: boolean;
     /** A fatura desta linha (cartao + competencia) esta marcada como paga. Ausente = nao paga. */
     statementPaid?: boolean;
+    /**
+     * Linha de competencia ANTERIOR a `fromCompetence` cuja fatura existe e nao esta paga
+     * (item 8). So vale antes da janela. Ausente = linha do passado fica fora.
+     */
+    statementOverdue?: boolean;
   }[];
   fromCompetence: Competence;
   months: number;
@@ -139,6 +153,8 @@ function usageBasisPoints(used: Cents, limit: Cents): BasisPoints {
 
 /** As tres linhas do card "Comprometido nos cartoes"; a soma e `totalCents`. */
 export interface CommitmentBreakdown {
+  /** Faturas de competencias ANTERIORES, vencidas e nao pagas (item 8), com sinal. */
+  overdueUnpaidCents: Cents;
   /** Tudo da fatura de `fromCompetence` (parcela e compra), com sinal. */
   currentStatementCents: Cents;
   /** Parcelas das competencias seguintes da janela. */
@@ -158,6 +174,8 @@ export function futureCommitment(input: CommitmentInput): {
     byCardId: Record<string, Cents>;
   }[];
   breakdown: CommitmentBreakdown;
+  /** Competencias anteriores com fatura vencida e nao paga que entraram, em ordem. */
+  overdueCompetences: Competence[];
   totalCents: Cents;
   lastCommittedCompetence: Competence | null;
   limitUsage: { cardId: string; usedCents: Cents; usageBp: BasisPoints | null }[];
@@ -173,20 +191,35 @@ export function futureCommitment(input: CommitmentInput): {
   const monthCardTotals = new Map<Competence, Map<string, Cents>>();
   const monthInstallments = new Map<Competence, Cents>();
   const monthPurchases = new Map<Competence, Cents>();
+  let overdueUnpaid = zero();
+  const overdueMonths = new Set<Competence>();
   // Cartoes vistos em lancamento, na ordem em que aparecem — so para os que
   // nao estiverem em `cards` entrarem em `limitUsage` sem sumir calados.
   const seenCardIds: string[] = [];
   const seen = new Set<string>();
 
   for (const transaction of input.transactions) {
-    if (!inWindow.has(transaction.competence)) continue;
     // Fatura paga nao e mais compromisso (item 6 do cabecalho).
     if (transaction.statementPaid === true) continue;
-
     const amount = cents(transaction.amountCents);
+    const cardId = transaction.creditCardId;
+
+    if (!inWindow.has(transaction.competence)) {
+      // Fora da janela so conta a fatura vencida e nao paga de ANTES dela (item 8).
+      const beforeWindow = diffMonths(transaction.competence, input.fromCompetence) < 0;
+      if (!beforeWindow || transaction.statementOverdue !== true) continue;
+      overdueUnpaid = addCents(overdueUnpaid, amount);
+      overdueMonths.add(transaction.competence);
+      cardTotals.set(cardId, addCents(cardTotals.get(cardId) ?? zero(), amount));
+      if (!seen.has(cardId)) {
+        seen.add(cardId);
+        seenCardIds.push(cardId);
+      }
+      continue;
+    }
+
     const parts = transaction.installment === true ? monthInstallments : monthPurchases;
     parts.set(transaction.competence, addCents(parts.get(transaction.competence) ?? zero(), amount));
-    const cardId = transaction.creditCardId;
 
     cardTotals.set(cardId, addCents(cardTotals.get(cardId) ?? zero(), amount));
 
@@ -218,6 +251,7 @@ export function futureCommitment(input: CommitmentInput): {
 
   const [current, ...later] = byCompetence;
   const breakdown: CommitmentBreakdown = {
+    overdueUnpaidCents: overdueUnpaid,
     currentStatementCents: current?.totalCents ?? zero(),
     laterInstallmentsCents: sumValues(later.map((entry) => entry.installmentCents)),
     laterPurchasesCents: sumValues(later.map((entry) => entry.purchaseCents)),
@@ -259,9 +293,9 @@ export function futureCommitment(input: CommitmentInput): {
     }
   }
 
-  const totalCents = sumValues(
-    byCompetence.map((entry) => entry.totalCents),
-  );
+  // Janela + vencidas nao pagas: a soma das quatro linhas do `breakdown`.
+  const totalCents = addCents(sumValues(byCompetence.map((entry) => entry.totalCents)), overdueUnpaid);
+  const overdueCompetences = [...overdueMonths].sort((a, b) => diffMonths(a, b));
 
-  return { byCompetence, breakdown, totalCents, lastCommittedCompetence, limitUsage };
+  return { byCompetence, breakdown, overdueCompetences, totalCents, lastCommittedCompetence, limitUsage };
 }
