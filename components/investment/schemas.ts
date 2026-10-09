@@ -70,6 +70,12 @@ export const investmentResponseSchema = z.object({
     monthsWithData: z.number().int(),
     windowFrom: z.string(),
     windowTo: z.string(),
+    /**
+     * Meses da janela que ficaram FORA da média por não ter receita lançada (decisão de 2026-10-08).
+     * OPCIONAL enquanto `app/api/investment/load.ts` não os repassa: a tela só diz quais ficaram fora
+     * quando a lista vem.
+     */
+    excludedMonths: z.array(z.string()).optional(),
   }),
 });
 

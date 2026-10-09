@@ -194,6 +194,96 @@ export interface BuildImportPreviewInput {
    * membro deixa o cartao preencher. Ausente = comportamento anterior.
    */
   cardHolders?: ReadonlyMap<string, string>;
+  /**
+   * Planos de parcelamento ja gravados para o cartao do lote (ver
+   * `ExistingInstallmentPlan`). A linha que casa com um deles nao conta como
+   * plano novo em `installmentPlansDetected`. Ausente = `[]`.
+   */
+  existingPlans?: readonly ExistingInstallmentPlan[];
+}
+
+/**
+ * Um plano de parcelamento JA GRAVADO, do household e do cartao do lote.
+ * Contrato combinado com a Estaca (`listExistingInstallmentPlans` em lib/db).
+ *
+ * Existe para a fatura SEGUINTE de um parcelamento nao criar outro plano nem
+ * reprojetar as parcelas que o lote anterior ja projetou: com o mesmo
+ * `dedupe_hash`, isso violava o indice unico (household_id, dedupe_hash) no
+ * commit, e o mes contava em dobro.
+ */
+export interface ExistingInstallmentPlan {
+  /** `installment_plans.id`. */
+  id: string;
+  /** Descricao CONFIRMADA no lote que criou o plano (pode ter sido editada). */
+  description: string;
+  installmentsCount: number;
+  totalCents: Cents;
+  firstCompetence: Competence;
+  /** Parcelas `planned` do plano: a que tem o numero da linha real e conciliada. */
+  openPlanned: { installmentNumber: number; transactionId: string }[];
+  /** Numeros com transacao `posted`: ja tem a parcela real, nao casam de novo. */
+  postedNumbers: number[];
+  /**
+   * `raw_description` das transacoes reais (posted) do plano. Casa o plano
+   * quando o usuario trocou a descricao no primeiro lote ("Sofa da sala").
+   */
+  rawDescriptions?: string[];
+}
+
+/** O que `findExistingPlan` precisa saber de uma linha parcelada. */
+interface InstallmentLineKey {
+  description: string;
+  rawDescription: string;
+  amountCents: Cents;
+  installment: PreviewInstallment;
+  /** Competencia em que a linha e cobrada (a da fatura, em cartao). */
+  competence: Competence;
+}
+
+/**
+ * Plano gravado a que a linha parcelada pertence, ou `null`.
+ *
+ * Casa quando, ao mesmo tempo:
+ * - a descricao bate: `planKey` da descricao confirmada da linha com a do plano,
+ *   OU a descricao normalizada da `rawDescription` da linha com a de alguma real
+ *   do plano (`rawDescriptions`) — `normalizeDescription` tira o sufixo de
+ *   parcela, entao `03/10` e `04/10` casam;
+ * - o total de parcelas e o mesmo;
+ * - a primeira competencia e a mesma: `competencia - (current - 1)`. E o que
+ *   separa a compra de outra identica iniciada em outro mes;
+ * - o valor fecha com o total do plano com ate 1 centavo por parcela
+ *   (`|amount * total - totalCents| <= total`): o banco arredonda a primeira ou
+ *   a ultima parcela (100,00 em 3x = 33,33/33,33/33,34);
+ * - o numero da linha ainda nao tem parcela real (`postedNumbers`, mais os
+ *   numeros ja tomados neste lote). Se tiver, tenta o proximo candidato: duas
+ *   compras identicas no mesmo mes sao dois planos com a mesma chave.
+ *
+ * Ordem dos candidatos: a do array (o loader entrega por created_at, id).
+ */
+function findExistingPlan(
+  plans: readonly ExistingInstallmentPlan[],
+  line: InstallmentLineKey,
+  takenNumbers: ReadonlyMap<string, ReadonlySet<number>>,
+): ExistingInstallmentPlan | null {
+  const { current, total } = line.installment;
+  const firstCompetence = addCompetence(line.competence, -(current - 1));
+  const lineKey = planKey(line.description, total);
+  const rawKey = normalizeDescription(line.rawDescription);
+  for (const plan of plans) {
+    if (plan.installmentsCount !== total || plan.firstCompetence !== firstCompetence) continue;
+    const describes =
+      planKey(plan.description, plan.installmentsCount) === lineKey ||
+      (rawKey !== '' &&
+        (plan.rawDescriptions ?? []).some((raw) => normalizeDescription(raw) === rawKey));
+    if (!describes) continue;
+    const deviation = line.amountCents * total - plan.totalCents;
+    if (Math.abs(deviation) > total) continue;
+    if (plan.postedNumbers.includes(current) || takenNumbers.get(plan.id)?.has(current) === true) {
+      continue;
+    }
+    return plan;
+  }
+  return null;
 }
 
 /** Saida de `buildImportPreview`. */
@@ -409,11 +499,32 @@ export function buildImportPreview(
   const isInformational = (row: ImportPreviewRow): boolean =>
     input.parse.rows[row.index]?.informational === true;
 
+  // Linha de um plano JA GRAVADO (fatura seguinte) nao e plano novo.
+  const existingPlans = input.existingPlans ?? [];
+  const takenNumbers = new Map<string, Set<number>>();
   const planKeys = new Set<string>();
   for (const row of notDuplicated) {
-    if (row.installment !== null && !isInformational(row)) {
-      planKeys.add(planKey(row.description, row.installment.total));
+    if (row.installment === null || isInformational(row)) continue;
+    if (row.amountCents !== null && row.competence !== null) {
+      const existing = findExistingPlan(
+        existingPlans,
+        {
+          description: row.description,
+          rawDescription: row.rawDescription,
+          amountCents: row.amountCents,
+          installment: row.installment,
+          competence: row.competence,
+        },
+        takenNumbers,
+      );
+      if (existing !== null) {
+        const taken = takenNumbers.get(existing.id) ?? new Set<number>();
+        taken.add(row.installment.current);
+        takenNumbers.set(existing.id, taken);
+        continue;
+      }
     }
+    planKeys.add(planKey(row.description, row.installment.total));
   }
 
   const amounts = notDuplicated
@@ -478,6 +589,12 @@ export interface FinalizeInput {
    * `occurredOn` (comportamento anterior).
    */
   statementCompetence: Competence | null;
+  /**
+   * Planos ja gravados do household para o cartao do lote. A linha que casa
+   * (`findExistingPlan`) liga ao plano existente, concilia a planned do mesmo
+   * numero e NAO cria plano nem projeta parcelas. Ausente = `[]`.
+   */
+  existingPlans?: readonly ExistingInstallmentPlan[];
 }
 
 /** Uma transacao pronta para gravar. */
@@ -491,13 +608,28 @@ export interface FinalizedTransaction {
   categoryId: string | null;
   memberId: string | null;
   dedupeHash: string;
+  /** Plano NOVO deste lote (`installmentPlans[].ref`). Exclusivo com `installmentPlanId`. */
   installmentPlanRef: number | null;
+  /** Plano JA GRAVADO (`ExistingInstallmentPlan.id`), com `installmentPlanRef` null. */
+  installmentPlanId: string | null;
   installmentNumber: number | null;
+  /**
+   * A `planned` do plano existente que esta linha real cumpre (mesmo numero):
+   * o commit a grava `reconciled` com `reconciled_by` = esta linha. `null`
+   * quando nao ha planned aberta daquele numero.
+   */
+  reconcilesTransactionId: string | null;
 }
 
 /** Um plano de parcelas detectado na fatura. */
 export interface FinalizedInstallmentPlan {
   ref: number;
+  /**
+   * `index` da linha confirmada que abriu o plano: a "linha de origem" que a
+   * coluna "Ainda presos" mostra (`summarizeStillHeld`). Aditivo; o banco nao o
+   * grava.
+   */
+  sourceIndex: number;
   description: string;
   totalCents: Cents;
   installmentsCount: number;
@@ -575,6 +707,9 @@ export function finalizeImport(input: FinalizeInput): FinalizeResult {
   // sem `forceDuplicate` nao entram as duas.
   const seen = new Set(input.existingHashes);
   const plansByKey = new Map<string, FinalizedInstallmentPlan>();
+  const existingPlans = input.existingPlans ?? [];
+  // Numeros de parcela ja tomados neste lote, por plano existente.
+  const takenNumbers = new Map<string, Set<number>>();
 
   for (const row of input.rows) {
     if (!row.include) {
@@ -609,14 +744,48 @@ export function finalizeImport(input: FinalizeInput): FinalizeResult {
     );
 
     let planRef: number | null = null;
+    let existingPlanId: string | null = null;
+    let reconcilesTransactionId: string | null = null;
     let installmentNumber: number | null = null;
 
     if (row.installment !== null) {
+      // Fatura seguinte de um plano ja gravado: liga a ele, concilia a planned do
+      // mesmo numero e nao cria plano nem reprojeta (as futuras ja existem).
+      // So a linha que CASA de fato (`findExistingPlan`) vai para o plano: uma
+      // compra nova com a mesma descricao cai no `plansByKey` (plano novo), na
+      // ordem que for — a mesma regra do preview. Como o numero tomado bloqueia
+      // o plano, duas linhas nunca conciliam a mesma planned.
+      const existing = findExistingPlan(
+        existingPlans,
+        {
+          description: row.description,
+          rawDescription: row.rawDescription,
+          amountCents: row.amountCents,
+          installment: row.installment,
+          competence,
+        },
+        takenNumbers,
+      );
+      if (existing !== null) {
+        const current = row.installment.current;
+        reconcilesTransactionId =
+          existing.openPlanned.find((planned) => planned.installmentNumber === current)
+            ?.transactionId ?? null;
+        const taken = takenNumbers.get(existing.id) ?? new Set<number>();
+        taken.add(current);
+        takenNumbers.set(existing.id, taken);
+        existingPlanId = existing.id;
+        installmentNumber = current;
+      }
+    }
+
+    if (row.installment !== null && existingPlanId === null) {
       const key = planKey(row.description, row.installment.total);
       let plan = plansByKey.get(key);
       if (plan === undefined) {
         plan = {
           ref: installmentPlans.length + 1,
+          sourceIndex: row.index,
           description: row.description,
           // `amountCents * total`: `allocate` divide isso em N partes iguais ao
           // valor confirmado, entao o plano e as parcelas fecham com a linha.
@@ -664,7 +833,9 @@ export function finalizeImport(input: FinalizeInput): FinalizeResult {
               rawDescription: childText,
             }),
             installmentPlanRef: plan.ref,
+            installmentPlanId: null,
             installmentNumber: number,
+            reconcilesTransactionId: null,
           });
         }
       }
@@ -688,7 +859,9 @@ export function finalizeImport(input: FinalizeInput): FinalizeResult {
       memberId: row.memberId,
       dedupeHash: hash,
       installmentPlanRef: planRef,
+      installmentPlanId: existingPlanId,
       installmentNumber,
+      reconcilesTransactionId,
     });
     included.push(row.amountCents);
   }

@@ -9,7 +9,7 @@ import { basisPoints } from '@/lib/money';
 
 import type { PassiveIncomeState } from './passive-income';
 
-const SECTION = 'rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5';
+const SECTION = 'border border-border bg-card p-4 sm:p-5';
 
 function Bar({ bp, label }: { bp: number; label: string }) {
   const percent = Math.min(100, Math.max(0, bp / 100));
@@ -46,7 +46,7 @@ export function PassiveIncomeCard({ state }: { state: PassiveIncomeState }) {
         </p>
         <Link
           href="/investimentos"
-          className="mt-3 inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          className="mt-3 inline-flex min-h-11 items-center bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 sm:min-h-9"
         >
           Monte seu plano de renda passiva
         </Link>
@@ -59,7 +59,7 @@ export function PassiveIncomeCard({ state }: { state: PassiveIncomeState }) {
       <section
         aria-labelledby="dashboard-passive-heading"
         role="alert"
-        className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 sm:p-5"
+        className="border border-warning/50 bg-warning-soft p-4 text-sm text-warning sm:p-5"
       >
         <h2 id="dashboard-passive-heading" className="mb-1 flex items-center gap-2 text-base font-semibold">
           <AlertTriangle className="h-5 w-5" aria-hidden="true" />
@@ -90,7 +90,7 @@ export function PassiveIncomeCard({ state }: { state: PassiveIncomeState }) {
       </p>
 
       <p className="mt-3 text-sm text-muted-foreground">Patrimônio atual</p>
-      <p className="text-2xl font-semibold tracking-tight"><Money value={state.currentPortfolioCents} sign="never" /></p>
+      <p className="text-2xl font-semibold"><Money value={state.currentPortfolioCents} sign="never" /></p>
 
       <ul className="mt-3 flex flex-col gap-3" aria-label="Alvo por cenário">
         {state.scenarios.map((row) => (

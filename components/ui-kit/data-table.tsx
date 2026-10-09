@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, type ReactNode } from 'react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatInteger } from '@/lib/i18n/format';
 
@@ -102,7 +103,7 @@ export function DataTable<T>({
       <div className="-mx-4 overflow-x-auto sm:mx-0">
         <table className="w-full min-w-[480px] border-collapse text-sm">
           <thead>
-            <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <tr className="border-b-2 border-foreground text-left text-xs uppercase tracking-wide text-muted-foreground">
               {columns.map((column) => {
                 const active = sort?.columnId === column.id;
                 return (
@@ -128,14 +129,18 @@ export function DataTable<T>({
                         type="button"
                         onClick={() => toggleSort(column.id)}
                         className={cn(
-                          'inline-flex items-center gap-1 hover:text-foreground',
+                          'inline-flex min-h-11 items-center gap-1 hover:text-foreground sm:min-h-8',
                           active && 'text-foreground',
                         )}
                       >
                         {column.header}
-                        <span aria-hidden="true">
-                          {active ? (sort?.direction === 'asc' ? '▲' : '▼') : ''}
-                        </span>
+                        {active ? (
+                          sort?.direction === 'asc' ? (
+                            <ArrowUp className="h-3 w-3" aria-hidden="true" />
+                          ) : (
+                            <ArrowDown className="h-3 w-3" aria-hidden="true" />
+                          )
+                        ) : null}
                       </button>
                     ) : (
                       column.header
@@ -177,7 +182,7 @@ export function DataTable<T>({
               type="button"
               onClick={() => setPage((current) => Math.max(0, current - 1))}
               disabled={currentPage === 0}
-              className="rounded-md border border-border px-3 py-1 disabled:opacity-40"
+              className="inline-flex h-11 items-center border border-input bg-card px-3 disabled:opacity-40 sm:h-8"
             >
               Anterior
             </button>
@@ -191,7 +196,7 @@ export function DataTable<T>({
                 setPage((current) => Math.min(pageCount - 1, current + 1))
               }
               disabled={currentPage >= pageCount - 1}
-              className="rounded-md border border-border px-3 py-1 disabled:opacity-40"
+              className="inline-flex h-11 items-center border border-input bg-card px-3 disabled:opacity-40 sm:h-8"
             >
               Próxima
             </button>

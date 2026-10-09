@@ -27,7 +27,7 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-12 text-center',
+        'flex flex-col items-center gap-3 border border-dashed border-input px-4 py-12 text-center',
         className,
       )}
     >
@@ -49,7 +49,7 @@ export function EmptyState({
       ) : (
         <Link
           href={action.href}
-          className="mt-2 inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          className="mt-2 inline-flex h-11 items-center justify-center border border-primary bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:h-9"
         >
           {action.label}
         </Link>

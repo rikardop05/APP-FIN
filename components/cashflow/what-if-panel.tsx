@@ -63,7 +63,7 @@ export function WhatIfPanel({ window, items, onChange }: WhatIfPanelProps) {
   return (
     <section
       aria-labelledby="fluxo-whatif-heading"
-      className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
+      className="flex flex-col gap-4 border border-border bg-card p-4 shadow-sm sm:p-5"
     >
       <div className="flex flex-col gap-1">
         <h2 id="fluxo-whatif-heading" className="flex items-center gap-2 text-base font-semibold">
@@ -127,7 +127,7 @@ export function WhatIfPanel({ window, items, onChange }: WhatIfPanelProps) {
 
       {items.length > 0 ? (
         <div className="flex flex-col gap-2">
-          <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+          <ul className="flex flex-col divide-y divide-border border border-border">
             {items.map((item) => (
               <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                 <span className="flex min-w-0 flex-col">

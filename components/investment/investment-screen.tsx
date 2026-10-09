@@ -35,7 +35,7 @@ import {
 } from './schemas';
 
 const inputClass =
-  'h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring';
+  'h-11 w-full border border-input bg-card px-3 text-base sm:h-9 sm:text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring';
 
 function Field({ label, htmlFor, error, hint, children }: { label: string; htmlFor: string; error?: string; hint?: string; children: ReactNode }) {
   return (
@@ -65,7 +65,7 @@ async function readData(response: Response): Promise<InvestmentData> {
 /** Avisos permanentes do módulo (RF-INV-01 e RF-INV-03): aparecem em toda visita, sem fechar. */
 function Notices() {
   return (
-    <div className="mt-4 flex flex-col gap-1 rounded-lg border border-border bg-secondary/40 px-4 py-3 text-sm" role="note">
+    <div className="mt-4 flex flex-col gap-1 border border-border bg-secondary/40 px-4 py-3 text-sm" role="note">
       <p><strong className="font-semibold">Valores em R$ de hoje.</strong> Tudo aqui está no poder de compra de hoje, já descontada a inflação.</p>
       <p className="text-muted-foreground">Retorno passado não é garantia de retorno futuro. Os cenários são hipóteses para planejar, não previsões.</p>
     </div>
@@ -93,7 +93,7 @@ function PlanFields({ values, errors, onChange }: PlanFieldsProps) {
         <Field label="Patrimônio atual" htmlFor="plan-portfolio" error={errors.portfolio}>
           <input id="plan-portfolio" className={inputClass} value={values.portfolio} onChange={set('portfolio')} inputMode="decimal" placeholder="R$ 0,00" />
         </Field>
-        <Field label="Aporte mensal atual" htmlFor="plan-contribution" error={errors.contribution} hint="Quanto você consegue investir por mês hoje.">
+        <Field label="Aporte mensal planejado" htmlFor="plan-contribution" error={errors.contribution} hint="Quanto você planeja investir por mês.">
           <input id="plan-contribution" className={inputClass} value={values.contribution} onChange={set('contribution')} inputMode="decimal" placeholder="R$ 0,00" />
         </Field>
         <Field label="Prazo desejado (opcional)" htmlFor="plan-date" error={errors.targetDate}>
@@ -173,19 +173,19 @@ function CreatePlan({ onCreated }: { onCreated: (data: InvestmentData) => void }
   }
 
   return (
-    <section aria-labelledby="create-heading" className="mt-6 rounded-lg border border-border bg-card p-4 sm:p-6">
+    <section aria-labelledby="create-heading" className="mt-6 border border-border bg-card p-4 sm:p-6">
       <div className="mb-4 flex items-start gap-3">
         <TrendingUp className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
         <div>
           <h2 id="create-heading" className="font-semibold">Crie seu plano de renda passiva</h2>
           <p className="text-sm text-muted-foreground">
-            Informe a renda que você quer receber, o patrimônio e o aporte de hoje. Mostramos três cenários (conservador, médio e otimista) com as premissas de cada um, que você pode editar depois.
+            Informe a renda que você quer receber, o patrimônio e o aporte mensal planejado. Mostramos três cenários (conservador, médio e otimista) com as premissas de cada um, que você pode editar depois.
           </p>
         </div>
       </div>
       <form className="flex flex-col gap-4" onSubmit={(event) => void submit(event)} noValidate>
         <PlanFields values={values} errors={errors} onChange={setValues} />
-        {failure ? <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{failure}</p> : null}
+        {failure ? <p className="border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{failure}</p> : null}
         <div className="flex justify-end border-t border-border pt-4">
           <Button type="submit" disabled={saving}>{saving ? 'Criando…' : 'Criar plano'}</Button>
         </div>
@@ -210,13 +210,13 @@ function ScenarioCard({ scenario, surplus, maxYears, values, errors, onChange }:
   const setPremise = (field: 'returnPct' | 'withdrawalPct') => (event: { target: { value: string } }) =>
     onChange({ ...values, scenarios: { ...values.scenarios, [label]: { ...row, [field]: event.target.value } } });
   return (
-    <article className="flex min-w-0 flex-col gap-4 rounded-lg border border-border bg-card p-4 sm:p-5" aria-labelledby={`scenario-${label}`}>
+    <article className="flex min-w-0 flex-col gap-4 border border-border bg-card p-4 sm:p-5" aria-labelledby={`scenario-${label}`}>
       <div className="flex items-center justify-between gap-2">
         <h3 id={`scenario-${label}`} className="text-base font-semibold">{scenarioName(label)}</h3>
         <Badge variant={scenario.result.feasible ? 'success' : 'warning'}>{scenario.result.feasible ? 'Viável' : 'Fora do prazo'}</Badge>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 rounded-md bg-secondary/40 p-3">
+      <div className="grid grid-cols-2 gap-3 bg-secondary/40 p-3">
         <Field label="Retorno real ao ano (%)" htmlFor={`ret-${label}`} error={errors[`${label}.return`]}>
           <input id={`ret-${label}`} className={inputClass} value={row.returnPct} onChange={setPremise('returnPct')} inputMode="decimal" />
         </Field>
@@ -231,17 +231,17 @@ function ScenarioCard({ scenario, surplus, maxYears, values, errors, onChange }:
           <dd className="text-lg font-semibold"><Money value={scenario.result.targetPortfolioCents} sign="never" /></dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">Tempo para chegar lá com o aporte atual</dt>
+          <dt className="text-muted-foreground">Tempo para chegar lá com o aporte planejado</dt>
           <dd className={months.kind === 'unreachable' || months.kind === 'too-long' ? 'font-medium text-amber-800' : 'font-medium'}>{months.text}</dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">Renda mensal projetada em {maxYears} anos, mantendo o aporte atual</dt>
+          <dt className="text-muted-foreground">Renda mensal projetada em {maxYears} anos, mantendo o aporte planejado</dt>
           <dd className="font-medium"><Money value={scenario.result.projectedIncomeWithCurrentPlanCents} sign="never" /></dd>
         </div>
         <div>
           <dt className="mb-1 text-muted-foreground">Aporte mensal necessário para chegar em</dt>
           <dd>
-            <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
+            <ul className="flex flex-col divide-y divide-border border border-border">
               {scenario.result.requiredByHorizon.map((item) => (
                 <li key={item.years} className="flex items-baseline justify-between gap-3 px-3 py-1.5">
                   <span>{item.years} anos</span>
@@ -328,12 +328,12 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
       ) : (
         <form className="mt-6 flex flex-col gap-6" onSubmit={(event) => void save(event)} noValidate>
           {confirmation ? (
-            <p className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900" role="status">
+            <p className="border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900" role="status">
               {confirmation}
             </p>
           ) : null}
 
-          <section aria-labelledby="plan-heading" className="rounded-lg border border-border bg-card p-4 sm:p-6">
+          <section aria-labelledby="plan-heading" className="border border-border bg-card p-4 sm:p-6">
             <h2 id="plan-heading" className="mb-4 font-semibold">Seu plano</h2>
             <PlanFields values={values} errors={errors} onChange={setValues} />
           </section>
@@ -346,7 +346,7 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
               </p>
             </div>
             {dirty ? (
-              <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+              <p className="border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
                 Você alterou o plano. Os resultados abaixo ainda são os da versão salva: salve para recalcular.
               </p>
             ) : null}
@@ -358,17 +358,17 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
             </div>
           </section>
 
-          {failure ? <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{failure}</p> : null}
+          {failure ? <p className="border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{failure}</p> : null}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
             {idleHint ? <p className="text-sm text-muted-foreground sm:mr-2">{idleHint}</p> : null}
             <Button variant="outline" disabled={!dirty || saving} onClick={() => saved !== null && (setValues(saved), setErrors({}))}>Descartar alterações</Button>
             <Button type="submit" disabled={!dirty || saving}>{saving ? 'Salvando…' : 'Salvar e recalcular'}</Button>
           </div>
 
-          <section aria-labelledby="curves-heading" className="rounded-lg border border-border bg-card p-4 sm:p-6">
+          <section aria-labelledby="curves-heading" className="border border-border bg-card p-4 sm:p-6">
             <h2 id="curves-heading" className="font-semibold">Como o patrimônio cresce</h2>
             <p className="mb-3 text-sm text-muted-foreground">
-              Patrimônio acumulado nos próximos {maxYears} anos, mantendo o aporte atual, em R$ de hoje.
+              Patrimônio acumulado nos próximos {maxYears} anos, mantendo o aporte planejado, em R$ de hoje.
             </p>
             <AccumulationChart scenarios={ordered} />
           </section>

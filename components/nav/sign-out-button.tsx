@@ -34,8 +34,8 @@ export function SignOutButton({ variant }: SignOutButtonProps) {
       disabled={pending}
       className={cn(
         variant === 'sidebar'
-          ? 'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground disabled:opacity-50'
-          : 'flex flex-col items-center gap-1 rounded-md px-2 py-3 text-xs font-medium text-muted-foreground hover:bg-secondary/60 hover:text-foreground disabled:opacity-50',
+          ? 'flex min-h-11 w-full items-center gap-3 border-l-2 border-transparent px-3 text-sm font-medium text-sidebar-muted transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-foreground disabled:opacity-50'
+          : 'flex min-h-[44px] flex-col items-center justify-center gap-1 border border-border bg-card px-2 py-3 text-xs font-medium text-foreground hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
       )}
     >
       <LogOut className={variant === 'sidebar' ? 'h-4 w-4 shrink-0' : 'h-5 w-5'} aria-hidden="true" />

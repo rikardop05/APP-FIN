@@ -113,7 +113,7 @@ export function AccumulationChart({ scenarios, compact = false, reference = null
         {yTicks.map((value) => (
           <g key={value}>
             <line x1={PAD.left} x2={width - PAD.right} y1={y(value)} y2={y(value)} className="stroke-border" strokeWidth={1} />
-            <text x={PAD.left - 6} y={y(value) + 4} textAnchor="end" fontSize={11} className="fill-muted-foreground">
+            <text x={PAD.left - 6} y={y(value) + 4} textAnchor="end" fontSize={12} className="fill-muted-foreground">
               {formatCompactBRL(cents(Math.round(value)))}
             </text>
           </g>
@@ -125,7 +125,7 @@ export function AccumulationChart({ scenarios, compact = false, reference = null
             x={x(month)}
             y={HEIGHT_NOW - 8}
             textAnchor={month === 0 ? 'start' : month === lastMonth ? 'end' : 'middle'}
-            fontSize={11}
+            fontSize={12}
             className="fill-muted-foreground"
           >
             {yearTickLabel(month)}
@@ -153,7 +153,7 @@ export function AccumulationChart({ scenarios, compact = false, reference = null
         {reference ? (
           <g>
             <line x1={PAD.left} x2={width - PAD.right} y1={y(reference.valueCents)} y2={y(reference.valueCents)} className="stroke-amber-600" strokeWidth={1.5} strokeDasharray="1 5" strokeLinecap="round" />
-            <text x={PAD.left + 4} y={y(reference.valueCents) - 5} fontSize={11} fontWeight={600} className="fill-amber-800">
+            <text x={PAD.left + 4} y={y(reference.valueCents) - 5} fontSize={12} fontWeight={600} className="fill-amber-800">
               {`${reference.label}: ${formatCompactBRL(reference.valueCents)}`}
             </text>
           </g>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { listContentState } from './list-presentation';
+import { listContentState, sortForDisplay } from './list-presentation';
 
 /**
  * O bug do T-403: carga falha -> `rows` fica vazio -> a tela mostrava o estado
@@ -29,5 +29,51 @@ describe('listContentState', () => {
   it('lista quando a carga deu certo e ha itens', () => {
     expect(listContentState({ loading: false, failed: false, rowCount: 1 })).toBe('list');
     expect(listContentState({ loading: false, failed: false, rowCount: 60 })).toBe('list');
+  });
+});
+
+describe('sortForDisplay: o mês atual primeiro, parcelas futuras no fim', () => {
+  const row = (id: string, competence: string, occurredOn: string) => ({ id, competence, occurredOn });
+  const TODAY = '2026-10-08';
+
+  it('ordem: mês atual (mais recente primeiro), meses passados (do mais recente), futuros por último (do mais próximo)', () => {
+    const rows = [
+      row('futuro-dez', '2026-12', '2026-12-01'),
+      row('passado-set', '2026-09', '2026-09-15'),
+      row('atual-01', '2026-10', '2026-10-01'),
+      row('futuro-nov', '2026-11', '2026-11-01'),
+      row('atual-07', '2026-10', '2026-10-07'),
+      row('passado-ago', '2026-08', '2026-08-30'),
+    ];
+    expect(sortForDisplay(rows, TODAY).map((r) => r.id)).toEqual([
+      'atual-07',
+      'atual-01',
+      'passado-set',
+      'passado-ago',
+      'futuro-nov',
+      'futuro-dez',
+    ]);
+  });
+
+  it('o critério é a COMPETÊNCIA (o eixo do app), não a data da compra: parcela de nov comprada em set é futura', () => {
+    const rows = [row('parcela', '2026-11', '2026-09-20'), row('compra-de-hoje', '2026-10', '2026-10-08')];
+    expect(sortForDisplay(rows, TODAY).map((r) => r.id)).toEqual(['compra-de-hoje', 'parcela']);
+  });
+
+  it('empate preserva a ordem recebida do servidor (ordenação estável)', () => {
+    const rows = [row('a', '2026-10', '2026-10-05'), row('b', '2026-10', '2026-10-05'), row('c', '2026-10', '2026-10-05')];
+    expect(sortForDisplay(rows, TODAY).map((r) => r.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('não altera o array de entrada; lista vazia devolve vazia', () => {
+    const rows = [row('futuro', '2026-12', '2026-12-01'), row('atual', '2026-10', '2026-10-01')];
+    sortForDisplay(rows, TODAY);
+    expect(rows.map((r) => r.id)).toEqual(['futuro', 'atual']);
+    expect(sortForDisplay([], TODAY)).toEqual([]);
+  });
+
+  it('só futuro ou só passado: mantém a lógica (passado do mais recente; futuro do mais próximo)', () => {
+    expect(sortForDisplay([row('a', '2026-01', '2026-01-10'), row('b', '2026-05', '2026-05-10')], TODAY).map((r) => r.id)).toEqual(['b', 'a']);
+    expect(sortForDisplay([row('a', '2027-02', '2027-02-10'), row('b', '2026-12', '2026-12-10')], TODAY).map((r) => r.id)).toEqual(['b', 'a']);
   });
 });

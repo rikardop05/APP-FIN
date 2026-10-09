@@ -108,3 +108,28 @@ describe('previewSchema espelha ImportPreview', () => {
     expect(parsed.preview).toStrictEqual(fullPreview);
   });
 });
+
+describe('recalculateResponseSchema e a coluna Ainda presos', () => {
+  const base = { totalCents: -100, includedRowsCount: 1, plannedRowsCount: 0, competenceByIndex: [] };
+
+  it('preserva stillHeld', async () => {
+    const { recalculateResponseSchema } = await import('./schemas');
+    const stillHeld = {
+      months: [
+        {
+          competence: '2026-11',
+          totalCents: -5000,
+          items: [{ sourceIndex: 0, description: 'LOJA', installmentNumber: 4, installmentsCount: 10, amountCents: -5000 }],
+        },
+      ],
+      totalCents: -5000,
+      count: 1,
+    };
+    expect(recalculateResponseSchema.parse({ ...base, stillHeld }).stillHeld).toEqual(stillHeld);
+  });
+
+  it('falha ALTO se a rota deixar de mandar stillHeld', async () => {
+    const { recalculateResponseSchema } = await import('./schemas');
+    expect(() => recalculateResponseSchema.parse(base)).toThrow();
+  });
+});

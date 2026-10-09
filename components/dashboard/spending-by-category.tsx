@@ -1,9 +1,10 @@
 import { PiggyBank, Receipt } from 'lucide-react';
 
 import { competenceShort } from '@/components/cashflow/labels';
-import { EmptyState, Money } from '@/components/ui-kit';
+import { Badge, EmptyState, Money } from '@/components/ui-kit';
 import { BAR_X_CLASS, barScaleStyle } from './bar-scale';
-import { basisPoints, type BasisPoints, type Cents } from '@/lib/money';
+import type { BasisPoints, Cents } from '@/lib/money';
+import { variationView } from './presentation';
 
 type SpendingByCategoryProps = {
   items: {
@@ -43,7 +44,7 @@ export function SpendingByCategory({ items: unsortedItems, competence }: Spendin
     return (
       <section
         aria-labelledby="dashboard-spending-heading"
-        className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
+        className="border border-border bg-card p-4 sm:p-5"
       >
         <div className="mb-3">
           <h2 id="dashboard-spending-heading" className="text-base font-semibold text-foreground">
@@ -68,7 +69,7 @@ export function SpendingByCategory({ items: unsortedItems, competence }: Spendin
   return (
     <section
       aria-labelledby="dashboard-spending-heading"
-      className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
+      className="border border-border bg-card p-4 sm:p-5"
     >
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
@@ -79,16 +80,15 @@ export function SpendingByCategory({ items: unsortedItems, competence }: Spendin
             {competenciaCurta} vs. média dos 3 meses anteriores.
           </p>
         </div>
-        <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+        <Badge>
           {items.length} {items.length === 1 ? 'categoria' : 'categorias'}
-        </span>
+        </Badge>
       </div>
 
       <ul className="flex flex-col gap-3">
         {items.map((item) => {
           const width = maxSpent > 0 ? Math.max(2, (Number(item.spentCents) / Number(maxSpent)) * 100) : 0;
-          const variation = item.variationBp === null ? null : formatVariationBasisPoints(item.variationBp);
-          const tone = variation === null ? 'neutral' : variation.tone;
+          const variation = variationView(item);
           return (
             <li key={item.categoryId} className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-3">
@@ -104,29 +104,25 @@ export function SpendingByCategory({ items: unsortedItems, competence }: Spendin
                   <span className="text-xs text-muted-foreground">
                     média <Money value={item.average3mCents} sign="never" />
                   </span>
-                  <Money value={item.spentCents} sign="never" className="text-sm font-semibold tabular" />
+                  <Money value={item.spentCents} sign="never" className="text-sm font-semibold" />
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <div
-                  className="h-2 flex-1 overflow-hidden rounded-full bg-secondary"
+                  className="h-2 flex-1 overflow-hidden bg-secondary"
                   role="img"
                   aria-label={`${item.name}: ${Math.round(width)}% do maior gasto da lista`}
                 >
                   <div className={`${BAR_X_CLASS} bg-primary`} style={barScaleStyle(width, 'x')} />
                 </div>
-                {variation === null ? (
-                  <span className="min-w-[3.5rem] text-right text-xs text-muted-foreground">sem média</span>
-                ) : (
-                  <span
-                    className={`min-w-[3.5rem] text-right text-xs font-medium tabular ${
-                      tone === 'positive' ? 'text-emerald-700' : tone === 'negative' ? 'text-red-700' : 'text-muted-foreground'
-                    }`}
-                    title={`Variação contra a média dos 3 meses anteriores`}
-                  >
-                    {variation.label}
-                  </span>
-                )}
+                <span
+                  className={`min-w-[6rem] text-right text-xs font-medium num ${
+                    variation.tone === 'ok' ? 'text-success' : variation.tone === 'attention' ? 'text-warning' : 'text-muted-foreground'
+                  }`}
+                  title="Variação contra a média dos 3 meses anteriores"
+                >
+                  {variation.text}
+                </span>
               </div>
             </li>
           );
@@ -134,18 +130,4 @@ export function SpendingByCategory({ items: unsortedItems, competence }: Spendin
       </ul>
     </section>
   );
-}
-
-/**
- * Converte a variação em basis points em rótulo + tom. Apresentação apenas;
- * o número vem do motor.
- */
-function formatVariationBasisPoints(bp: BasisPoints): { label: string; tone: 'positive' | 'negative' | 'neutral' } {
-  const value = basisPoints(bp);
-  if (value === 0) return { label: '0%', tone: 'neutral' };
-  const whole = Math.floor(Math.abs(value) / 100);
-  const fraction = Math.abs(value) % 100;
-  const label = `${value > 0 ? '+' : '−'}${whole},${String(fraction).padStart(2, '0')}%`;
-  const tone: 'positive' | 'negative' | 'neutral' = value > 0 ? 'negative' : 'positive';
-  return { label, tone };
 }

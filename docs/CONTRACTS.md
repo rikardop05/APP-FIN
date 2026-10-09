@@ -93,19 +93,40 @@ function replanInstallments(input: InstallmentPlanInput, opts: {
 
 ```ts
 interface CommitmentInput {
-  transactions: { competence: Competence; amountCents: Cents; creditCardId: string; status: 'posted' | 'planned' }[]
+  transactions: {
+    competence: Competence; amountCents: Cents; creditCardId: string; status: 'posted' | 'planned'
+    installment?: boolean      // parcela de parcelamento; ausente = compra lançada (ou estorno)
+    statementPaid?: boolean    // fatura (cartão + competência) marcada como PAGA: a linha sai de tudo; ausente = não paga
+  }[]
   fromCompetence: Competence
   months: number
   cards: { id: string; name: string; creditLimitCents: Cents | null }[]
 }
 
 function futureCommitment(input: CommitmentInput): {
-  byCompetence: { competence: Competence; totalCents: Cents; byCardId: Record<string, Cents> }[]
+  byCompetence: {
+    competence: Competence; totalCents: Cents
+    installmentCents: Cents; purchaseCents: Cents   // installmentCents + purchaseCents = totalCents
+    byCardId: Record<string, Cents>
+  }[]
+  // As três linhas do card "Comprometido nos cartões"; a soma é EXATAMENTE totalCents.
+  breakdown: {
+    currentStatementCents: Cents    // fatura de fromCompetence inteira (parcela e compra)
+    laterInstallmentsCents: Cents   // parcelas das competências seguintes da janela
+    laterPurchasesCents: Cents      // compras já lançadas (e estornos) nas competências seguintes
+  }
   totalCents: Cents
   lastCommittedCompetence: Competence | null   // ULTIMO mes da janela com saldo DEVEDOR
   limitUsage: { cardId: string; usedCents: Cents; usageBp: BasisPoints | null }[]
 }
 ```
+
+> **Fatura paga (decisão do Ricardo, 2026-10-08).** Linha com `statementPaid` não entra em nada: nem
+> no mês, nem no total, nem no `breakdown`, nem no uso de limite. Fatura vencida e NÃO marcada como paga
+> continua comprometida — o app não sabe se ela foi paga; só a marca explícita (`statements.status =
+> 'paid'`) a tira. O feed `listCommitmentTransactions` (`/lib/db/queries/dashboard.ts`, Painel e
+> `/cartoes`) preenche `statementPaid` pela fatura da própria linha (`statement_id`) ou, na parcela
+> projetada sem `statement_id`, pela fatura do mesmo cartão e competência.
 
 > **Semantica de `lastCommittedCompetence`** — fixada em 2026-09-16, apos conflito entre tres fontes
 > apontado pelo Esquadro no T-110 e confirmado pelo Corvo.
@@ -875,10 +896,25 @@ function monthlyKpis(input: {
   }[]
   futureInstallmentsCents: Cents
   uncategorizedCount: number
+  plannedContributionCents?: Cents | null   // aporte mensal PLANEJADO do plano (premissa); ausente/null = sem plano
 }): {
-  incomeCents: Cents; expenseCents: Cents; contributionsCents: Cents
+  incomeCents: Cents; expenseCents: Cents
+  contributionsCents: Cents                 // SÓ aporte LANÇADO (`posted`); previsto fica fora (decisão de 2026-10-08)
   surplusCents: Cents; savingsRateBp: BasisPoints | null; essentialShareBp: BasisPoints | null
   futureInstallmentsCents: Cents; uncategorizedCount: number
+  plannedContributionCents: Cents | null    // repasse, para "Aportes de <mês>: R$ X de R$ Y planejados"
+}
+
+/**
+ * UMA definição de "sobra de um mês" (decisão de 2026-10-08): a de monthlyKpis, aplicada a cada mês.
+ * Mês sem receita lançada (incomeCents 0) SAI da média e vai para excludedWithoutIncome. Quem chama
+ * decide o recorte (Investimentos: todos os meses fechados da janela, só `posted`, inclusive os sem
+ * nenhum lançamento). Média: centavo mais próximo, meio afastando do zero; null quando nenhum mês entrou.
+ */
+function monthlySurplusAverage(months: { competence: Competence; transactions: MonthlyKpisInput['transactions'] }[]): {
+  averageCents: Cents | null
+  months: { competence: Competence; incomeCents: Cents; expenseCents: Cents; surplusCents: Cents }[]  // os que entraram
+  excludedWithoutIncome: Competence[]                                                               // os que ficaram fora
 }
 ```
 
@@ -1316,6 +1352,82 @@ HTTP (forma usada pela tela de cartões; erros como `{ error: string }` em pt-BR
 | `GET /api/cards` | cada cartão ganha `holders: CardHolderItem[]`, por `last4` | |
 | `PUT /api/cards/[id]/holders` corpo `{ last4, memberId }` | 200 `{ cards, members }` | 400 final inválido ou membro de outro household; 404 cartão de outro household |
 | `DELETE /api/cards/[id]/holders/[holderId]` | 200 `{ cards, members }` | 404 se não for do cartão/household |
+
+### 16.2 Fatura seguinte de um parcelamento já gravado (correção de 2026-10-08)
+
+Defeito corrigido: a fatura SEGUINTE de uma compra parcelada criava um plano novo e reprojetava as parcelas
+futuras com o MESMO `dedupe_hash` das `planned` do lote anterior; o índice único `(household_id, dedupe_hash)`
+derrubava o commit, e a parcela real ficava ao lado da prevista sem conciliar.
+
+**Parte pura (`finalizeImport` / `buildImportPreview`, `existingPlans`):**
+
+```ts
+// /lib/import/pipeline.ts
+interface ExistingInstallmentPlan {
+  id: string; description: string; installmentsCount: number; totalCents: Cents; firstCompetence: Competence
+  openPlanned: { installmentNumber: number; transactionId: string }[]
+  postedNumbers: number[]
+  rawDescriptions?: string[]
+}
+FinalizeInput.existingPlans?: readonly ExistingInstallmentPlan[]           // ausente = []
+BuildImportPreviewInput.existingPlans?: readonly ExistingInstallmentPlan[] // ausente = []
+FinalizedTransaction.installmentPlanId: string | null        // plano JÁ GRAVADO; exclusivo com installmentPlanRef
+FinalizedTransaction.reconcilesTransactionId: string | null  // a `planned` que esta linha real cumpre
+FinalizedInstallmentPlan.sourceIndex: number                 // linha confirmada que abriu o plano novo (não gravado)
+```
+
+- **Casa** uma linha parcelada com um plano gravado quando, ao mesmo tempo: o total de parcelas é o mesmo; a
+  primeira competência calculada da linha (`competência − (current − 1)`) é a do plano; a descrição bate,
+  pelo `planKey` da descrição confirmada **ou** pela descrição normalizada da `rawDescription` contra alguma de
+  `rawDescriptions` (casa o plano cuja descrição o usuário trocou no 1º lote); e o valor fecha com o total com
+  **até 1 centavo por parcela**, `|amountCents × total − totalCents| ≤ total` (o banco arredonda a 1ª ou a
+  última parcela).
+- O número da linha não pode estar em `postedNumbers` nem já ter sido tomado por outra linha do lote; se
+  estiver, tenta o próximo candidato na ordem recebida. Sem candidato, comportamento anterior (plano novo).
+- Se casar: **não cria plano nem projeta parcelas**. A linha real sai com `installmentPlanRef: null`,
+  `installmentPlanId` = o plano, `installmentNumber` = a parcela atual e `reconcilesTransactionId` = a `openPlanned`
+  do mesmo número (`null` se não houver).
+- Só a linha que **casa de fato** vai para o plano gravado. Uma compra nova com a mesma descrição e o mesmo total
+  de parcelas (outra primeira competência, outro valor, ou número já tomado) vira plano novo, em qualquer ordem
+  do lote, e a prévia conta igual. Como o número tomado bloqueia o plano, **duas linhas nunca conciliam a mesma
+  `planned`**.
+- **Caso conhecido, não tratado:** duas compras idênticas (mesma loja, valor, nº de parcelas e mês de início),
+  só uma já gravada, e as duas parcelas no mesmo lote, com a segunda forçada como duplicata real. A segunda
+  vira plano novo e reprojeta com o mesmo `dedupe_hash` das `planned` do primeiro, e o commit falha no índice
+  único. É raro e a linha não traz nada que separe as duas compras. Se acontecer, a saída é recusar na prévia a
+  parcela que repete um número já tomado do mesmo plano.
+- Prévia: a linha que casa não conta em `installmentPlansDetected`. Como nada é projetado, ela também não
+  aparece em "Ainda presos" (`summarizeStillHeld`) nem em `plannedRowsCount`.
+
+**Parte do banco (`/lib/db/queries/import-plans.ts` e `import.ts`):**
+
+```ts
+/** Planos do cartão, por created_at e id. openPlanned = só `planned`; postedNumbers = só `posted`;
+ *  rawDescriptions = raw_description não vazias das parcelas `posted` (casa plano com descrição editada). */
+function listExistingInstallmentPlans(householdId: string, creditCardId: string, executor?: typeof db | Tx):
+  Promise<ExistingInstallmentPlan[]>   // tipo exportado por /lib/import/pipeline.ts
+```
+
+- `prepareImport` devolve `existingPlans` (cartão; conta: `[]`), e `POST /api/import/upload` o repassa a
+  `buildImportPreview`. `/api/import/recalculate` usa o mesmo loader.
+- `commitImport` relê `existingPlans` DENTRO da transação e passa a `finalizeImport`. Linha com
+  `installmentPlanId` grava `installment_plan_id` = plano existente (nenhum plano novo, nenhuma projeção). Linha com
+  `reconcilesTransactionId` concilia a prevista na mesma transação: `status = 'reconciled'`,
+  `reconciled_by_transaction_id` = a real, só se a prevista ainda está `planned` e é do mesmo plano e household
+  (decisão nº 7: sai da contagem, o mês não conta em dobro). A real de plano existente não concilia recorrência.
+  `CommitImportResult.installmentsReconciled` conta essas previstas.
+- `revertImport` do lote SEGUINTE: reabre a prevista que ele cumpriu (`planned`, par anulado) e mantém o plano —
+  o estado volta ao da fatura anterior.
+- `revertImport` do lote ANTERIOR com o plano ainda vivo (linha de outro lote nele): apaga só as linhas reais do
+  lote; as parcelas PROJETADAS desse plano ficam, com `import_batch_id` null (são o futuro do plano, não do lote).
+  Reimportar o lote religa a parcela real ao plano sem reprojetar. Plano sem linha de outro lote: como antes, tudo
+  do lote sai e o plano vazio é apagado.
+  Limite conhecido: desfazer TODAS as faturas de um plano nessa ordem (a anterior primeiro) deixa as parcelas
+  projetadas soltas, sem linha real e sem lote, ainda no comprometido. Reimportar uma das faturas readota o plano;
+  sem isso, saem só apagando. Não há limpeza automática porque plano manual também tem projetadas sem lote.
+- Impacto de exclusão (`transaction-delete.ts`): como a reimportação reconhece o plano que sobrou, a parcela LIDA
+  apagada volta (`returns_on_reimport`) e a PROJETADA apagada não volta (`stays_deleted_on_reimport`).
+  `reimport_will_fail` não é mais produzido; fica na união só para a tela aceitar respostas antigas.
 
 ## 17. Sessão e contexto de household — `/lib/auth/session.ts`
 

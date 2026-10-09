@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { cents } from '@/lib/money';
 import { Plus, Tags, Wand2 } from 'lucide-react';
 import { Button, EmptyState, PageHeader } from '@/components/ui-kit';
-import { TransactionFilters, type TransactionFilterValues } from './transaction-filters';
+import { TransactionFilters } from './transaction-filters';
+import { applyDelayMs, EMPTY_FILTERS, type TransactionFilterValues } from './filter-presentation';
 import {
   BatchCategorizationDialog,
   DeleteTransactionDialog,
@@ -34,18 +35,7 @@ import {
   type TransactionResponse,
 } from './schemas';
 import { TransactionList, type TransactionEditValues } from './transaction-list';
-import { listContentState } from './list-presentation';
-
-const emptyFilters: TransactionFilterValues = {
-  from: '',
-  to: '',
-  categoryId: '',
-  accountId: '',
-  creditCardId: '',
-  memberId: '',
-  search: '',
-  uncategorized: false,
-};
+import { listContentState, sortForDisplay } from './list-presentation';
 
 const emptyOptions: TransactionOptions = {
   categories: [],
@@ -107,8 +97,9 @@ function hasFilters(filters: TransactionFilterValues): boolean {
 }
 
 export function LancamentosScreen({ today }: { today: string }) {
-  const [filters, setFilters] = useState(emptyFilters);
-  const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [data, setData] = useState<TransactionResponse | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -145,7 +136,16 @@ export function LancamentosScreen({ today }: { today: string }) {
 
   useEffect(() => { void load(appliedFilters); }, [appliedFilters, load]);
 
-  const rows = data?.transactions ?? [];
+  // Filtros aplicam sozinhos: campos discretos na hora, texto com atraso curto (sem botao Filtrar).
+  useEffect(() => {
+    const delay = applyDelayMs(appliedFilters, filters);
+    const timer = setTimeout(() => {
+      setAppliedFilters((current) => (JSON.stringify(current) === JSON.stringify(filters) ? current : { ...filters }));
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [filters, appliedFilters]);
+
+  const rows = useMemo(() => sortForDisplay(data?.transactions ?? [], today), [data, today]);
   const options = data?.options ?? emptyOptions;
   // Com erro de CARGA, nao mostrar o vazio (ha lancamentos, so nao carregaram):
   // a decisao esta na funcao pura listContentState. Erro de acao nao entra aqui.
@@ -397,13 +397,9 @@ export function LancamentosScreen({ today }: { today: string }) {
     }
   }
 
-  function submitFilters() {
-    setAppliedFilters({ ...filters });
-  }
-
   function clearFilters() {
-    setFilters(emptyFilters);
-    setAppliedFilters(emptyFilters);
+    setFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
   }
 
   return (
@@ -413,18 +409,18 @@ export function LancamentosScreen({ today }: { today: string }) {
         description="Receitas e despesas da família, filtráveis por período, categoria, cartão ou conta, responsável e texto."
         actions={
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Link href="/lancamentos/revisar" className="inline-flex min-h-9 items-center justify-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted">Revisar sem categoria</Link>
+            <Link href="/lancamentos/revisar" className="inline-flex min-h-11 items-center sm:min-h-9 justify-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted">Revisar sem categoria</Link>
             <Button variant="outline" onClick={() => void openApplyAll()} disabled={busy}><Wand2 className="mr-2 h-4 w-4" aria-hidden="true" />Aplicar regras aos não categorizados</Button>
             <Button onClick={() => setDialog({ kind: 'manual' })}><Plus className="mr-2 h-4 w-4" aria-hidden="true" />Novo lançamento</Button>
           </div>
         }
       />
 
-      {error ? <div role="alert" className="flex flex-col gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 sm:flex-row sm:items-center sm:justify-between"><span>{error}</span>{loadFailed ? <Button variant="outline" size="sm" onClick={() => void load(appliedFilters)}>Tentar novamente</Button> : null}</div> : null}
+      {error ? <div role="alert" className="flex flex-col gap-3 border border-destructive/50 bg-destructive-soft px-4 py-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"><span>{error}</span>{loadFailed ? <Button variant="outline" size="sm" onClick={() => void load(appliedFilters)}>Tentar novamente</Button> : null}</div> : null}
 
-      {notice ? <div role="status" className="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><span>{notice}</span><Button variant="ghost" size="sm" onClick={() => setNotice(null)}>Fechar</Button></div> : null}
+      {notice ? <div role="status" className="flex items-center justify-between gap-3 border border-success/50 bg-success-soft px-4 py-3 text-sm text-success"><span>{notice}</span><Button variant="ghost" size="sm" onClick={() => setNotice(null)}>Fechar</Button></div> : null}
 
-      <TransactionFilters value={filters} options={options} busy={loading} onChange={(value) => setFilters((previous) => ({ ...previous, ...value }))} onSubmit={submitFilters} onClear={clearFilters} />
+      <TransactionFilters value={filters} options={options} open={filtersOpen} onOpenChange={setFiltersOpen} onChange={(value) => setFilters((previous) => ({ ...previous, ...value }))} onClear={clearFilters} />
 
       {selectedIds.length > 0 ? (
         <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">

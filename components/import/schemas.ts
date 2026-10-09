@@ -168,7 +168,33 @@ export const uploadResponseSchema = z.object({
   previousBatches: z.array(previousBatchSchema),
 });
 
+/**
+ * Coluna "Ainda presos" (espelho de `StillHeldSummary`, `lib/import/still-held.ts`): as parcelas
+ * futuras que o lote projeta, por competência. OBRIGATÓRIA: se a rota parar de enviá-la, a tela falha
+ * alto em vez de mostrar a coluna vazia como se o lote não projetasse nada.
+ */
+const stillHeldSchema = z.object({
+  months: z.array(
+    z.object({
+      competence: competenceSchema,
+      totalCents: centsSchema,
+      items: z.array(
+        z.object({
+          sourceIndex: z.number().int(),
+          description: z.string(),
+          installmentNumber: z.number().int(),
+          installmentsCount: z.number().int(),
+          amountCents: centsSchema,
+        }),
+      ),
+    }),
+  ),
+  totalCents: centsSchema,
+  count: z.number().int().nonnegative(),
+});
+
 export const recalculateResponseSchema = z.object({
+  stillHeld: stillHeldSchema,
   totalCents: centsSchema,
   /**
    * Quantas linhas vão ser gravadas neste commit. É a resposta à pergunta que
@@ -193,6 +219,7 @@ export const recalculateResponseSchema = z.object({
   ),
 });
 
+export type StillHeld = z.infer<typeof stillHeldSchema>;
 export type UploadResponse = z.infer<typeof uploadResponseSchema>;
 export type CardFull = z.infer<typeof cardFullSchema>;
 export type SourceItem = z.infer<typeof sourceItemSchema>;

@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { Trash2 } from 'lucide-react';
 
-import { Button } from '@/components/ui-kit';
+import { Button, Input, Select } from '@/components/ui-kit';
 
 import {
   buildHolderBody,
@@ -17,7 +17,7 @@ import {
   type HolderFormErrors,
   type HolderRow,
 } from './holders';
-import { Field, inputClassName, selectClassName } from './form-fields';
+import { Field } from './form-fields';
 import { cardListSchema, type CardList, type CardRecord } from './schemas';
 
 type CardHoldersProps = {
@@ -135,9 +135,8 @@ export function CardHolders({ card, members, onUpdated }: CardHoldersProps) {
       <form className="mt-4 flex flex-col gap-3" onSubmit={(e) => void submit(e)} noValidate>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Final do cartão (4 dígitos)" htmlFor={`${idPrefix}-last4`} error={errors.last4}>
-            <input
+            <Input
               id={`${idPrefix}-last4`}
-              className={inputClassName}
               value={last4}
               onChange={(e) => {
                 setLast4(e.target.value);
@@ -150,9 +149,8 @@ export function CardHolders({ card, members, onUpdated }: CardHoldersProps) {
             />
           </Field>
           <Field label="Responsável" htmlFor={`${idPrefix}-member`} error={errors.memberId}>
-            <select
+            <Select
               id={`${idPrefix}-member`}
-              className={selectClassName}
               value={memberId}
               onChange={(e) => {
                 setMemberId(e.target.value);
@@ -164,7 +162,7 @@ export function CardHolders({ card, members, onUpdated }: CardHoldersProps) {
               {members.map((member) => (
                 <option key={member.id} value={member.id}>{member.name}</option>
               ))}
-            </select>
+            </Select>
           </Field>
         </div>
         {hint ? <p className="text-xs text-amber-800">{hint}</p> : null}

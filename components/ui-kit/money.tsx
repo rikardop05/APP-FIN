@@ -6,8 +6,8 @@ type MoneyProps = {
   value: Cents;
   /**
    * Ver `formatBRL`: `'auto'` mostra o `-` do negativo, `'always'` prefixa `+`
-   * no positivo. `'never'` remove o `-` E a cor de destaque — os dois
-   * indicadores de direção somem juntos. Use `'never'` só quando a direção já
+   * no positivo. `'never'` remove o `-`. Despesa NÃO é vermelha no
+   * mundo do carnê (vermelho é carimbo): o sinal carrega a direção. Use `'never'` só quando a direção já
    * vem de outro elemento (cabeçalho da coluna, ícone); numa coluna com
    * despesa e receita misturadas, `'never'` as deixa visualmente idênticas.
    */
@@ -22,16 +22,8 @@ type MoneyProps = {
  * passar o valor por aqui, não de escrever a conta de novo.
  */
 export function Money({ value, sign = 'auto', className }: MoneyProps) {
-  const negative = value < 0;
-
   return (
-    <span
-      className={cn(
-        'tabular',
-        negative && sign !== 'never' && 'text-destructive',
-        className,
-      )}
-    >
+    <span className={cn('num', className)}>
       {formatBRL(value, { sign })}
     </span>
   );

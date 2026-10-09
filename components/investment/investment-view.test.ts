@@ -237,7 +237,7 @@ describe('corpo do PUT a partir do formulário (bug do salvar do Ricardo)', () =
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.messages).toEqual([
-      'Aporte mensal atual: Informe o aporte mensal (zero ou mais).',
+      'Aporte mensal planejado: Informe o aporte mensal (zero ou mais).',
       'Imposto sobre o rendimento: Informe o imposto entre 0 e 100 %.',
       'Otimista: retorno real: Retorno real entre -99,99 % e 100 % ao ano.',
     ]);

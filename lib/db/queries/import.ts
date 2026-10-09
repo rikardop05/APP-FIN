@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import type { ImportFormat, TransactionKind, TransactionStatus } from '@/lib/db';
 import {
@@ -30,6 +30,7 @@ import { kindForAmount } from './import-kind';
 import { incrementRuleHits } from './auto-categorization';
 import { listTransactionDedupeHashes } from './transactions';
 import { cardHoldersByLast4 } from './card-holders';
+import { listExistingInstallmentPlans, type ExistingInstallmentPlan } from './import-plans';
 
 export type ImportSourceContext = {
   sourceId: string;
@@ -57,6 +58,12 @@ export type ImportPreparation = {
    * `BuildImportPreviewInput.cardHolders`. Importacao em conta: mapa vazio.
    */
   cardHolders: Map<string, string>;
+  /**
+   * Parcelamentos ja gravados do cartao da importacao, para `existingPlans`
+   * (CONTRACTS §16): a fatura seguinte reconhece o plano em vez de criar outro.
+   * Importacao em conta: vazio.
+   */
+  existingPlans: ExistingInstallmentPlan[];
 };
 
 /**
@@ -100,6 +107,8 @@ export type CommitImportResult = FinalizeResult & {
   rowsDuplicated: number;
   /** Previsões de recorrência cumpridas por linhas deste lote (viraram `reconciled`). */
   plannedReconciled: number;
+  /** Parcelas previstas de planos existentes cumpridas pela parcela real deste lote. */
+  installmentsReconciled: number;
 };
 
 export type CommitImportTestOptions = {
@@ -251,7 +260,7 @@ export async function prepareImport(
   sourceId: string,
   fileHash: string,
 ): Promise<ImportPreparation> {
-  const [source, rules, existingHashes, previousBatches, cardHolders] = await Promise.all([
+  const [source, rules, existingHashes, previousBatches, cardHolders, existingPlans] = await Promise.all([
     sourceContext(householdId, sourceKind, sourceId),
     listImportRules(householdId),
     listTransactionDedupeHashes(householdId),
@@ -259,8 +268,11 @@ export async function prepareImport(
     sourceKind === 'credit_card'
       ? cardHoldersByLast4(householdId, sourceId)
       : Promise.resolve(new Map<string, string>()),
+    sourceKind === 'credit_card'
+      ? listExistingInstallmentPlans(householdId, sourceId)
+      : Promise.resolve([]),
   ]);
-  return { source, rules, existingHashes, previousBatches, cardHolders };
+  return { source, rules, existingHashes, previousBatches, cardHolders, existingPlans };
 }
 
 async function ensureReferences(
@@ -375,8 +387,14 @@ export async function commitImport(
     const existingHashes = new Set(
       hashRows.flatMap((row) => (row.dedupeHash === null ? [] : [row.dedupeHash])),
     );
+    // Planos ja gravados do cartao, lidos DENTRO da transacao: a fatura seguinte
+    // liga a parcela real ao plano existente e concilia a prevista de mesmo
+    // numero, em vez de criar outro plano e reprojetar (CONTRACTS §16).
+    const existingPlans =
+      source.creditCardId === null ? [] : await listExistingInstallmentPlans(householdId, source.creditCardId, tx);
     const result = finalizeImport({
       rows: input.confirmedRows,
+      existingPlans,
       sourceId: input.sourceId,
       sourceKind: input.sourceKind,
       cardCycle: source.cardCycle,
@@ -451,6 +469,7 @@ export async function commitImport(
     // Todo o `skipped` sai da conta (desmarcada, duplicata e informativa), nao so as duplicatas.
     const importedRows = importedRowsCount(input.confirmedRows.length, result.skipped);
     let plannedReconciled = 0;
+    let installmentsReconciled = 0;
     if (result.transactions.length > 0) {
       // Ids gerados aqui (não lidos do `returning`): a conciliação não depende da
       // ordem em que o Postgres devolve as linhas.
@@ -481,7 +500,9 @@ export async function commitImport(
             creditCardId: source.creditCardId,
             statementId: projected ? null : statementId,
             memberId: row.memberId,
-            installmentPlanId: row.installmentPlanRef === null ? null : (planIds.get(row.installmentPlanRef) ?? null),
+            installmentPlanId:
+              row.installmentPlanId ??
+              (row.installmentPlanRef === null ? null : (planIds.get(row.installmentPlanRef) ?? null)),
             installmentNumber: row.installmentNumber,
             importBatchId: batch.id,
             dedupeHash: row.dedupeHash,
@@ -493,7 +514,9 @@ export async function commitImport(
       // plano) e projetada não conciliam.
       const postings = result.transactions.flatMap((row, index) => {
         const id = ids[index];
-        if (id === undefined || row.rawDescription === '' || row.installmentPlanRef !== null) return [];
+        if (id === undefined || row.rawDescription === '' || row.installmentPlanRef !== null || row.installmentPlanId !== null) {
+          return [];
+        }
         return [
           {
             id,
@@ -506,6 +529,28 @@ export async function commitImport(
         ];
       });
       plannedReconciled = await reconcileImportedPostings(tx, householdId, postings);
+
+      // Parcela real de plano existente cumpre a prevista de mesmo numero
+      // (decisao n. 7: a prevista vira `reconciled`, sai da contagem, e o
+      // `revertImport` a reabre). `status = 'planned'` e o plano na clausula:
+      // prevista que mudou no meio nao e tocada.
+      for (const [index, row] of result.transactions.entries()) {
+        const id = ids[index];
+        if (id === undefined || row.reconcilesTransactionId === null || row.installmentPlanId === null) continue;
+        const updated = await tx
+          .update(transactions)
+          .set({ status: 'reconciled', reconciledByTransactionId: id })
+          .where(
+            and(
+              eq(transactions.householdId, householdId),
+              eq(transactions.id, row.reconcilesTransactionId),
+              eq(transactions.installmentPlanId, row.installmentPlanId),
+              eq(transactions.status, 'planned'),
+            ),
+          )
+          .returning({ id: transactions.id });
+        installmentsReconciled += updated.length;
+      }
 
       // Uso da regra = linha REAL que ela categorizou. Parcela projetada
       // (planned) leva o rastro, mas nao e uso: contaria 10 vezes uma compra so.
@@ -534,6 +579,7 @@ export async function commitImport(
       rowsImported: importedRows,
       rowsDuplicated: result.skipped.filter((row) => row.reason === 'duplicate').length,
       plannedReconciled,
+      installmentsReconciled,
     };
   });
 }
@@ -574,11 +620,46 @@ export async function revertImport(
       .limit(1);
     if (batch === undefined) throw new ImportBatchNotFoundError();
 
-    const batchTransactions = await tx
-      .select({ id: transactions.id, installmentPlanId: transactions.installmentPlanId })
+    const batchRows = await tx
+      .select({
+        id: transactions.id,
+        installmentPlanId: transactions.installmentPlanId,
+        rawDescription: transactions.rawDescription,
+      })
       .from(transactions)
       .where(and(eq(transactions.householdId, householdId), eq(transactions.importBatchId, batchId)));
-    const planIds = [...new Set(batchTransactions.flatMap((row) => (row.installmentPlanId === null ? [] : [row.installmentPlanId])))];
+    const planIds = [...new Set(batchRows.flatMap((row) => (row.installmentPlanId === null ? [] : [row.installmentPlanId])))];
+
+    // Plano que continua vivo: tem linha de OUTRO lote (a fatura seguinte ligou a
+    // parcela real dela ao plano, CONTRACTS §16.2). As parcelas PROJETADAS deste
+    // lote nesse plano sao o futuro do plano, nao do lote: ficam, soltas do lote.
+    // Apaga-las sumiria com o comprometido em silencio, e reimportar este lote
+    // nao as traria de volta (casa com o plano e nao reprojeta).
+    const livePlanIds = new Set<string>();
+    if (planIds.length > 0) {
+      const outside = await tx
+        .select({ id: transactions.installmentPlanId })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.householdId, householdId),
+            inArray(transactions.installmentPlanId, planIds),
+            or(isNull(transactions.importBatchId), ne(transactions.importBatchId, batchId)),
+          ),
+        );
+      for (const row of outside) if (row.id !== null) livePlanIds.add(row.id);
+    }
+    const keptIds = batchRows
+      .filter((row) => row.rawDescription === '' && row.installmentPlanId !== null && livePlanIds.has(row.installmentPlanId))
+      .map((row) => row.id);
+    if (keptIds.length > 0) {
+      await tx
+        .update(transactions)
+        .set({ importBatchId: null })
+        .where(and(eq(transactions.householdId, householdId), inArray(transactions.id, keptIds)));
+    }
+    const kept = new Set(keptIds);
+    const batchTransactions = batchRows.filter((row) => !kept.has(row.id));
     if (batchTransactions.length > 0) {
       // Desfazer a importação reabre as previsões que ela cumpriu: o RESTRICT de
       // `reconciled_by_transaction_id` barraria o DELETE (decisão nº 7, §3.3).
@@ -595,7 +676,15 @@ export async function revertImport(
             ),
           ),
         );
-      await tx.delete(transactions).where(and(eq(transactions.householdId, householdId), eq(transactions.importBatchId, batchId)));
+      await tx.delete(transactions).where(
+        and(
+          eq(transactions.householdId, householdId),
+          inArray(
+            transactions.id,
+            batchTransactions.map((row) => row.id),
+          ),
+        ),
+      );
     }
     let installmentPlansDeleted = 0;
     if (planIds.length > 0) {

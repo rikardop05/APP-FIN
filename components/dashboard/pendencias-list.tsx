@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { AlertCircle, AlertTriangle, CheckCircle2, Inbox } from 'lucide-react';
 
 import { competenceShort } from '@/components/cashflow/labels';
-import { EmptyState, Money } from '@/components/ui-kit';
+import { Badge, EmptyState, Money } from '@/components/ui-kit';
 import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 import { formatDateBR } from '@/lib/date';
 import type { BasisPoints, Cents } from '@/lib/money';
@@ -98,11 +98,12 @@ export function PendenciasList({
     return (
       <section
         aria-labelledby="dashboard-pendencias-heading"
-        className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
+        id="pendencias"
+        className="scroll-mt-4 border border-border bg-card p-4 sm:p-5"
       >
         <div className="mb-3">
           <h2 id="dashboard-pendencias-heading" className="flex items-center gap-2 text-base font-semibold text-foreground">
-            <CheckCircle2 className="h-5 w-5 text-emerald-700" aria-hidden="true" />
+            <CheckCircle2 className="h-5 w-5 text-success" aria-hidden="true" />
             Nada pendente neste mês
           </h2>
           <p className="text-sm text-muted-foreground">
@@ -122,11 +123,12 @@ export function PendenciasList({
   return (
     <section
       aria-labelledby="dashboard-pendencias-heading"
-      className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
+      id="pendencias"
+        className="scroll-mt-4 border border-border bg-card p-4 sm:p-5"
     >
       <div className="mb-4">
         <h2 id="dashboard-pendencias-heading" className="flex items-center gap-2 text-base font-semibold text-foreground">
-          <AlertTriangle className="h-5 w-5 text-amber-700" aria-hidden="true" />
+          <AlertTriangle className="h-5 w-5 text-warning" aria-hidden="true" />
           Pendências
         </h2>
         <p className="text-sm text-muted-foreground">
@@ -134,25 +136,25 @@ export function PendenciasList({
         </p>
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-5">
         {hasUncategorized ? (
           <article aria-labelledby="dashboard-pendencias-uncat-heading" className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-3">
               <h3 id="dashboard-pendencias-uncat-heading" className="text-sm font-semibold text-foreground">
                 Não categorizados
               </h3>
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+              <Badge variant="warning">
                 {uncategorizedCount} {uncategorizedCount === 1 ? 'item' : 'itens'}
-              </span>
+              </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Lançamentos do mês sem categoria. Vá em Lançamentos e aplique uma regra ou crie uma.
             </p>
-            <ul className="flex flex-col gap-1.5">
+            <ul className="flex flex-col divide-y divide-border border-y border-border">
               {uncategorizedItems.map((item) => (
                 <li
                   key={item.id}
-                  className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2"
+                  className="flex items-center justify-between gap-2 py-2"
                 >
                   <div className="flex min-w-0 flex-col">
                     <span className="truncate text-sm font-medium text-foreground">
@@ -160,14 +162,14 @@ export function PendenciasList({
                     </span>
                     <span className="text-xs text-muted-foreground">{formatDateBR(item.occurredOn)}</span>
                   </div>
-                  <Money value={item.amountCents as Cents} className="shrink-0 text-sm font-medium tabular" />
+                  <Money value={item.amountCents as Cents} className="shrink-0 text-sm font-medium" />
                 </li>
               ))}
             </ul>
             {uncategorizedCount > uncategorizedItems.length ? (
               <Link
                 href="/lancamentos"
-                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                className="min-h-11 text-sm text-primary underline underline-offset-2 sm:min-h-0"
               >
                 Ver mais {uncategorizedCount - uncategorizedItems.length}{' '}
                 {uncategorizedCount - uncategorizedItems.length === 1 ? 'item' : 'itens'} em Lançamentos →
@@ -182,22 +184,22 @@ export function PendenciasList({
               <h3 id="dashboard-pendencias-fat-heading" className="text-sm font-semibold text-foreground">
                 Faturas divergentes
               </h3>
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+              <Badge variant="warning">
                 {divergentStatements.length}{' '}
                 {divergentStatements.length === 1 ? 'fatura' : 'faturas'}
-              </span>
+              </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Total somado pelos lançamentos é diferente do total informado na fatura.
             </p>
-            <ul className="flex flex-col gap-1.5">
+            <ul className="flex flex-col divide-y divide-border border-y border-border">
               {divergentStatements.map((item) => (
                 <li
                   key={item.statementId}
-                  className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2"
+                  className="flex items-center justify-between gap-2 py-2"
                 >
                   <div className="flex min-w-0 items-center gap-2">
-                    <AlertCircle className="h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
+                    <AlertCircle className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
                     <div className="flex min-w-0 flex-col">
                       <span className="truncate text-sm font-medium text-foreground">
                         {item.cardName}
@@ -223,18 +225,18 @@ export function PendenciasList({
               <h3 id="dashboard-pendencias-budget-heading" className="text-sm font-semibold text-foreground">
                 {OVER_BUDGET_TITLE}
               </h3>
-              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+              <Badge variant="danger">
                 {overBudgetItems.length} {overBudgetItems.length === 1 ? 'categoria' : 'categorias'}
-              </span>
+              </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {OVER_BUDGET_INTRO}
             </p>
-            <ul className="flex flex-col gap-1.5">
+            <ul className="flex flex-col divide-y divide-border border-y border-border">
               {overBudgetItems.map((item) => (
                 <li
                   key={item.categoryId}
-                  className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2"
+                  className="flex items-center justify-between gap-2 py-2"
                 >
                   <div className="flex min-w-0 flex-col">
                     <span className="truncate text-sm font-medium text-foreground">{item.categoryName}</span>
@@ -242,7 +244,7 @@ export function PendenciasList({
                       {overBudgetLine(item.expectedCents, item.plannedCents)}
                     </span>
                   </div>
-                  <span className="shrink-0 text-sm font-semibold tabular text-red-700">
+                  <span className="shrink-0 text-sm font-semibold num text-destructive">
                     {item.usageBp === null ? 'sem valor planejado' : formatBasisPoints(item.usageBp)}
                   </span>
                 </li>
@@ -250,7 +252,7 @@ export function PendenciasList({
             </ul>
             <Link
               href="/orcamento"
-              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              className="min-h-11 text-sm text-primary underline underline-offset-2 sm:min-h-0"
             >
               Abrir o orçamento →
             </Link>
@@ -258,7 +260,7 @@ export function PendenciasList({
         ) : null}
 
         {overBudgetUnavailable ? (
-          <p role="status" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <p role="status" className="border border-warning/50 bg-warning-soft px-3 py-2 text-sm text-warning">
             Não foi possível conferir os orçamentos estourados agora.{' '}
             <Link href="/orcamento" className="underline underline-offset-2">
               Abrir o orçamento
@@ -273,32 +275,32 @@ export function PendenciasList({
               <h3 id="dashboard-pendencias-recurring-heading" className="text-sm font-semibold text-foreground">
                 Despesas fixas previstas e não realizadas
               </h3>
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+              <Badge variant="warning">
                 {overdueRecurring.count} {overdueRecurring.count === 1 ? 'item' : 'itens'}
-              </span>
+              </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Previsões cuja data já passou. Ainda não conferimos isso sozinhos com o que você importou: se já pagou e
               importou, a linha continua aqui.
             </p>
-            <ul className="flex flex-col gap-1.5">
+            <ul className="flex flex-col divide-y divide-border border-y border-border">
               {overdueRecurring.items.map((item) => (
                 <li
                   key={item.id}
-                  className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2"
+                  className="flex items-center justify-between gap-2 py-2"
                 >
                   <div className="flex min-w-0 flex-col">
                     <span className="truncate text-sm font-medium text-foreground">{item.description}</span>
                     <span className="text-xs text-muted-foreground">previsto para {formatDateBR(item.occurredOn)}</span>
                   </div>
-                  <Money value={item.amountCents} sign="never" className="shrink-0 text-sm font-medium tabular" />
+                  <Money value={item.amountCents} sign="never" className="shrink-0 text-sm font-medium" />
                 </li>
               ))}
             </ul>
             {overdueRecurring.count > overdueRecurring.items.length ? (
               <Link
                 href="/lancamentos"
-                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                className="min-h-11 text-sm text-primary underline underline-offset-2 sm:min-h-0"
               >
                 Ver mais {overdueRecurring.count - overdueRecurring.items.length} em Lançamentos →
               </Link>

@@ -87,7 +87,7 @@ export function CategoryForm({ mode, initial, busy = false, onCancel, onSubmit }
           </Select>
         </Field>
       ) : (
-        <p className="rounded-md bg-secondary/60 px-3 py-2 text-xs text-muted-foreground">
+        <p className="bg-secondary/60 px-3 py-2 text-xs text-muted-foreground">
           A natureza pertence às subcategorias. Crie subcategorias para classificar os lançamentos.
         </p>
       )}

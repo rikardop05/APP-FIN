@@ -15,7 +15,7 @@ export function ImportHistoryEmptyState() {
       description="Quando você confirmar um lote, ele aparece aqui. Cada item pode ser desfeito com um clique."
       icon={FileUp}
       action={{
-        label: 'Use o card acima para enviar um PDF',
+        label: 'Escolher o PDF da fatura',
         onClick: () => {
           const input = document.querySelector<HTMLInputElement>('input[type="file"]');
           input?.focus();

@@ -108,7 +108,7 @@ export function BalanceChart({ months, baseMonths }: BalanceChartProps) {
 
         {/* Eixo zero */}
         <line x1={PAD.left} x2={width - PAD.right} y1={zeroY} y2={zeroY} className="stroke-muted-foreground" strokeWidth={1} />
-        <text x={PAD.left} y={zeroY - 4} className="fill-muted-foreground" fontSize={11}>
+        <text x={PAD.left} y={zeroY - 4} className="fill-muted-foreground" fontSize={12}>
           {formatBRL(cents(0))}
         </text>
 
@@ -147,7 +147,7 @@ export function BalanceChart({ months, baseMonths }: BalanceChartProps) {
               x={x(index)}
               y={HEIGHT - 12}
               textAnchor="middle"
-              fontSize={11}
+              fontSize={12}
               className={month.negative ? 'fill-red-700' : 'fill-muted-foreground'}
             >
               {competenceShort(month.competence)}
@@ -156,11 +156,11 @@ export function BalanceChart({ months, baseMonths }: BalanceChartProps) {
         )}
 
         {/* Extremos */}
-        <text x={PAD.left} y={PAD.top - 12} className="fill-muted-foreground" fontSize={11}>
+        <text x={PAD.left} y={PAD.top - 12} className="fill-muted-foreground" fontSize={12}>
           {formatBRL(cents(hi))}
         </text>
         {lo < 0 ? (
-          <text x={PAD.left} y={PAD.top + plotH + 12} className="fill-red-700" fontSize={11}>
+          <text x={PAD.left} y={PAD.top + plotH + 12} className="fill-red-700" fontSize={12}>
             {formatBRL(cents(lo))}
           </text>
         ) : null}

@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { AlertCircle, CheckCircle2 } from 'lucide-react';
 
-import { Button } from '@/components/ui-kit';
+import { competenceLong } from '@/components/cashflow/labels';
+import { Button, Faixa } from '@/components/ui-kit';
 import { formatDateBR } from '@/lib/date';
 
 import { cardPatchBody, competenceMismatch, type CompetenceMismatch } from './competence-warning';
@@ -24,10 +24,6 @@ type CompetenceWarningBannerProps = {
   /** Chamado com o ciclo que o SERVIDOR confirmou depois do `PATCH`. */
   onCycleChanged: (cycle: CardCycle) => void;
 };
-
-function formatCompetence(competence: string): string {
-  return `${competence.slice(5)}/${competence.slice(0, 4)}`;
-}
 
 /**
  * Aviso de competência divergente (avisa, NÃO bloqueia) e, num único caso, a
@@ -101,30 +97,20 @@ export function CompetenceWarningBanner({
   if (mismatch === null) {
     if (fixedDay === null) return null;
     return (
-      <div
-        role="status"
-        className="mt-4 flex gap-2 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950"
-      >
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-        <div className="flex flex-col gap-1">
-          <p>
-            Cartão atualizado: agora vence no dia <strong className="font-semibold">{fixedDay}</strong>. A competência
-            esperada foi recalculada com isso e bate com o documento.
-          </p>
-          <p className="text-xs text-emerald-900/80">
-            Faturas que já estavam gravadas não mudam; o novo vencimento vale para as próximas.
-          </p>
-        </div>
-      </div>
+      <Faixa tone="ok" role="status">
+        <p>
+          Cartão atualizado: agora vence no dia <strong className="font-semibold">{fixedDay}</strong>. A competência
+          esperada foi recalculada com isso e bate com o documento.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Faturas que já estavam gravadas não mudam; o novo vencimento vale para as próximas.
+        </p>
+      </Faixa>
     );
   }
 
   return (
-    <div
-      role="status"
-      className="mt-4 flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
-    >
-      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+    <Faixa tone="attention" role="status">
       <div className="flex flex-col gap-1">
         <BannerText mismatch={mismatch} sourceName={sourceName} />
 
@@ -144,7 +130,7 @@ export function CompetenceWarningBanner({
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-background p-3">
+              <div className="flex flex-col gap-2 border border-border bg-card p-3">
                 <p>
                   Mudar o vencimento de <strong className="font-semibold">{sourceName}</strong> do dia{' '}
                   {mismatch.registeredDueDay} para o dia {mismatch.fix.dueDay}? Isto muda como as próximas faturas deste
@@ -162,7 +148,7 @@ export function CompetenceWarningBanner({
                   </Button>
                 </div>
                 {error !== null ? (
-                  <p role="alert" className="text-xs text-red-800">
+                  <p role="alert" className="text-xs font-medium text-destructive">
                     {error}
                   </p>
                 ) : null}
@@ -171,7 +157,7 @@ export function CompetenceWarningBanner({
           </div>
         ) : null}
       </div>
-    </div>
+    </Faixa>
   );
 }
 
@@ -183,7 +169,7 @@ function readApiError(body: unknown, fallback: string): string {
 function BannerText({ mismatch, sourceName }: { mismatch: CompetenceMismatch; sourceName: string }) {
   const printed = formatDateBR(mismatch.printedDueDate);
   const expected = formatDateBR(mismatch.expectedDueDate);
-  const declared = formatCompetence(mismatch.declaredCompetence);
+  const declared = competenceLong(mismatch.declaredCompetence);
 
   if (mismatch.kind === 'registration') {
     return (
@@ -196,7 +182,7 @@ function BannerText({ mismatch, sourceName }: { mismatch: CompetenceMismatch; so
           <strong className="font-semibold">{declared}</strong> o sistema esperava{' '}
           <strong className="font-semibold">{expected}</strong>). A competência declarada parece certa.
         </p>
-        <p className="text-xs text-amber-900/80">
+        <p className="text-xs text-muted-foreground">
           Um ciclo errado desloca a competência de toda importação futura deste cartão.{' '}
           {mismatch.fix === null ? (
             <>
@@ -230,7 +216,7 @@ function BannerText({ mismatch, sourceName }: { mismatch: CompetenceMismatch; so
           competência <strong className="font-semibold">{declared}</strong>, para a qual o sistema esperava vencimento
           em <strong className="font-semibold">{expected}</strong>.
         </p>
-        <p className="text-xs text-amber-900/80">
+        <p className="text-xs text-muted-foreground">
           Se a competência estiver errada, use &ldquo;Voltar para a entrada&rdquo; e troque antes de confirmar. Se lançou
           de propósito (por exemplo, uma fatura antiga), pode seguir: nada foi bloqueado.
         </p>
@@ -247,7 +233,7 @@ function BannerText({ mismatch, sourceName }: { mismatch: CompetenceMismatch; so
         <strong className="font-semibold">{expected}</strong>, e a data impressa também não é o vencimento de nenhuma
         competência próxima deste cartão.
       </p>
-      <p className="text-xs text-amber-900/80">
+      <p className="text-xs text-muted-foreground">
         Pode ser a competência ou o cadastro do cartão (vencimento dia {mismatch.registeredDueDay}). Confira os dois — o
         cadastro fica em{' '}
         <Link href="/cartoes" className="underline underline-offset-2">

@@ -60,7 +60,6 @@ describe('datas e competências em pt-BR, pelos formatadores existentes', () => 
 
 describe('contraste do placeholder: token existente, sem paleta nova', () => {
   const FILES = [
-    'components/cards/form-fields.tsx',
     'components/goals/goal-form.tsx',
     'components/investment/investment-screen.tsx',
     'components/investment/positions/positions-screen.tsx',
@@ -69,9 +68,14 @@ describe('contraste do placeholder: token existente, sem paleta nova', () => {
     expect(read(file)).toContain('placeholder:text-muted-foreground');
   });
 
-  it('o final do cartão (1234) usa o estilo de campo com o placeholder legível', () => {
-    expect(read('components/cards/card-holders.tsx')).toContain('className={inputClassName}');
-    expect(read('components/cards/form-fields.tsx')).toMatch(/inputClassName =\s*'[^']*placeholder:text-muted-foreground/);
+  it('os campos dos cartões usam Input e Select do ui-kit, que já carregam o placeholder legível', () => {
+    expect(read('components/ui-kit/input.tsx')).toContain('placeholder:text-muted-foreground');
+    for (const file of ['account-form', 'card-form', 'card-holders']) {
+      const source = read(`components/cards/${file}.tsx`);
+      expect(source).toContain('<Input');
+      expect(source).not.toMatch(/<input/);
+      expect(source).not.toContain('h-9');
+    }
   });
 });
 

@@ -48,6 +48,18 @@
  *    `usado / limite` em basis points, arredondada para o bp mais proximo.
  *    `usageBp` e `null` quando o limite e `null` (RF-CC-05: cartao sem limite
  *    cadastrado) **ou nao-positivo** — limite zero dividiria por zero.
+ *
+ * 6. **Fatura PAGA sai; vencida e nao paga continua** (decisao do Ricardo,
+ *    2026-10-08). Linha com `statementPaid` nao entra em nada: nem no mes, nem
+ *    no total, nem no uso de limite. O app nao sabe se uma fatura vencida foi
+ *    paga; so a marca explicita de paga a tira do comprometimento.
+ *
+ * 7. **Cada mes separa parcela de compra ja lancada** (`installmentCents` +
+ *    `purchaseCents` = `totalCents`), e `breakdown` da as tres linhas do card
+ *    "Comprometido nos cartoes", que fecham exatamente com `totalCents`: a
+ *    fatura do mes corrente (inteira), as parcelas dos meses seguintes e as
+ *    compras ja lancadas em faturas futuras (compra feita depois do
+ *    fechamento, e estorno). Linha sem `installment` conta como compra.
  */
 
 import { competenceRange, type Competence } from '@/lib/date';
@@ -66,6 +78,10 @@ export interface CommitmentInput {
     amountCents: Cents;
     creditCardId: string;
     status: TransactionStatus;
+    /** Parcela de parcelamento (`installment_plan_id`). Ausente = compra lancada. */
+    installment?: boolean;
+    /** A fatura desta linha (cartao + competencia) esta marcada como paga. Ausente = nao paga. */
+    statementPaid?: boolean;
   }[];
   fromCompetence: Competence;
   months: number;
@@ -121,12 +137,27 @@ function usageBasisPoints(used: Cents, limit: Cents): BasisPoints {
   return basisPoints(Number(capped));
 }
 
+/** As tres linhas do card "Comprometido nos cartoes"; a soma e `totalCents`. */
+export interface CommitmentBreakdown {
+  /** Tudo da fatura de `fromCompetence` (parcela e compra), com sinal. */
+  currentStatementCents: Cents;
+  /** Parcelas das competencias seguintes da janela. */
+  laterInstallmentsCents: Cents;
+  /** Compras ja lancadas (e estornos) nas competencias seguintes da janela. */
+  laterPurchasesCents: Cents;
+}
+
 export function futureCommitment(input: CommitmentInput): {
   byCompetence: {
     competence: Competence;
     totalCents: Cents;
+    /** Parte do mes que e parcela; `installmentCents + purchaseCents = totalCents`. */
+    installmentCents: Cents;
+    /** Parte do mes que e compra ja lancada (ou estorno). */
+    purchaseCents: Cents;
     byCardId: Record<string, Cents>;
   }[];
+  breakdown: CommitmentBreakdown;
   totalCents: Cents;
   lastCommittedCompetence: Competence | null;
   limitUsage: { cardId: string; usedCents: Cents; usageBp: BasisPoints | null }[];
@@ -140,6 +171,8 @@ export function futureCommitment(input: CommitmentInput): {
   // cruzamento (soma dos cartoes daquele mes).
   const cardTotals = new Map<string, Cents>();
   const monthCardTotals = new Map<Competence, Map<string, Cents>>();
+  const monthInstallments = new Map<Competence, Cents>();
+  const monthPurchases = new Map<Competence, Cents>();
   // Cartoes vistos em lancamento, na ordem em que aparecem — so para os que
   // nao estiverem em `cards` entrarem em `limitUsage` sem sumir calados.
   const seenCardIds: string[] = [];
@@ -147,8 +180,12 @@ export function futureCommitment(input: CommitmentInput): {
 
   for (const transaction of input.transactions) {
     if (!inWindow.has(transaction.competence)) continue;
+    // Fatura paga nao e mais compromisso (item 6 do cabecalho).
+    if (transaction.statementPaid === true) continue;
 
     const amount = cents(transaction.amountCents);
+    const parts = transaction.installment === true ? monthInstallments : monthPurchases;
+    parts.set(transaction.competence, addCents(parts.get(transaction.competence) ?? zero(), amount));
     const cardId = transaction.creditCardId;
 
     cardTotals.set(cardId, addCents(cardTotals.get(cardId) ?? zero(), amount));
@@ -173,9 +210,18 @@ export function futureCommitment(input: CommitmentInput): {
     return {
       competence,
       totalCents: sumValues(perCard.values()),
+      installmentCents: monthInstallments.get(competence) ?? zero(),
+      purchaseCents: monthPurchases.get(competence) ?? zero(),
       byCardId,
     };
   });
+
+  const [current, ...later] = byCompetence;
+  const breakdown: CommitmentBreakdown = {
+    currentStatementCents: current?.totalCents ?? zero(),
+    laterInstallmentsCents: sumValues(later.map((entry) => entry.installmentCents)),
+    laterPurchasesCents: sumValues(later.map((entry) => entry.purchaseCents)),
+  };
 
   const cardsById = new Map(input.cards.map((card) => [card.id, card]));
   const limitUsage: {
@@ -217,5 +263,5 @@ export function futureCommitment(input: CommitmentInput): {
     byCompetence.map((entry) => entry.totalCents),
   );
 
-  return { byCompetence, totalCents, lastCommittedCompetence, limitUsage };
+  return { byCompetence, breakdown, totalCents, lastCommittedCompetence, limitUsage };
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   divergentStatements,
   monthlyKpis,
+  monthlySurplusAverage,
   spendingByCategory,
   type CategoryNature,
   type DivergentStatementInput,
@@ -215,6 +216,23 @@ describe('monthlyKpis', () => {
       ]),
     );
     expect(result.expenseCents).toBe(20000);
+  });
+
+  it('aporte do mes conta so o LANCADO: previsto de aporte fica fora (decisao 2026-10-08)', () => {
+    const result = monthlyKpis(
+      kpiInput([
+        kpiTx(-50000, 'investment_contribution', 'investment', 'posted'),
+        kpiTx(-30000, 'investment_contribution', 'investment', 'planned'),
+      ]),
+    );
+    // So o posted: 50000. O planned de 30000 nao e aporte feito.
+    expect(result.contributionsCents).toBe(50000);
+  });
+
+  it('aporte planejado passa direto para a tela, ao lado do lancado; sem plano e null', () => {
+    expect(monthlyKpis(kpiInput([], { plannedContributionCents: cents(50000) })).plannedContributionCents).toBe(50000);
+    expect(monthlyKpis(kpiInput([], { plannedContributionCents: null })).plannedContributionCents).toBeNull();
+    expect(monthlyKpis(kpiInput([])).plannedContributionCents).toBeNull();
   });
 
   it('razao patologica satura em vez de lancar', () => {
@@ -440,5 +458,76 @@ describe('divergentStatements', () => {
 
   it('sem faturas devolve lista vazia', () => {
     expect(divergentStatements([])).toEqual([]);
+  });
+});
+
+describe('monthlySurplusAverage', () => {
+  const mes = (competence: string, transactions: KpiTx[]) => ({ competence, transactions });
+
+  it('media so dos meses COM receita lancada; os sem receita saem e sao listados', () => {
+    const result = monthlySurplusAverage([
+      // Julho: so despesa (-1.469,01), nenhuma receita: sai da media.
+      mes('2026-07', [kpiTx(-146901, 'expense', 'essential')]),
+      // Agosto: 5.000,00 - 2.000,00 = 3.000,00.
+      mes('2026-08', [kpiTx(500000, 'income', 'income'), kpiTx(-200000, 'expense', 'essential')]),
+      // Setembro: 4.000,00 - 3.949,31 = 50,69.
+      mes('2026-09', [kpiTx(400000, 'income', 'income'), kpiTx(-394931, 'expense', 'non_essential')]),
+    ]);
+    expect(result.months).toEqual([
+      { competence: '2026-08', incomeCents: 500000, expenseCents: 200000, surplusCents: 300000 },
+      { competence: '2026-09', incomeCents: 400000, expenseCents: 394931, surplusCents: 5069 },
+    ]);
+    expect(result.excludedWithoutIncome).toEqual(['2026-07']);
+    // (300000 + 5069) / 2 = 152534,5 -> meio afasta do zero -> 152535.
+    expect(result.averageCents).toBe(152535);
+  });
+
+  it('a sobra de cada mes e a do monthlyKpis: piso por balde, aporte e transferencia fora', () => {
+    const result = monthlySurplusAverage([
+      mes('2026-09', [
+        kpiTx(100000, 'income', 'income'),
+        // Estorno maior que a despesa: despesa do mes e 0 (piso), nao receita extra.
+        kpiTx(5000, 'expense', 'non_essential'),
+        kpiTx(-50000, 'investment_contribution', 'investment'),
+        kpiTx(-20000, 'transfer', 'non_essential'),
+        kpiTx(-30000, 'credit_card_payment', 'non_essential'),
+      ]),
+    ]);
+    // Receita 1.000,00 - despesa 0 = 1.000,00 (e nao 1.050,00 da soma bruta).
+    expect(result.months[0]?.surplusCents).toBe(100000);
+    expect(result.averageCents).toBe(100000);
+  });
+
+  it('media negativa arredonda com o meio afastando do zero', () => {
+    const result = monthlySurplusAverage([
+      mes('2026-08', [kpiTx(100, 'income', 'income'), kpiTx(-101, 'expense', 'essential')]),
+      mes('2026-09', [kpiTx(100, 'income', 'income'), kpiTx(-102, 'expense', 'essential')]),
+    ]);
+    // (-1 + -2) / 2 = -1,5 -> -2.
+    expect(result.averageCents).toBe(-2);
+  });
+
+  it('nenhum mes com receita: media null, todos listados como fora', () => {
+    const result = monthlySurplusAverage([
+      mes('2026-07', [kpiTx(-1000, 'expense', 'essential')]),
+      mes('2026-09', [kpiTx(-2000, 'expense', 'essential')]),
+    ]);
+    expect(result).toEqual({ averageCents: null, months: [], excludedWithoutIncome: ['2026-07', '2026-09'] });
+  });
+
+  it('receita que se anula com estorno de receita conta como mes sem receita', () => {
+    const result = monthlySurplusAverage([
+      mes('2026-09', [kpiTx(1000, 'income', 'income'), kpiTx(-1000, 'income', 'income'), kpiTx(-500, 'expense', 'essential')]),
+    ]);
+    expect(result.excludedWithoutIncome).toEqual(['2026-09']);
+    expect(result.averageCents).toBeNull();
+  });
+
+  it('lista vazia: media null e nada fora', () => {
+    expect(monthlySurplusAverage([])).toEqual({ averageCents: null, months: [], excludedWithoutIncome: [] });
+  });
+
+  it('recusa competencia malformada', () => {
+    expect(() => monthlySurplusAverage([mes('2026-13', [])])).toThrow();
   });
 });

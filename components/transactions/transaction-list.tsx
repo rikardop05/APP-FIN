@@ -5,7 +5,7 @@ import { Pencil, Tags, Trash2 } from 'lucide-react';
 import { competenceShort } from '@/components/cashflow/labels';
 import { formatBRL, parseBRL } from '@/lib/money';
 import {
-  Badge,
+  Selo,
   Button,
   Checkbox,
   DateText,
@@ -134,33 +134,42 @@ function TransactionEditor({ row, options, onSave, onCancel }: EditorProps) {
   );
 }
 
+/**
+ * Ações da linha numa linha só (sem empilhar). Na tabela viram botões de ícone com nome acessível e
+ * dica, para o "Excluir" nunca cortar em 1440px; no cartão do celular mostram o texto.
+ */
 function RowActions({
   description,
+  compact,
   onEdit,
   onRule,
   onDelete,
 }: {
   description: string;
+  compact: boolean;
   onEdit: () => void;
   onRule: () => void;
   onDelete: () => void;
 }) {
+  const labelClass = compact ? 'sr-only' : 'ml-1';
+  const iconClass = 'h-4 w-4';
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button variant="ghost" size="sm" onClick={onEdit}>
-        <Pencil className="mr-1 h-4 w-4" aria-hidden="true" /> Editar
+    <div className="flex flex-nowrap items-center gap-1 whitespace-nowrap">
+      <Button variant="ghost" size="sm" title="Editar" aria-label={`Editar ${description}`} onClick={onEdit}>
+        <Pencil className={iconClass} aria-hidden="true" /><span className={labelClass}>Editar</span>
       </Button>
-      <Button variant="ghost" size="sm" onClick={onRule}>
-        <Tags className="mr-1 h-4 w-4" aria-hidden="true" /> Criar regra
+      <Button variant="ghost" size="sm" title="Criar regra" aria-label={`Criar regra para ${description}`} onClick={onRule}>
+        <Tags className={iconClass} aria-hidden="true" /><span className={labelClass}>Criar regra</span>
       </Button>
       <Button
         variant="ghost"
         size="sm"
         className="text-destructive hover:text-destructive"
+        title="Excluir"
         aria-label={`Excluir ${description}`}
         onClick={onDelete}
       >
-        <Trash2 className="mr-1 h-4 w-4" aria-hidden="true" /> Excluir
+        <Trash2 className={iconClass} aria-hidden="true" /><span className={labelClass}>Excluir</span>
       </Button>
     </div>
   );
@@ -184,10 +193,11 @@ export function TransactionList({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="hidden overflow-hidden rounded-lg border border-border md:block">
+      <div className="hidden overflow-hidden border border-border md:block">
         <table className="w-full border-collapse text-sm">
+          <caption className="sr-only">Lançamentos, do mês atual para os anteriores e depois os futuros</caption>
           <thead>
-            <tr className="border-b border-border bg-secondary/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <tr className="border-b border-border bg-secondary/40 text-left text-xs text-muted-foreground">
               <th className="w-12 px-3 py-3"><Checkbox aria-label="Selecionar todos os lançamentos" checked={allSelected} onChange={onToggleAll} /></th>
               <th className="px-3 py-3 font-medium">Data</th>
               <th className="px-3 py-3 font-medium">Descrição</th>
@@ -195,7 +205,7 @@ export function TransactionList({
               <th className="px-3 py-3 font-medium">Origem</th>
               <th className="px-3 py-3 font-medium">Categoria</th>
               <th className="px-3 py-3 font-medium">Responsável</th>
-              <th className="px-3 py-3 font-medium">Ações</th>
+              <th scope="col" className="px-3 py-3 font-medium">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -209,12 +219,12 @@ export function TransactionList({
                   <>
                     <td className="px-3 py-3 align-top"><Checkbox aria-label={`Selecionar ${row.description}`} checked={selectedIds.includes(row.id)} onChange={() => onToggle(row.id)} /></td>
                     <td className="whitespace-nowrap px-3 py-3 align-top"><DateText value={row.occurredOn} /></td>
-                    <td className="max-w-[18rem] px-3 py-3 align-top"><div className="truncate font-medium" title={row.description}>{row.description}</div><span className="text-xs text-muted-foreground">{kindLabel[row.kind]}</span></td>
+                    <td className="max-w-[18rem] px-3 py-3 align-top"><div className="truncate font-medium" title={row.description}>{row.description}</div><span className="text-xs text-muted-foreground">{kindLabel[row.kind]}{row.installmentNumber === null ? '' : ` · parcela ${String(row.installmentNumber).padStart(2, '0')}`}</span>{row.status === 'planned' ? <Selo tone="neutral" label="Previsto" className="ml-2" /> : null}</td>
                     <td className="whitespace-nowrap px-3 py-3 text-right align-top"><Money value={row.amountCents} /></td>
                     <td className="max-w-[10rem] truncate px-3 py-3 align-top text-muted-foreground" title={sourceLabel(row)}>{sourceLabel(row)}</td>
-                    <td className="px-3 py-3 align-top">{row.categoryName ? row.categoryName : <Badge variant="warning">Não categorizado</Badge>}</td>
+                    <td className="px-3 py-3 align-top">{row.categoryName ? row.categoryName : <Selo tone="attention" label="Não categorizado" />}</td>
                     <td className="px-3 py-3 align-top text-muted-foreground">{row.memberName ?? '—'}</td>
-                    <td className="px-3 py-3 align-top"><RowActions description={row.description} onEdit={() => onEdit(row.id)} onRule={() => onRule(row.id)} onDelete={() => onDelete(row.id)} /></td>
+                    <td className="px-3 py-3 align-top"><RowActions compact description={row.description} onEdit={() => onEdit(row.id)} onRule={() => onRule(row.id)} onDelete={() => onDelete(row.id)} /></td>
                   </>
                 )}
               </tr>
@@ -239,18 +249,18 @@ export function TransactionList({
                     <Checkbox aria-label={`Selecionar ${row.description}`} checked={selectedIds.includes(row.id)} onChange={() => onToggle(row.id)} />
                     <div className="min-w-0">
                       <p className="truncate font-medium" title={row.description}>{row.description}</p>
-                      <p className="text-sm text-muted-foreground"><DateText value={row.occurredOn} /> · {kindLabel[row.kind]}</p>
+                      <p className="text-sm text-muted-foreground"><DateText value={row.occurredOn} /> · {kindLabel[row.kind]}{row.installmentNumber === null ? '' : ` · parcela ${String(row.installmentNumber).padStart(2, '0')}`}</p>{row.status === 'planned' ? <Selo tone="neutral" label="Previsto" className="mt-1" /> : null}
                     </div>
                   </div>
                   <Money value={row.amountCents} />
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm">
                   <div><dt className="text-xs text-muted-foreground">Origem</dt><dd className="truncate" title={sourceLabel(row)}>{sourceLabel(row)}</dd></div>
-                  <div><dt className="text-xs text-muted-foreground">Categoria</dt><dd>{row.categoryName ?? <Badge variant="warning">Não categorizado</Badge>}</dd></div>
+                  <div><dt className="text-xs text-muted-foreground">Categoria</dt><dd>{row.categoryName ?? <Selo tone="attention" label="Não categorizado" />}</dd></div>
                   <div><dt className="text-xs text-muted-foreground">Responsável</dt><dd>{row.memberName ?? '—'}</dd></div>
                   <div><dt className="text-xs text-muted-foreground">Competência</dt><dd>{competenceShort(row.competence)}</dd></div>
                 </dl>
-                <div className="mt-3 border-t border-border pt-3"><RowActions description={row.description} onEdit={() => onEdit(row.id)} onRule={() => onRule(row.id)} onDelete={() => onDelete(row.id)} /></div>
+                <div className="mt-3 border-t border-border pt-3"><RowActions compact={false} description={row.description} onEdit={() => onEdit(row.id)} onRule={() => onRule(row.id)} onDelete={() => onDelete(row.id)} /></div>
               </>
             )}
           </article>

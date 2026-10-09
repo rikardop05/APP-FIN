@@ -76,8 +76,9 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // `silent`: recarrega sem trocar a lista por "Carregando" (o feedback do botão de fatura paga fica à vista).
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const [accountsResponse, cardsResponse] = await Promise.all([
@@ -95,6 +96,12 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
       setLoading(false);
     }
   }, []);
+
+  // Fatura marcada ou desmarcada como paga: refaz as faturas aqui e o comprometido no servidor.
+  const statusChanged = useCallback(() => {
+    void load(true);
+    router.refresh();
+  }, [load, router]);
 
   useEffect(() => {
     void load();
@@ -204,7 +211,7 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
       />
 
       {error ? (
-        <div role="alert" className="flex flex-col gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 sm:flex-row sm:items-center sm:justify-between">
+        <div role="alert" className="flex flex-col gap-3 border border-destructive/50 bg-destructive-soft px-4 py-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
           <span>{error}</span>
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
             Tentar novamente
@@ -213,7 +220,7 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
       ) : null}
 
       {loading ? (
-        <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">
+        <div className="border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">
           Carregando contas e cartões…
         </div>
       ) : (
@@ -235,7 +242,7 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 {accounts.map((account) => (
-                  <article key={account.id} className="rounded-lg border border-border bg-card p-4">
+                  <article key={account.id} className="border border-border bg-card p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-start gap-3">
                         <Landmark className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -246,11 +253,11 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
                           </p>
                         </div>
                       </div>
-                      <div className="flex shrink-0 gap-1">
+                      <div className="flex shrink-0 items-center">
                         <Button variant="ghost" size="sm" aria-label={`Editar ${account.name}`} onClick={() => setDialog({ kind: 'account', record: account })}>
                           <Pencil className="h-4 w-4" aria-hidden="true" />
                         </Button>
-                        <Button variant="ghost" size="sm" aria-label={`Desativar ${account.name}`} onClick={() => void archive('account', account.id, account.name)}>
+                        <Button variant="ghost" size="sm" className="ml-4 border-l border-border" aria-label={`Desativar ${account.name}`} onClick={() => void archive('account', account.id, account.name)}>
                           <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
                         </Button>
                       </div>
@@ -288,7 +295,7 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
             ) : (
               <div className="flex flex-col gap-4">
                 {cards.map((card) => (
-                  <article key={card.id} className="rounded-lg border border-border bg-card p-4 sm:p-5">
+                  <article key={card.id} className="border border-border bg-card p-4 sm:p-5">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex min-w-0 items-start gap-3">
                         <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -299,11 +306,11 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
                           </p>
                         </div>
                       </div>
-                      <div className="flex gap-1 self-end sm:self-start">
+                      <div className="flex items-center self-end sm:self-start">
                         <Button variant="ghost" size="sm" aria-label={`Editar ${card.name}`} onClick={() => setDialog({ kind: 'card', record: card })}>
                           <Pencil className="h-4 w-4" aria-hidden="true" />
                         </Button>
-                        <Button variant="ghost" size="sm" aria-label={`Desativar ${card.name}`} onClick={() => void archive('card', card.id, card.name)}>
+                        <Button variant="ghost" size="sm" className="ml-4 border-l border-border" aria-label={`Desativar ${card.name}`} onClick={() => void archive('card', card.id, card.name)}>
                           <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
                         </Button>
                       </div>
@@ -326,7 +333,7 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
                         <h4 className="font-medium">Faturas</h4>
                         <Badge variant="neutral">{card.statements.length} {card.statements.length === 1 ? 'fatura' : 'faturas'}</Badge>
                       </div>
-                      <StatementList statements={card.statements} cycle={{ closingDay: card.closingDay, dueDay: card.dueDay }} today={today} />
+                      <StatementList statements={card.statements} cycle={{ closingDay: card.closingDay, dueDay: card.dueDay }} today={today} onStatusChanged={statusChanged} />
                     </div>
                   </article>
                 ))}
@@ -340,7 +347,7 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
 
       {dialog ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/20 p-0 sm:items-center sm:p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null); }}>
-          <div className="max-h-[90vh] w-full overflow-y-auto rounded-t-lg border border-border bg-background p-4 shadow-lg sm:max-w-2xl sm:rounded-lg sm:p-6" role="dialog" aria-modal="true" aria-labelledby="cartoes-dialog-title">
+          <div className="max-h-[90vh] w-full overflow-y-auto border border-border bg-background p-4 shadow-lg sm:max-w-2xl sm:p-6" role="dialog" aria-modal="true" aria-labelledby="cartoes-dialog-title">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h2 id="cartoes-dialog-title" className="text-lg font-semibold">

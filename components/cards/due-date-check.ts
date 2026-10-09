@@ -24,6 +24,8 @@ export type CheckedStatement = {
   id: string;
   period: Competence;
   dueDate: IsoDate;
+  /** `paid` = marcada como paga (decisão de 2026-10-08): a fatura quitada não precisa de aviso. */
+  status?: 'open' | 'closed' | 'paid';
 };
 
 export type DueDateWarning = {
@@ -51,6 +53,7 @@ export function dueDateWarnings(
   today: IsoDate,
 ): DueDateWarning[] {
   return statements.flatMap((statement) => {
+    if (statement.status === 'paid') return [];
     const expected = expectedDueDate(statement.period, cycle);
     if (expected === null || expected === statement.dueDate) return [];
     // Comparação de string: 'YYYY-MM-DD' ordena como as datas.

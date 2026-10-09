@@ -15,6 +15,10 @@ export type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** No celular: `primary` = toque direto na barra inferior; `more` = atrás do botão "Mais". */
+  mobile: 'primary' | 'more';
+  /** Rótulo curto da barra inferior, onde 12px por 1/5 da largura não comporta o nome inteiro. */
+  short?: string;
 };
 
 /**
@@ -23,15 +27,15 @@ export type NavItem = {
  * duplicam a lista.
  */
 export const NAV_ITEMS: readonly NavItem[] = [
-  { href: '/', label: 'Painel', icon: LayoutDashboard },
-  { href: '/lancamentos', label: 'Lançamentos', icon: ListChecks },
-  { href: '/importar', label: 'Importar', icon: Upload },
-  { href: '/cartoes', label: 'Cartões', icon: CreditCard },
-  { href: '/orcamento', label: 'Orçamento', icon: Wallet },
-  { href: '/fluxo', label: 'Fluxo de caixa', icon: LineChart },
-  { href: '/investimentos', label: 'Investimentos', icon: TrendingUp },
-  { href: '/metas', label: 'Metas', icon: Target },
-  { href: '/config', label: 'Configurações', icon: Settings },
+  { href: '/', label: 'Painel', icon: LayoutDashboard, mobile: 'primary' },
+  { href: '/lancamentos', label: 'Lançamentos', icon: ListChecks, mobile: 'primary' },
+  { href: '/importar', label: 'Importar', icon: Upload, mobile: 'more' },
+  { href: '/cartoes', label: 'Cartões', icon: CreditCard, mobile: 'primary' },
+  { href: '/orcamento', label: 'Orçamento', icon: Wallet, mobile: 'more' },
+  { href: '/fluxo', label: 'Fluxo de caixa', short: 'Fluxo', icon: LineChart, mobile: 'primary' },
+  { href: '/investimentos', label: 'Investimentos', icon: TrendingUp, mobile: 'more' },
+  { href: '/metas', label: 'Metas', icon: Target, mobile: 'more' },
+  { href: '/config', label: 'Configurações', icon: Settings, mobile: 'more' },
 ];
 
 /**

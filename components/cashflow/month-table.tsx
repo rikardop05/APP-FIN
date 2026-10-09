@@ -68,7 +68,7 @@ export function MonthTable({ months, composition, adjustments }: MonthTableProps
                   <th scope="row" className="whitespace-nowrap px-2 py-2 text-left font-medium">
                     {competenceShort(month.competence)}
                     {month.negative ? (
-                      <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+                      <span className="ml-2 inline-flex items-center border border-destructive/50 bg-destructive-soft px-2 py-0.5 text-xs font-medium text-destructive">
                         Saldo negativo
                       </span>
                     ) : null}
@@ -111,13 +111,13 @@ export function MonthTable({ months, composition, adjustments }: MonthTableProps
           return (
             <li
               key={month.competence}
-              className={cn('rounded-lg border border-border p-3', month.negative && 'border-red-300 bg-red-50')}
+              className={cn('border border-border p-3', month.negative && 'border-red-300 bg-red-50')}
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="font-medium">
                   {competenceShort(month.competence)}
                   {month.negative ? (
-                    <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+                    <span className="ml-2 inline-flex items-center border border-destructive/50 bg-destructive-soft px-2 py-0.5 text-xs font-medium text-destructive">
                       Saldo negativo
                     </span>
                   ) : null}
@@ -165,7 +165,7 @@ export function MonthTable({ months, composition, adjustments }: MonthTableProps
         })}
       </ul>
 
-      <p className="mt-3 text-xs text-muted-foreground">
+      <p className="mt-3 max-w-prose text-xs text-muted-foreground">
         Vermelho = saldo no <strong className="font-medium">fim do mês</strong> abaixo de zero.
         &ldquo;Resultado do mês&rdquo; negativo só diz que saiu mais do que entrou naquele mês; o
         saldo pode continuar positivo. A fatura entra no mês em que vence, e as parcelas de cartão

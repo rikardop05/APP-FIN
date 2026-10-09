@@ -105,6 +105,11 @@ export interface MonthlyKpisInput {
   }[];
   futureInstallmentsCents: Cents;
   uncategorizedCount: number;
+  /**
+   * Aporte mensal PLANEJADO do plano de investimento (premissa, nao lancamento),
+   * para a tela mostrar "R$ X de R$ Y planejados". Ausente ou null = sem plano.
+   */
+  plannedContributionCents?: Cents | null;
 }
 
 export interface MonthlyKpis {
@@ -116,6 +121,8 @@ export interface MonthlyKpis {
   essentialShareBp: BasisPoints | null;
   futureInstallmentsCents: Cents;
   uncategorizedCount: number;
+  /** Repasse de `plannedContributionCents`; null sem plano. */
+  plannedContributionCents: Cents | null;
 }
 
 /** Basis points em 100 %. `500 bp = 5,00 %` (CONVENTIONS §3). */
@@ -216,7 +223,11 @@ export function monthlyKpis(input: MonthlyKpisInput): MonthlyKpis {
         }
         break;
       case 'investment_contribution':
-        contributions = addCents(contributions, amount);
+        // Aporte do mes e so o LANCADO (decisao do Ricardo, 2026-10-08): aporte
+        // previsto e intencao, nao patrimonio. O planejado vai ao lado, em
+        // `plannedContributionCents`. Mesmo criterio de "Aporte lancado x
+        // planejado" em /investimentos/posicoes.
+        if (transaction.status === 'posted') contributions = addCents(contributions, amount);
         break;
       case 'transfer':
       case 'credit_card_payment':
@@ -256,7 +267,71 @@ export function monthlyKpis(input: MonthlyKpisInput): MonthlyKpis {
         : ratioBasisPoints(netOutflow(essentialExpense), incomeCents),
     futureInstallmentsCents: cents(input.futureInstallmentsCents),
     uncategorizedCount: input.uncategorizedCount,
+    plannedContributionCents:
+      input.plannedContributionCents === undefined || input.plannedContributionCents === null
+        ? null
+        : cents(input.plannedContributionCents),
   };
+}
+
+/** Um mes da media de sobra: as linhas dele, ja recortadas pela competencia. */
+export interface SurplusMonthInput {
+  competence: Competence;
+  transactions: MonthlyKpisInput['transactions'];
+}
+
+export interface MonthlySurplusAverage {
+  /** Media da sobra dos meses que entraram; null quando nenhum entrou. */
+  averageCents: Cents | null;
+  /** Meses que entraram na media, na ordem recebida. */
+  months: { competence: Competence; incomeCents: Cents; expenseCents: Cents; surplusCents: Cents }[];
+  /** Meses que ficaram FORA por nao ter receita lancada, na ordem recebida. */
+  excludedWithoutIncome: Competence[];
+}
+
+/**
+ * Media mensal da sobra — UMA definicao de "sobra de um mes" para o sistema: a
+ * de `monthlyKpis` (receita menos despesa, piso por balde, aporte e
+ * transferencia fora), aplicada a cada mes. O Painel e Investimentos usam a
+ * mesma regra.
+ *
+ * Mes sem receita lancada (`incomeCents` = 0) SAI da media e vai para
+ * `excludedWithoutIncome` (decisao do Ricardo, 2026-10-08): sem a receita, a
+ * "sobra" do mes e so a despesa, e a media passa a medir a falta de lancamento,
+ * nao a casa. A tela diz quais meses ficaram fora.
+ *
+ * Quem chama decide o recorte (quais meses e quais status); Investimentos passa
+ * os meses fechados com `posted`. Arredondamento: centavo mais proximo, meio
+ * afastando do zero.
+ */
+export function monthlySurplusAverage(months: readonly SurplusMonthInput[]): MonthlySurplusAverage {
+  const included: MonthlySurplusAverage['months'] = [];
+  const excludedWithoutIncome: Competence[] = [];
+
+  for (const month of months) {
+    const kpis = monthlyKpis({
+      competence: month.competence,
+      transactions: month.transactions,
+      futureInstallmentsCents: zero(),
+      uncategorizedCount: 0,
+    });
+    if (kpis.incomeCents === 0) {
+      excludedWithoutIncome.push(month.competence);
+      continue;
+    }
+    included.push({
+      competence: month.competence,
+      incomeCents: kpis.incomeCents,
+      expenseCents: kpis.expenseCents,
+      surplusCents: kpis.surplusCents,
+    });
+  }
+
+  const averageCents =
+    included.length === 0
+      ? null
+      : divideRound(addCents(...included.map((month) => month.surplusCents)), included.length);
+  return { averageCents, months: included, excludedWithoutIncome };
 }
 
 export interface SpendingByCategoryInput {

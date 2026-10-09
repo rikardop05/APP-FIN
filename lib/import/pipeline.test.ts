@@ -333,6 +333,7 @@ describe('finalizeImport — planos de parcela e totais', () => {
     expect(result.installmentPlans).toEqual([
       {
         ref: 1,
+        sourceIndex: 0,
         description: 'MAGAZINE',
         totalCents: cents(-250000),
         installmentsCount: 10,
@@ -517,6 +518,7 @@ describe('competencia da fatura e projecao de parcelas (decisao do Ricardo)', ()
     expect(result.installmentPlans).toEqual([
       {
         ref: 1,
+        sourceIndex: 0,
         description: 'CARTAO DE TODOS',
         totalCents: cents(-3120),
         installmentsCount: 12,

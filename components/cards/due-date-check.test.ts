@@ -99,6 +99,11 @@ describe('aviso de vencimento que não bate com o ciclo atual do cartão', () =>
     expect(dueDateWarnings([statement()], { closingDay: 0, dueDay: 40 }, '2026-09-03')).toEqual([]);
   });
 
+  it('fatura marcada como paga nao gera aviso, mesmo antes do vencimento', () => {
+    expect(dueDateWarnings([statement({ status: 'paid' })], santander, '2026-09-03')).toEqual([]);
+    expect(dueDateWarnings([statement({ status: 'open' })], santander, '2026-09-03')).toHaveLength(1);
+  });
+
   it('sem faturas: nada; e não altera a entrada', () => {
     expect(dueDateWarnings([], santander, '2026-09-03')).toEqual([]);
     const input = [statement()];

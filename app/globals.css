@@ -3,57 +3,120 @@
 @tailwind utilities;
 
 /*
- * Tokens de tema do shadcn/ui (paleta neutra padrao).
+ * Mundo CARNÊ DE PRESTAÇÕES (Fase C, onda 1 do redesenho).
  *
- * Ficam FORA de `@layer base` de proposito. Dentro da layer, o Tailwind
- * descarta a regra `.dark` porque a string "dark" nao aparece em nenhum
- * arquivo de `content` — o resultado e o tema escuro cair silenciosamente
- * nos valores do claro. Verificado em 2026-09-10: nem usar uma utility
- * `dark:` traz o bloco de volta. Fora da layer, os tokens sempre saem.
+ * Papel de carnê em verde-água claro, tinta verde-escura quase preta, verde-carnê como cor de
+ * identidade. O vermelho é CARIMBO: só perigo, divergência e PAGO. Despesa NÃO é vermelha.
+ * Réguas de 1px, cantos retos, picote tracejado entre canhotos, numerais condensados tabulares.
+ *
+ * Ficam FORA de `@layer base` de propósito. Dentro da layer, o Tailwind descarta a regra de tema
+ * escuro porque a string não aparece em nenhum arquivo de `content` (verificado em 2026-09-10:
+ * o escuro cai em silêncio nos valores do claro). Fora da layer, os tokens sempre saem.
+ *
+ * Cada token é um triplo HSL ("H S% L%"), para o Tailwind compor opacidade (`bg-primary/90`).
+ * Contraste conferido por teste (`components/ui-kit/tokens.test.ts`): texto >= 4,5:1.
  */
 :root {
-  --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
-  --card: 0 0% 100%;
-  --card-foreground: 240 10% 3.9%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 3.9%;
-  --primary: 240 5.9% 10%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
-  --accent: 240 4.8% 95.9%;
-  --accent-foreground: 240 5.9% 10%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
-  --ring: 240 5.9% 10%;
-  --radius: 0.5rem;
+  color-scheme: light;
+
+  /* Papel e tinta */
+  --background: 156 22% 95%; /* papel de carnê, verde-água muito claro */
+  --foreground: 180 47% 11%; /* tinta verde-escura quase preta */
+  --card: 156 30% 98%; /* o canhoto: papel mais claro que a mesa */
+  --card-foreground: 180 47% 11%;
+  --popover: 156 30% 98%;
+  --popover-foreground: 180 47% 11%;
+
+  /* Identidade: verde-carnê */
+  --primary: 168 52% 32%;
+  --primary-foreground: 156 30% 98%;
+
+  /* Faixas e fundos de apoio */
+  --secondary: 156 16% 90%;
+  --secondary-foreground: 180 47% 11%;
+  --muted: 156 16% 90%;
+  --muted-foreground: 180 15% 34%; /* tinta atenuada, 5:1 sobre o papel */
+  --accent: 156 18% 87%;
+  --accent-foreground: 180 47% 11%;
+
+  /* Carimbo: perigo, divergência e PAGO. Nunca despesa. */
+  --destructive: 4 65% 46%;
+  --destructive-foreground: 156 30% 98%;
+  --destructive-soft: 4 60% 94%;
+
+  /* Estados */
+  --success: 158 55% 24%;
+  --success-foreground: 156 30% 98%;
+  --success-soft: 156 40% 90%;
+  --warning: 34 88% 26%;
+  --warning-foreground: 156 30% 98%;
+  --warning-soft: 42 92% 90%;
+
+  /* Réguas e campos */
+  --border: 160 12% 76%; /* régua de 1px */
+  --input: 165 10% 52%; /* borda de campo, 3:1 sobre o papel */
+  --ring: 168 52% 32%;
+
+  /* Lombada do carnê: a navegação lateral */
+  --sidebar: 180 47% 11%;
+  --sidebar-foreground: 156 22% 95%;
+  --sidebar-muted: 160 14% 72%;
+  --sidebar-accent: 156 22% 95%;
+  --sidebar-accent-foreground: 180 47% 11%;
+  --sidebar-border: 180 25% 24%;
+
+  /* Cantos retos em todo o mundo. */
+  --radius: 0px;
+
+  /* Altura da barra inferior do celular (com a área segura do iPhone): o rodapé fixo da tela
+     (Placar) e o painel do "Mais" somam a mesma medida. */
+  --bottom-nav-h: calc(4rem + env(safe-area-inset-bottom));
 }
 
-.dark {
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
-  --card: 240 10% 3.9%;
-  --card-foreground: 0 0% 98%;
-  --popover: 240 10% 3.9%;
-  --popover-foreground: 0 0% 98%;
-  --primary: 0 0% 98%;
-  --primary-foreground: 240 5.9% 10%;
-  --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
-  --accent: 240 3.7% 15.9%;
-  --accent-foreground: 0 0% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 3.7% 15.9%;
-  --input: 240 3.7% 15.9%;
-  --ring: 240 4.9% 83.9%;
+/* Modo escuro de verdade: segue o sistema (antes os tokens .dark existiam e nunca eram usados). */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --background: 180 30% 7%;
+    --foreground: 156 20% 92%;
+    --card: 180 26% 10%;
+    --card-foreground: 156 20% 92%;
+    --popover: 180 26% 10%;
+    --popover-foreground: 156 20% 92%;
+
+    --primary: 166 45% 52%;
+    --primary-foreground: 180 30% 7%;
+
+    --secondary: 180 18% 14%;
+    --secondary-foreground: 156 20% 92%;
+    --muted: 180 18% 14%;
+    --muted-foreground: 160 12% 66%;
+    --accent: 180 18% 17%;
+    --accent-foreground: 156 20% 92%;
+
+    --destructive: 4 72% 62%;
+    --destructive-foreground: 180 30% 7%;
+    --destructive-soft: 4 40% 16%;
+
+    --success: 152 45% 58%;
+    --success-foreground: 180 30% 7%;
+    --success-soft: 160 35% 14%;
+    --warning: 40 80% 62%;
+    --warning-foreground: 180 30% 7%;
+    --warning-soft: 38 40% 15%;
+
+    --border: 180 14% 22%;
+    --input: 175 12% 42%;
+    --ring: 166 45% 52%;
+
+    --sidebar: 180 30% 5%;
+    --sidebar-foreground: 156 20% 92%;
+    --sidebar-muted: 160 12% 62%;
+    --sidebar-accent: 180 20% 15%;
+    --sidebar-accent-foreground: 156 20% 92%;
+    --sidebar-border: 180 18% 16%;
+  }
 }
 
 @layer base {
@@ -61,12 +124,167 @@
     @apply border-border;
   }
 
-  body {
-    @apply bg-background text-foreground;
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
-  /* Valor monetario sempre em tabular para as colunas alinharem. */
-  .tabular {
-    font-variant-numeric: tabular-nums;
+  body {
+    @apply bg-background font-sans text-foreground;
+    font-feature-settings: 'kern' 1, 'liga' 1;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  a {
+    text-underline-offset: 3px;
+  }
+
+  /* Superfícies do navegador que não são desenhadas, mas carregam o desenho. */
+  ::selection {
+    background: hsl(var(--primary) / 0.25);
+    color: inherit;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    caret-color: hsl(var(--primary));
+    accent-color: hsl(var(--primary));
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--input)) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--input));
+    border: 3px solid hsl(var(--background));
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Valores e numeração de parcela: numerais condensados, tabulares, sempre alinhados em coluna. */
+  .tabular,
+  .num {
+    font-family: var(--font-numeral), 'Arial Narrow', 'Roboto Condensed', sans-serif;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+}
+
+@layer components {
+  /*
+   * PICOTE: o separador do carnê. Tracejado de 1px, 6px de traço e 4px de vão, na cor do campo.
+   * `.picote` é horizontal (bloco de 1px de altura); `.picote-v` é vertical (1px de largura).
+   * Componente React: `Picote` (components/ui-kit/picote.tsx).
+   */
+  .picote {
+    height: 1px;
+    width: 100%;
+    background-image: repeating-linear-gradient(
+      90deg,
+      hsl(var(--input)) 0 6px,
+      transparent 6px 10px
+    );
+  }
+
+  .picote-v {
+    width: 1px;
+    align-self: stretch;
+    background-image: repeating-linear-gradient(
+      180deg,
+      hsl(var(--input)) 0 6px,
+      transparent 6px 10px
+    );
+  }
+
+  /*
+   * FUNDO DE SEGURANÇA (guilhochê leve): ondas sobrepostas, 56x28 px, traço de 0,8 px com 22% de
+   * opacidade. SÓ para áreas de IDENTIDADE (capa do lote, placar, marca da lombada), nunca atrás
+   * de números nem de texto corrido. Componente React: `Guilhoche`.
+   */
+  .guilhoche {
+    background-color: hsl(var(--secondary));
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='28' viewBox='0 0 56 28'%3E%3Cg fill='none' stroke='%232E8C7A' stroke-opacity='.22' stroke-width='.8'%3E%3Cpath d='M0 14C7 0 21 0 28 14S49 28 56 14'/%3E%3Cpath d='M0 14C7 28 21 28 28 14S49 0 56 14'/%3E%3Cpath d='M0 7C7-7 21-7 28 7S49 21 56 7'/%3E%3Cpath d='M0 21C7 7 21 7 28 21S49 35 56 21'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 56px 28px;
+  }
+
+  /* Sobre a tinta (lombada): traço claro e mais discreto. */
+  .guilhoche-ink {
+    background-color: hsl(var(--sidebar));
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='28' viewBox='0 0 56 28'%3E%3Cg fill='none' stroke='%23F1F6F4' stroke-opacity='.10' stroke-width='.8'%3E%3Cpath d='M0 14C7 0 21 0 28 14S49 28 56 14'/%3E%3Cpath d='M0 14C7 28 21 28 28 14S49 0 56 14'/%3E%3Cpath d='M0 7C7-7 21-7 28 7S49 21 56 7'/%3E%3Cpath d='M0 21C7 7 21 7 28 21S49 35 56 21'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 56px 28px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .guilhoche {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='28' viewBox='0 0 56 28'%3E%3Cg fill='none' stroke='%235FD0BA' stroke-opacity='.12' stroke-width='.8'%3E%3Cpath d='M0 14C7 0 21 0 28 14S49 28 56 14'/%3E%3Cpath d='M0 14C7 28 21 28 28 14S49 0 56 14'/%3E%3Cpath d='M0 7C7-7 21-7 28 7S49 21 56 7'/%3E%3Cpath d='M0 21C7 7 21 7 28 21S49 35 56 21'/%3E%3C/g%3E%3C/svg%3E");
+  }
+}
+
+/*
+ * ASSINATURA: ao confirmar o lote, o picote se abre e os canhotos assentam. Movimento único e curto
+ * (cerca de 700 ms), só na lista que ganha a classe `.destacando`. Quem usa espera `DESTACAR_MS`
+ * (components/import/destacar.ts) e, com prefers-reduced-motion, não espera nada.
+ */
+@keyframes destaca {
+  0% { transform: translateX(0); }
+  45% { transform: translateX(-10px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes assenta {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0.55; transform: translateY(3px); }
+}
+
+.destacando [data-canhoto-stub] {
+  animation: destaca 420ms ease-out both;
+  animation-delay: calc(var(--i, 0) * 18ms);
+}
+
+.destacando [data-canhoto] {
+  animation: assenta 280ms ease-in both;
+  animation-delay: calc(420ms + var(--i, 0) * 18ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .destacando [data-canhoto-stub],
+  .destacando [data-canhoto] {
+    animation: none !important;
   }
 }

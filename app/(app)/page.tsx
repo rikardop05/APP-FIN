@@ -117,6 +117,7 @@ export default async function DashboardPage() {
     transactions: dashboard.monthlyTransactions,
     futureInstallmentsCents: dashboard.futureInstallmentsCents,
     uncategorizedCount: dashboard.uncategorizedCount,
+    plannedContributionCents: dashboard.plannedContributionCents,
   });
 
   const spending = spendingByCategory({
@@ -165,16 +166,14 @@ export default async function DashboardPage() {
   return (
     <DashboardScreen
       competence={competence}
-      commitmentMonths={settings.commitmentMonths}
       kpis={{
         incomeCents: kpis.incomeCents,
         expenseCents: kpis.expenseCents,
         contributionsCents: kpis.contributionsCents,
+        plannedContributionCents: kpis.plannedContributionCents,
         surplusCents: kpis.surplusCents,
         savingsRateBp: kpis.savingsRateBp,
         essentialShareBp: kpis.essentialShareBp,
-        futureInstallmentsCents: kpis.futureInstallmentsCents,
-        uncategorizedCount: kpis.uncategorizedCount,
       }}
       spending={spending.map((row) => ({
         categoryId: row.categoryId,
@@ -188,9 +187,12 @@ export default async function DashboardPage() {
         totalCents: commitment.totalCents as Cents,
         lastCommittedCompetence: commitment.lastCommittedCompetence,
         windowEnd,
+        breakdown: commitment.breakdown,
         byCompetence: commitment.byCompetence.map((entry) => ({
           competence: entry.competence,
           totalCents: entry.totalCents,
+          installmentCents: entry.installmentCents,
+          purchaseCents: entry.purchaseCents,
         })),
       }}
       incomeExpense={incomeExpense}

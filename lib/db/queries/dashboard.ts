@@ -7,6 +7,7 @@ import type { CategoryNature, TransactionKind, TransactionStatus } from '@/lib/d
 import {
   categories,
   creditCards,
+  investmentPlans,
   statements,
   transactions,
 } from '@/lib/db/schema';
@@ -51,6 +52,10 @@ export type DashboardCommitmentTransaction = {
   amountCents: Cents;
   creditCardId: string;
   status: TransactionStatus;
+  /** Parcela de parcelamento (`installment_plan_id`); false = compra lancada ou estorno. */
+  installment: boolean;
+  /** A fatura da linha esta marcada como paga (`statements.status = 'paid'`): sai do comprometido. */
+  statementPaid: boolean;
 };
 
 export type DashboardCategory = {
@@ -85,6 +90,11 @@ export type DashboardData = {
   commitmentTransactions: DashboardCommitmentTransaction[];
   cards: DashboardCard[];
   divergentStatements: DashboardDivergentStatement[];
+  /**
+   * Aporte mensal PLANEJADO do plano de investimento (`current_monthly_contribution_cents`),
+   * para "Aportes de <mes>: R$ X de R$ Y planejados". null = household sem plano.
+   */
+  plannedContributionCents: Cents | null;
 };
 
 const SPENDING_AVERAGE_WINDOW_MONTHS = 3;
@@ -133,6 +143,7 @@ export async function getDashboardData(
     commitmentRows,
     cardsRows,
     divergentRows,
+    planRows,
   ] = await Promise.all([
     db
       .select({
@@ -259,6 +270,13 @@ export async function getDashboardData(
         ),
       )
       .orderBy(desc(statements.period)),
+
+    // Um plano por household (garantido em `createInvestmentPlan`).
+    db
+      .select({ contribution: investmentPlans.currentMonthlyContributionCents })
+      .from(investmentPlans)
+      .where(eq(investmentPlans.householdId, householdId))
+      .limit(1),
   ]);
 
   const futureInstallmentsCents = safeCents(futureInstallmentsAgg[0]?.total ?? 0);
@@ -298,6 +316,8 @@ export async function getDashboardData(
       creditLimitCents: row.creditLimitCents === null ? null : safeCents(row.creditLimitCents),
     })),
     divergentStatements,
+    plannedContributionCents:
+      planRows[0] === undefined ? null : safeCents(planRows[0].contribution),
   };
 }
 
@@ -364,6 +384,22 @@ export async function listCommitmentTransactions(
       amountCents: transactions.amountCents,
       creditCardId: transactions.creditCardId,
       status: transactions.status,
+      installment: sql<boolean>`${transactions.installmentPlanId} is not null`,
+      // Fatura paga (decisao do Ricardo, 2026-10-08): a da propria linha (`statement_id`)
+      // ou, para a parcela projetada (sem `statement_id`), a do mesmo cartao e competencia.
+      // Vencida e nao paga continua contando: so a marca explicita tira.
+      //
+      // Nomes QUALIFICADOS e alias `paid_s` de proposito: interpolar a coluna de
+      // `transactions` aqui sai sem o nome da tabela, e dentro da subconsulta
+      // `credit_card_id` resolve para a coluna de `statements` — a fatura paga de
+      // QUALQUER cartao tirava a linha (pego pelo teste "outro cartao").
+      statementPaid: sql<boolean>`exists (
+        select 1 from "statements" as "paid_s"
+        where "paid_s"."status" = 'paid'
+          and ("paid_s"."id" = "transactions"."statement_id"
+            or ("paid_s"."credit_card_id" = "transactions"."credit_card_id"
+              and "paid_s"."period" = "transactions"."competence"))
+      )`,
     })
     .from(transactions)
     .where(
@@ -386,6 +422,8 @@ export async function listCommitmentTransactions(
       amountCents: safeCents(row.amountCents),
       creditCardId: row.creditCardId,
       status: row.status,
+      installment: row.installment === true,
+      statementPaid: row.statementPaid === true,
     }));
 }
 

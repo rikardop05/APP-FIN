@@ -15,7 +15,7 @@ import {
 
 /** Link de download com o mesmo desenho do `Button` (que não renderiza `<a>`). */
 const linkClass =
-  'inline-flex h-9 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  'inline-flex h-11 items-center justify-center gap-2 px-4 sm:h-9 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 type Pending = { fileName: string; payload: unknown; check: DryRunResponse };
 
@@ -95,7 +95,7 @@ export function BackupSection() {
           Um arquivo com todos os dados da casa. Restaurar só funciona numa casa ainda sem dados, e nunca sobrescreve nada.
         </p>
       </div>
-      <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 sm:flex-row sm:flex-wrap">
+      <div className="flex flex-col gap-2 border border-border bg-card p-4 sm:flex-row sm:flex-wrap">
         <a href="/api/backup" download className={`${linkClass} border border-border bg-background text-foreground hover:bg-secondary/60`}>
           <Download className="h-4 w-4" aria-hidden="true" />
           Baixar backup
@@ -114,8 +114,8 @@ export function BackupSection() {
         <p
           className={
             message.tone === 'error'
-              ? 'rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive'
-              : 'rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900'
+              ? 'border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive'
+              : 'border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900'
           }
           role={message.tone === 'error' ? 'alert' : 'status'}
         >
@@ -126,7 +126,7 @@ export function BackupSection() {
       {pending ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/20 p-0 sm:items-center sm:p-4" role="presentation">
           <div
-            className="max-h-[90vh] w-full overflow-y-auto rounded-t-lg border border-border bg-background p-4 shadow-lg sm:max-w-xl sm:rounded-lg sm:p-6"
+            className="max-h-[90vh] w-full overflow-y-auto border border-border bg-background p-4 shadow-lg sm:max-w-xl sm:p-6"
             role="dialog"
             aria-modal="true"
             aria-labelledby="backup-dialog-title"
@@ -143,7 +143,7 @@ export function BackupSection() {
               </ul>
             ) : null}
             {refusal ? (
-              <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="alert">
+              <p className="mt-3 border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="alert">
                 {refusal}
               </p>
             ) : null}

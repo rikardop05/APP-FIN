@@ -28,8 +28,8 @@ type BarChartProps = {
   height?: number;
 };
 
-const PAD = { top: 22, right: 8, bottom: 30, left: 8 };
-const MIN_LABEL_GAP = 52;
+const PAD = { top: 24, right: 8, bottom: 32, left: 8 };
+const MIN_LABEL_GAP = 60;
 
 /**
  * Barras em SVG puro (não há biblioteca de gráfico no projeto), agrupadas por
@@ -79,7 +79,7 @@ export function BarChart({ series, groups, ariaLabel, maxLabel, height = 220 }: 
         className="block max-w-full"
       >
         <line x1={PAD.left} x2={width - PAD.right} y1={baseY} y2={baseY} className="stroke-muted-foreground" strokeWidth={1} />
-        <text x={PAD.left} y={PAD.top - 8} className="fill-muted-foreground" fontSize={11}>
+        <text x={PAD.left} y={PAD.top - 8} className="fill-muted-foreground" fontSize={12}>
           {maxLabel}
         </text>
         {groups.map((group, groupIndex) => {
@@ -108,7 +108,7 @@ export function BarChart({ series, groups, ariaLabel, maxLabel, height = 220 }: 
                   x={PAD.left + groupW * groupIndex + groupW / 2}
                   y={height - 10}
                   textAnchor="middle"
-                  fontSize={11}
+                  fontSize={12}
                   className="fill-muted-foreground"
                 >
                   {group.label}

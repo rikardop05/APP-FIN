@@ -102,6 +102,7 @@ export async function POST(request: Request) {
       today: input.today,
       statementCompetence: input.defaultCompetence ?? null,
       cardHolders: preparation.cardHolders,
+      existingPlans: preparation.existingPlans,
     });
 
     return NextResponse.json({

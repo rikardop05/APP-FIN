@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
+import { listExistingInstallmentPlans } from '@/lib/db/queries/import-plans';
 import { finalizeImport } from '@/lib/import/pipeline';
+import { summarizeStillHeld } from '@/lib/import/still-held';
 
 import { countRows } from './counts';
 import { recalculateBodySchema } from './schema';
@@ -14,7 +16,8 @@ import { recalculateBodySchema } from './schema';
  * `competenceByIndex` e o `totalCents` do rodapé reflitam o que o usuário
  * acabou de digitar — antes do commit.
  *
- * **NÃO grava no banco.** O caminho de gravação é exclusivamente
+ * **NÃO grava no banco** (só LÊ os planos de parcelamento já gravados do cartão,
+ * `listExistingInstallmentPlans`). O caminho de gravação é exclusivamente
  * `/api/import/commit`. `finalizeImport` é função pura de `lib/import/pipeline`
  * (ver cabeçalho do módulo — sem `lib/db`, sem `next/*`, sem `fs`, sem
  * `fetch`). Esta rota só faz `finalizeImport(...)` e devolve o resultado como
@@ -27,7 +30,7 @@ import { recalculateBodySchema } from './schema';
  */
 export async function POST(request: Request) {
   try {
-    await requireSession();
+    const { householdId } = await requireSession();
     const payload: unknown = await request.json().catch(() => null);
     const parsed = recalculateBodySchema.safeParse(payload);
     if (!parsed.success) {
@@ -38,6 +41,13 @@ export async function POST(request: Request) {
     }
 
     const input = parsed.data;
+    // Os MESMOS planos que o commit carrega: a fatura seguinte de um plano ja
+    // gravado nao reprojeta, e "Ainda presos" e o contador do rodape tem de
+    // dizer isso antes do commit. So leitura, filtrada por household e cartao.
+    const existingPlans =
+      input.sourceKind === 'credit_card'
+        ? await listExistingInstallmentPlans(householdId, input.sourceId)
+        : [];
     const includedResult = finalizeImport({
       rows: input.rows,
       sourceId: input.sourceId,
@@ -46,6 +56,7 @@ export async function POST(request: Request) {
       existingHashes: new Set<string>(),
       reportedTotalCents: null,
       statementCompetence: input.statementCompetence,
+      existingPlans,
     });
     const competenceResult = finalizeImport({
       rows: input.rows.map((row) => ({ ...row, include: true })),
@@ -69,6 +80,9 @@ export async function POST(request: Request) {
       totalCents: includedResult.totals.includedCents,
       ...countRows(input.rows.length, includedResult),
       competenceByIndex,
+      // Coluna "Ainda presos": as parcelas futuras deste lote por competencia,
+      // da MESMA projecao que o commit grava (so as linhas marcadas).
+      stillHeld: summarizeStillHeld(includedResult),
     });
   } catch (error) {
     if (error instanceof SessionMissingError) {

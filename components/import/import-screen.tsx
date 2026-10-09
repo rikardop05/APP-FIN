@@ -1,21 +1,16 @@
 'use client';
 
 import {
-  type ChangeEvent,
   type FormEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
-import {
-  AlertCircle,
-  CheckCircle,
-  ClipboardPaste,
-  FileUp,
-  LockKeyhole,
-} from 'lucide-react';
+import Link from 'next/link';
 import { detectSource, type DetectedSource } from '@/lib/import/detect';
-import { Button, Input, PageHeader, Select } from '@/components/ui-kit';
+import { Button, Faixa, Input, PageHeader, Picote, Select } from '@/components/ui-kit';
+import { DropZone } from './drop-zone';
 import {
   accountsResponseSchema,
   apiErrorSchema,
@@ -145,49 +140,38 @@ function SourceNotice({
   if (count > 0) return null;
 
   return (
-    <p className="text-sm text-muted-foreground">
-      Cadastre uma origem ativa antes de enviar a importação.
-    </p>
+    <Faixa tone="attention">
+      <p>
+        Cadastre uma origem ativa antes de enviar a importação.{' '}
+        <Link href="/cartoes" className="font-medium underline underline-offset-2">
+          Ir para Cartões
+        </Link>
+      </p>
+    </Faixa>
   );
 }
 
 function DetectionMessage({ detection }: { detection: DetectedSource }) {
   if (detection.format === 'pdf' && detection.encrypted) {
     return (
-      <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-        <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <Faixa tone="attention">
         <span>Este PDF está protegido por senha. Informe a senha da fatura.</span>
-      </div>
+      </Faixa>
     );
   }
   if (detection.format === 'pdf') {
     return (
-      <p className="text-sm text-emerald-700">
-        PDF reconhecido. O conteúdo será apenas pré-visualizado neste passo.
-      </p>
+      <Faixa tone="ok">
+        <span>PDF reconhecido. O conteúdo será apenas pré-visualizado neste passo.</span>
+      </Faixa>
     );
   }
   if (detection.hint === null) return null;
 
   return (
-    <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+    <Faixa tone="attention">
       <span>{detection.hint}</span>
-    </div>
-  );
-}
-
-function PreviewNotice({ preview }: { preview: UploadResponse }) {
-  return (
-    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
-      <p className="font-medium">
-        {preview.preview.summary.rowsRead}{' '}
-        {preview.preview.summary.rowsRead === 1 ? 'linha lida' : 'linhas lidas'}.
-      </p>
-      <p className="mt-1">
-        Nada foi gravado. A confirmação das linhas será exibida na próxima etapa.
-      </p>
-    </div>
+    </Faixa>
   );
 }
 
@@ -208,6 +192,9 @@ export function ImportScreen({ today }: ImportScreenProps) {
   const [loadingSources, setLoadingSources] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** O erro veio da leitura do PDF ou do texto: ganha título e dica própria. */
+  const [readFailed, setReadFailed] = useState(false);
+  const latestFile = useRef<File | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   /**
    * Incrementado após cada commit bem-sucedido para forçar o `ImportHistory`
@@ -291,6 +278,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
 
   function clearResult() {
     setError(null);
+    setReadFailed(false);
     setPreview(null);
     setSuccess(null);
   }
@@ -309,8 +297,8 @@ export function ImportScreen({ today }: ImportScreenProps) {
     }
   }
 
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const selected = event.target.files?.[0] ?? null;
+  async function handleFile(selected: File | null) {
+    latestFile.current = selected;
     setFile(selected);
     setFileBytes(null);
     setPassword('');
@@ -321,7 +309,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
     }
 
     const bytes = new Uint8Array(await selected.arrayBuffer());
-    if (event.target.files?.[0] !== selected) return;
+    if (latestFile.current !== selected) return;
     setFileBytes(bytes);
     setDetection(detectSource({ fileName: selected.name, content: bytes }));
   }
@@ -368,6 +356,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
           ? cause.message
           : 'Não foi possível processar o PDF.',
       );
+      setReadFailed(true);
     } finally {
       setBusy(false);
     }
@@ -409,6 +398,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
           ? cause.message
           : 'Não foi possível processar o texto.',
       );
+      setReadFailed(true);
     } finally {
       setBusy(false);
     }
@@ -444,7 +434,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
       plannedReconciled > 0
         ? ` ${plannedReconciled === 1 ? '1 previsão cumprida' : `${plannedReconciled} previsões cumpridas`}.`
         : '';
-    setSuccess(`Importação confirmada. Lote ${batchId} gravado.${fulfilled}`);
+    setSuccess(`Importação confirmada. Os canhotos foram destacados no lote ${batchId}.${fulfilled}`);
     setHistoryRefreshKey((current) => current + 1);
   }
 
@@ -456,20 +446,21 @@ export function ImportScreen({ today }: ImportScreenProps) {
       />
 
       {error ? (
-        <div
-          role="alert"
-          className="flex gap-2 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900"
-        >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <Faixa tone="danger" role="alert" title={readFailed ? 'Não foi possível ler esta fatura' : undefined}>
           <span>{error}</span>
-        </div>
+          {readFailed ? (
+            <span className="text-xs text-muted-foreground">
+              Confira se o cartão e a competência estão certos e, em PDF com senha, a senha. Também dá para colar o
+              texto da fatura mais abaixo.
+            </span>
+          ) : null}
+        </Faixa>
       ) : null}
 
       {success ? (
-        <div role="status" className="flex gap-2 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
-          <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <Faixa tone="ok" role="status" title="Lote destacado">
           <span>{success}</span>
-        </div>
+        </Faixa>
       ) : null}
 
       {preview ? (
@@ -487,126 +478,102 @@ export function ImportScreen({ today }: ImportScreenProps) {
       ) : null}
 
       {!preview ? (
-        <section className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
-        <div className="mb-4 flex flex-col gap-1">
-          <h2 className="text-base font-semibold text-foreground">
-            Destino da importação
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Esta origem e competência serão usadas pelo PDF e pelo texto colado.
-          </p>
-        </div>
-        <SourceFields
-          sourceKind={sourceKind}
-          sourceId={sourceId}
-          competence={competence}
-          cards={cards}
-          accounts={accounts}
-          onSourceKindChange={handleSourceKindChange}
-          onSourceIdChange={(value) => {
-            setSourceId(value);
-            clearResult();
-          }}
-          onCompetenceChange={handleCompetenceChange}
-        />
-        <div className="mt-4">
-          <SourceNotice sourceKind={sourceKind} cards={cards} accounts={accounts} />
-        </div>
-        </section>
-      ) : null}
-
-      {!preview ? (
         <>
-        <section className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
-        <div className="mb-4 flex flex-col gap-1">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-            <FileUp className="h-5 w-5" aria-hidden="true" />
-            Arquivo PDF
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Escolha a origem e a competência antes de enviar sua fatura.
-          </p>
-        </div>
-        <form onSubmit={preventSubmit} className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
-            Arquivo
-            <Input
-              type="file"
-              accept=".pdf,.ofx,.csv,.xls,.xlsx,application/pdf"
-              onChange={handleFileChange}
-              className="h-auto py-2 file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1 file:text-sm file:font-medium"
+          <section aria-labelledby="destino-titulo" className="flex flex-col gap-4 border-t-2 border-foreground pt-4">
+            <div className="flex flex-col gap-1">
+              <h2 id="destino-titulo" className="text-lg font-semibold text-foreground">
+                Destino da importação
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Esta origem e competência serão usadas pelo PDF e pelo texto colado.
+              </p>
+            </div>
+            <SourceFields
+              sourceKind={sourceKind}
+              sourceId={sourceId}
+              competence={competence}
+              cards={cards}
+              accounts={accounts}
+              onSourceKindChange={handleSourceKindChange}
+              onSourceIdChange={(value) => {
+                setSourceId(value);
+                clearResult();
+              }}
+              onCompetenceChange={handleCompetenceChange}
             />
-          </label>
-          {file ? (
-            <p className="text-sm text-muted-foreground">Arquivo selecionado: {file.name}</p>
-          ) : null}
-          {detection ? <DetectionMessage detection={detection} /> : null}
-          {detection?.format === 'pdf' && detection.encrypted ? (
-            <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
-              Senha da fatura
-              <Input
-                type="password"
-                value={password}
-                autoComplete="new-password"
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Digite a senha do PDF"
-              />
-              <span className="font-normal text-muted-foreground">
-                A senha fica somente na memória e não é salva.
-              </span>
-            </label>
-          ) : null}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-muted-foreground">
-              PDF é o único formato de arquivo aceito nesta fase.
-            </p>
-            <Button type="button" disabled={!canUploadFile || busy} onClick={() => void uploadFile()}>
-              {busy ? 'Processando…' : 'Pré-visualizar PDF'}
-            </Button>
-          </div>
-          {loadingSources ? (
-            <p className="text-sm text-muted-foreground">Carregando origens…</p>
-          ) : null}
-        </form>
-      </section>
+            <SourceNotice sourceKind={sourceKind} cards={cards} accounts={accounts} />
+          </section>
 
-      <section className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
-        <div className="mb-4 flex flex-col gap-1">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-            <ClipboardPaste className="h-5 w-5" aria-hidden="true" />
-            Texto colado
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Cole linhas de qualquer origem. O texto segue para o mesmo preview do PDF.
-          </p>
-        </div>
-        <form onSubmit={preventSubmit} className="flex flex-col gap-4">
-          <textarea
-            aria-label="Texto para importar"
-            value={pastedText}
-            onChange={(event) => {
-              setPastedText(event.target.value);
-              clearResult();
-            }}
-            placeholder="Cole aqui as linhas da fatura ou do extrato…"
-            rows={7}
-            className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-          />
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-muted-foreground">
-              O texto fica nesta tela até você confirmar as linhas.
-            </p>
-            <Button type="button" disabled={!canUploadText || busy} onClick={() => void uploadText()}>
-              {busy ? 'Processando…' : 'Pré-visualizar texto'}
-            </Button>
-          </div>
-        </form>
-        </section>
+          <section aria-labelledby="pdf-titulo" className="flex flex-col gap-4 border-t border-border pt-4">
+            <div className="flex flex-col gap-1">
+              <h2 id="pdf-titulo" className="text-lg font-semibold text-foreground">
+                Fatura em PDF
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Escolha a origem e a competência antes de enviar sua fatura.
+              </p>
+            </div>
+            <form onSubmit={preventSubmit} className="flex flex-col gap-4">
+              <DropZone file={file} disabled={busy} onFile={(selected) => void handleFile(selected)} />
+              {detection ? <DetectionMessage detection={detection} /> : null}
+              {detection?.format === 'pdf' && detection.encrypted ? (
+                <label className="flex max-w-sm flex-col gap-1.5 text-sm font-medium text-foreground">
+                  Senha da fatura
+                  <Input
+                    type="password"
+                    value={password}
+                    autoComplete="new-password"
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Digite a senha do PDF"
+                  />
+                  <span className="font-normal text-muted-foreground">
+                    A senha fica somente na memória e não é salva.
+                  </span>
+                </label>
+              ) : null}
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-muted-foreground">PDF é o único formato de arquivo aceito nesta fase.</p>
+                <Button type="button" disabled={!canUploadFile || busy} onClick={() => void uploadFile()}>
+                  {busy ? 'Processando…' : 'Pré-visualizar PDF'}
+                </Button>
+              </div>
+              {loadingSources ? <p className="text-sm text-muted-foreground">Carregando origens…</p> : null}
+            </form>
+          </section>
+
+          <section aria-labelledby="texto-titulo" className="flex flex-col gap-4 border-t border-border pt-4">
+            <div className="flex flex-col gap-1">
+              <h2 id="texto-titulo" className="text-lg font-semibold text-foreground">
+                Texto colado
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Cole linhas de qualquer origem. O texto segue para o mesmo preview do PDF.
+              </p>
+            </div>
+            <form onSubmit={preventSubmit} className="flex flex-col gap-4">
+              <textarea
+                aria-label="Texto para importar"
+                value={pastedText}
+                onChange={(event) => {
+                  setPastedText(event.target.value);
+                  clearResult();
+                }}
+                placeholder="Cole aqui as linhas da fatura ou do extrato…"
+                rows={7}
+                className="w-full resize-y border border-input bg-card px-3 py-2 text-base text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring sm:text-sm"
+              />
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-muted-foreground">O texto fica nesta tela até você confirmar as linhas.</p>
+                <Button type="button" disabled={!canUploadText || busy} onClick={() => void uploadText()}>
+                  {busy ? 'Processando…' : 'Pré-visualizar texto'}
+                </Button>
+              </div>
+            </form>
+          </section>
         </>
       ) : null}
 
-      {!preview && preview ? <PreviewNotice preview={preview} /> : null}
-
+      <Picote />
       <ImportHistory refreshKey={historyRefreshKey} />
     </div>
   );

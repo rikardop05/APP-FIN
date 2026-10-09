@@ -17,8 +17,7 @@ type IncomeExpenseChartProps = {
  * Os números vêm de `buildIncomeExpenseSeries` (→ `monthlyKpis`), então a barra do
  * mês corrente é a mesma do card "Receita/Despesa do mês". O mês corrente inclui o
  * PREVISTO restante — o subtítulo diz isso, para ninguém achar que é só o
- * realizado. Verde = receita, cinza-escuro = despesa; vermelho fica reservado para
- * "saldo negativo", como na tela de fluxo.
+ * realizado. Receita em verde-carnê, despesa em tinta escura: despesa NÃO é vermelha (vermelho é carimbo).
  */
 export function IncomeExpenseChart({ months, currentCompetence }: IncomeExpenseChartProps) {
   const hasData = months.some((month) => month.incomeCents > 0 || month.expenseCents > 0);
@@ -38,7 +37,7 @@ export function IncomeExpenseChart({ months, currentCompetence }: IncomeExpenseC
     return (
       <section
         aria-labelledby="dashboard-income-expense-heading"
-        className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
+        className="border border-border bg-card p-4 sm:p-5"
       >
         {header}
         <EmptyState
@@ -66,13 +65,13 @@ export function IncomeExpenseChart({ months, currentCompetence }: IncomeExpenseC
   return (
     <section
       aria-labelledby="dashboard-income-expense-heading"
-      className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
+      className="border border-border bg-card p-4 sm:p-5"
     >
       {header}
       <BarChart
         series={[
-          { id: 'income', label: 'Receita', fillClass: 'fill-emerald-600' },
-          { id: 'expense', label: 'Despesa', fillClass: 'fill-slate-600' },
+          { id: 'income', label: 'Receita', fillClass: 'fill-primary' },
+          { id: 'expense', label: 'Despesa', fillClass: 'fill-foreground' },
         ]}
         groups={groups}
         maxLabel={formatBRL(cents(max))}

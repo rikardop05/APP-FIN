@@ -214,10 +214,11 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('exclusão de lançament
         expect(impact.effects).not.toContainEqual({ kind: 'returns_on_reimport' });
         expect(impact.effects.some((effect) => effect.kind === 'reimport_will_fail')).toBe(false);
 
-        // Parcela LIDA do arquivo (#1) com as 4 projetadas ficando: a reimportação falharia.
+        // Parcela LIDA do arquivo (#1) com as 4 projetadas ficando: a reimportação reconhece
+        // o plano existente (CONTRACTS §16), religa a #1 e não reprojeta — ela volta.
         const first = await m.del.getDeleteImpact(s.householdId, p.ids[0] ?? '', 'only');
-        expect(first.effects).toContainEqual({ kind: 'reimport_will_fail', planDescription: 'Magazine', blockingInstallments: 4 });
-        expect(first.effects).not.toContainEqual({ kind: 'returns_on_reimport' });
+        expect(first.effects).toContainEqual({ kind: 'returns_on_reimport' });
+        expect(first.effects.some((effect) => effect.kind === 'reimport_will_fail')).toBe(false);
 
         await m.del.deleteTransaction(s.householdId, p.ids[2] ?? '', 'only');
         expect(await s.exists(p.ids[2] ?? '')).toBe(false);
@@ -430,15 +431,11 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('exclusão de lançament
       const posted = rows.find((row) => row.status === 'posted');
       if (posted === undefined) throw new Error('Sem parcela postada.');
 
-      // A confirmação diz a VERDADE antes: com as 2 futuras ficando, a reimportação falha.
+      // Com as 2 futuras ficando, a reimportação reconhece o plano e religa a parcela: volta.
       const only = await m.del.getDeleteImpact(s.householdId, posted.id, 'only');
-      expect(only.effects).toContainEqual({
-        kind: 'reimport_will_fail',
-        planDescription: 'Compra parcelada',
-        blockingInstallments: 2,
-      });
-      expect(only.effects).not.toContainEqual({ kind: 'returns_on_reimport' });
-      // Levando as futuras junto, nada colide: aí sim volta.
+      expect(only.effects).toContainEqual({ kind: 'returns_on_reimport' });
+      expect(only.effects.some((effect) => effect.kind === 'reimport_will_fail')).toBe(false);
+      // Levando as futuras junto, o plano some e a reimportação recria tudo: também volta.
       const withFuture = await m.del.getDeleteImpact(s.householdId, posted.id, 'with-future');
       expect(withFuture.effects).toContainEqual({ kind: 'returns_on_reimport' });
       expect(withFuture.effects.some((effect) => effect.kind === 'reimport_will_fail')).toBe(false);
@@ -446,41 +443,41 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('exclusão de lançament
       await m.del.deleteTransaction(s.householdId, posted.id, 'only'); // deixa as 2 futuras
       const afterDelete = await m.db.select({ id: m.schema.transactions.id }).from(m.schema.transactions).where(eq(m.schema.transactions.householdId, s.householdId));
       expect(afterDelete).toHaveLength(2);
-      // Sem a lida, apagar UMA das projetadas ainda deixa a outra colidindo.
+      // Sem a lida, apagar UMA das projetadas: a reimportação religa a lida ao plano e não
+      // projeta, então a projetada apagada não volta.
       const sibling = await m.del.getDeleteImpact(s.householdId, afterDelete[0]?.id ?? '', 'only');
-      expect(sibling.effects).toContainEqual({
-        kind: 'reimport_will_fail',
-        planDescription: 'Compra parcelada',
-        blockingInstallments: 1,
-      });
+      expect(sibling.effects).toContainEqual({ kind: 'stays_deleted_on_reimport' });
 
-      // O resultado REAL (hipótese: o lote falha inteiro por violação do índice único
-      // de dedupe_hash das filhas que ficaram; não duplica em silêncio).
-      let outcome: 'rejeitou' | 'aceitou' = 'aceitou';
-      let cause = '';
-      try {
-        await m.imp.commitImport(s.householdId, input);
-      } catch (error) {
-        outcome = 'rejeitou';
-        // O erro do drizzle embrulha o do Postgres em `cause`.
-        const inner = (error as { cause?: { code?: string; constraint_name?: string } }).cause;
-        cause = `${inner?.code ?? '?'}/${inner?.constraint_name ?? '?'}`;
-      }
-      const afterReimport = await m.db.select({ id: m.schema.transactions.id }).from(m.schema.transactions).where(eq(m.schema.transactions.householdId, s.householdId));
-      // Nunca pode ter duplicado calado: ou rejeita e nada muda, ou aceita sem repetir as filhas.
-      if (outcome === 'rejeitou') expect(afterReimport).toHaveLength(2);
-      else expect(afterReimport.length).toBeLessThanOrEqual(3);
-      console.info(`[R1] reimportar após apagar a parcela postada: ${outcome}; linhas depois: ${String(afterReimport.length)}`);
-      expect(outcome).toBe('rejeitou');
-      // E rejeitou PELO MOTIVO previsto, não por outro erro qualquer: violação (23505)
-      // do índice único de dedupe_hash das parcelas futuras que ficaram.
-      expect(cause).toBe('23505/transactions_household_id_dedupe_hash_unique');
+      // O resultado REAL: a reimportação é aceita, religa a parcela ao plano que sobrou e
+      // não reprojeta — 3 linhas, um plano só, nenhum hash repetido. Antes da correção do
+      // plano existente, o lote falhava inteiro no índice único de dedupe_hash.
+      await m.imp.commitImport(s.householdId, input);
+      const afterReimport = await m.db
+        .select({
+          n: m.schema.transactions.installmentNumber,
+          status: m.schema.transactions.status,
+          planId: m.schema.transactions.installmentPlanId,
+        })
+        .from(m.schema.transactions)
+        .where(eq(m.schema.transactions.householdId, s.householdId))
+        .orderBy(m.schema.transactions.installmentNumber);
+      expect(afterReimport.map((row) => [row.n, row.status])).toEqual([
+        [1, 'posted'],
+        [2, 'planned'],
+        [3, 'planned'],
+      ]);
+      expect(new Set(afterReimport.map((row) => row.planId)).size).toBe(1);
+      const plans = await m.db
+        .select({ id: m.schema.installmentPlans.id })
+        .from(m.schema.installmentPlans)
+        .where(eq(m.schema.installmentPlans.householdId, s.householdId));
+      expect(plans).toHaveLength(1);
     } finally {
       await cleanup(m, s.householdId);
     }
   });
 
-  it('A1: plano importado mês a mês (3/10 no lote A, 4/10 no lote B, ambas lidas): apagar a 3/10 avisa que a reimportação falha', async () => {
+  it('A1: plano importado mês a mês (3/10 no lote A, 4/10 no lote B, ambas lidas): apagar a 3/10 diz que ela volta', async () => {
     const m = await modules();
     const s = await seed(m);
     try {
@@ -521,14 +518,11 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('exclusão de lançament
       const third = await parcela(3, batchA);
       const fourth = await parcela(4, batchB);
 
-      // A 4/10 (lida, de outro lote) ficando colide com o que o lote A recriaria.
+      // Com a 4/10 (lida, de outro lote) ficando, a reimportação do lote A reconhece o
+      // plano e religa a 3/10 (CONTRACTS §16): ela volta, nada colide.
       const only = await m.del.getDeleteImpact(s.householdId, third, 'only');
-      expect(only.effects).toContainEqual({
-        kind: 'reimport_will_fail',
-        planDescription: 'Geladeira',
-        blockingInstallments: 1,
-      });
-      expect(only.effects).not.toContainEqual({ kind: 'returns_on_reimport' });
+      expect(only.effects).toContainEqual({ kind: 'returns_on_reimport' });
+      expect(only.effects.some((effect) => effect.kind === 'reimport_will_fail')).toBe(false);
 
       // Apagar a 4/10 com a 3/10 lida ainda lá: a 3/10 é pulada na reimportação, nada colide.
       const fourthImpact = await m.del.getDeleteImpact(s.householdId, fourth, 'only');

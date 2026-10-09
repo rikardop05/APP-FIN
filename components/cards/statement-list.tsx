@@ -1,11 +1,17 @@
 import Link from 'next/link';
 import { competenceShort } from '@/components/cashflow/labels';
-import { Badge, DateText, EmptyState, Money } from '@/components/ui-kit';
+import { Badge, Canhoto, Carimbo, DateText, EmptyState, Money } from '@/components/ui-kit';
 import type { IsoDate } from '@/lib/date';
 import type { CardCycleConfig } from '@/lib/finance/billing';
 import { dueDateWarnings } from './due-date-check';
 import type { StatementRecord } from './schemas';
+import { isOverdueUnpaid, OVERDUE_UNPAID_HINT } from './statement-paid';
+import { StatementPaidButton } from './statement-paid-button';
 
+/**
+ * A lista só mostra. Gravar a marca de paga é do `StatementPaidButton` (que fala com a rota do Funil);
+ * a lista nunca faz `fetch`, e o aviso de vencimento continua sendo só aviso.
+ */
 const statusLabel: Record<StatementRecord['status'], string> = {
   open: 'Aberta',
   closed: 'Fechada',
@@ -24,9 +30,12 @@ type StatementListProps = {
   cycle?: CardCycleConfig;
   /** Hoje (`YYYY-MM-DD`): o aviso só vale para fatura que ainda não venceu. */
   today: IsoDate;
+  /** Depois de marcar ou desmarcar como paga: a tela recarrega as faturas. */
+  onStatusChanged?: () => void;
 };
 
-export function StatementList({ statements, cycle, today }: StatementListProps) {
+export function StatementList({ statements, cycle, today, onStatusChanged }: StatementListProps) {
+  const changed = onStatusChanged ?? (() => undefined);
   const warnings = cycle === undefined ? [] : dueDateWarnings(statements, cycle, today);
   const staleIds = new Set(warnings.map((warning) => warning.statementId));
 
@@ -44,7 +53,7 @@ export function StatementList({ statements, cycle, today }: StatementListProps) 
   return (
     <>
       {warnings.length > 0 ? (
-        <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+        <div className="mb-3 border border-warning/50 bg-warning-soft px-3 py-2 text-sm text-warning" role="status">
           <p className="font-medium">Vencimento diferente do ciclo atual do cartão</p>
           <ul className="mt-1 flex flex-col gap-1">
             {warnings.map((warning) => (
@@ -56,31 +65,32 @@ export function StatementList({ statements, cycle, today }: StatementListProps) 
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <tr className="border-b border-border text-left text-xs text-muted-foreground">
               <th className="px-3 py-2 font-medium">Competência</th>
               <th className="px-3 py-2 font-medium">Vencimento</th>
               <th className="px-3 py-2 text-right font-medium">Calculado</th>
               <th className="px-3 py-2 text-right font-medium">Informado</th>
               <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 font-medium">Ação</th>
             </tr>
           </thead>
           <tbody>
             {statements.map((statement) => (
-              <StatementTableRow key={statement.id} statement={statement} staleDueDate={staleIds.has(statement.id)} />
+              <StatementTableRow key={statement.id} statement={statement} staleDueDate={staleIds.has(statement.id)} overdue={isOverdueUnpaid(statement, today)} onChanged={changed} />
             ))}
           </tbody>
         </table>
       </div>
-      <div className="flex flex-col gap-2 md:hidden">
+      <ul className="flex flex-col gap-2 md:hidden">
         {statements.map((statement) => (
-          <StatementCard key={statement.id} statement={statement} staleDueDate={staleIds.has(statement.id)} />
+          <StatementCard key={statement.id} statement={statement} staleDueDate={staleIds.has(statement.id)} overdue={isOverdueUnpaid(statement, today)} onChanged={changed} />
         ))}
-      </div>
+      </ul>
     </>
   );
 }
 
-function StatementTableRow({ statement, staleDueDate }: { statement: StatementRecord; staleDueDate: boolean }) {
+function StatementTableRow({ statement, staleDueDate, overdue, onChanged }: { statement: StatementRecord; staleDueDate: boolean; overdue: boolean; onChanged: () => void }) {
   const mismatch = statement.differenceCents !== null && statement.differenceCents !== 0;
 
   return (
@@ -93,54 +103,61 @@ function StatementTableRow({ statement, staleDueDate }: { statement: StatementRe
       </td>
       <td className="px-3 py-3 align-middle">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={statusVariant[statement.status]}>{statusLabel[statement.status]}</Badge>
+          <StatusMark status={statement.status} />
           {mismatch ? <Badge variant="danger">Divergência</Badge> : null}
+          {overdue ? <Badge variant="warning" title={OVERDUE_UNPAID_HINT}>Vencida, não marcada como paga</Badge> : null}
           {staleDueDate ? <Badge variant="warning">Vencimento desatualizado</Badge> : null}
         </div>
+      </td>
+      <td className="px-3 py-3 align-middle">
+        <StatementPaidButton statement={statement} onChanged={onChanged} />
       </td>
     </tr>
   );
 }
 
-function StatementCard({ statement, staleDueDate }: { statement: StatementRecord; staleDueDate: boolean }) {
+/** PAGO é carimbo; os demais estados seguem como etiqueta. */
+function StatusMark({ status }: { status: StatementRecord['status'] }) {
+  return status === 'paid' ? (
+    <Carimbo tone="ok">Pago</Carimbo>
+  ) : (
+    <Badge variant={statusVariant[status]}>{statusLabel[status]}</Badge>
+  );
+}
+
+function StatementCard({ statement, staleDueDate, overdue, onChanged }: { statement: StatementRecord; staleDueDate: boolean; overdue: boolean; onChanged: () => void }) {
   const mismatch = statement.differenceCents !== null && statement.differenceCents !== 0;
 
   return (
-    <article className="rounded-md border border-border p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h4 className="font-medium text-foreground">Competência {competenceShort(statement.period)}</h4>
-          <p className="text-xs text-muted-foreground">
-            Vencimento <DateText value={statement.dueDate} />
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge variant={statusVariant[statement.status]}>{statusLabel[statement.status]}</Badge>
-          {mismatch ? <Badge variant="danger">Divergência</Badge> : null}
-          {staleDueDate ? <Badge variant="warning">Vencimento desatualizado</Badge> : null}
-        </div>
+    <Canhoto
+      as="li"
+      stub={competenceShort(statement.period)}
+      valor={<Money value={statement.computedTotalCents} />}
+    >
+      <p className="text-sm text-muted-foreground">
+        Vencimento <DateText value={statement.dueDate} />
+        {statement.reportedTotalCents === null ? null : (
+          <>
+            {' '}· informado <Money value={statement.reportedTotalCents} />
+          </>
+        )}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusMark status={statement.status} />
+        {mismatch ? <Badge variant="danger">Divergência</Badge> : null}
+          {overdue ? <Badge variant="warning" title={OVERDUE_UNPAID_HINT}>Vencida, não marcada como paga</Badge> : null}
+        {staleDueDate ? <Badge variant="warning">Vencimento desatualizado</Badge> : null}
       </div>
-      <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
-        <div>
-          <dt className="text-xs text-muted-foreground">Total calculado</dt>
-          <dd className="font-medium"><Money value={statement.computedTotalCents} /></dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">Total informado</dt>
-          <dd className="font-medium">
-            {statement.reportedTotalCents === null ? '—' : <Money value={statement.reportedTotalCents} />}
-          </dd>
-        </div>
-      </dl>
       {mismatch ? (
-        <p className="mt-3 text-xs text-destructive">
+        <p className="text-sm text-destructive">
           Diferença da conciliação:{' '}
           {statement.differenceCents === null ? null : <Money value={statement.differenceCents} />}
         </p>
       ) : null}
-      <Link href="/importar" className="mt-3 inline-flex text-xs font-medium text-primary underline-offset-4 hover:underline">
+      <StatementPaidButton statement={statement} onChanged={onChanged} />
+      <Link href="/importar" className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-4 sm:min-h-0">
         Ver importação
       </Link>
-    </article>
+    </Canhoto>
   );
 }

@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { AlertTriangle, LineChart } from 'lucide-react';
 
 import { BalanceChart } from '@/components/cashflow/balance-chart';
-import { Verdict } from '@/components/cashflow/verdict';
 import { EmptyState } from '@/components/ui-kit';
 import type { CashflowProjection } from '@/lib/finance/cashflow';
 
@@ -36,7 +35,7 @@ export function ProjectedBalance({ state }: { state: ProjectedState }) {
     return (
       <section
         aria-labelledby="dashboard-projected-heading"
-        className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
+        className="border border-border bg-card p-4 sm:p-5"
       >
         <h2 id="dashboard-projected-heading" className="mb-3 text-base font-semibold text-foreground">
           Saldo projetado
@@ -56,7 +55,7 @@ export function ProjectedBalance({ state }: { state: ProjectedState }) {
       <section
         aria-labelledby="dashboard-projected-heading"
         role="alert"
-        className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 sm:p-5"
+        className="border border-warning/50 bg-warning-soft p-4 text-sm text-warning sm:p-5"
       >
         <h2 id="dashboard-projected-heading" className="mb-1 flex items-center gap-2 text-base font-semibold">
           <AlertTriangle className="h-5 w-5" aria-hidden="true" />
@@ -74,35 +73,36 @@ export function ProjectedBalance({ state }: { state: ProjectedState }) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <Verdict projection={state.projection} baseProjection={null} />
-      <section
-        aria-labelledby="dashboard-projected-heading"
-        className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
-      >
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="dashboard-projected-heading" className="text-base font-semibold text-foreground">
-            Saldo projetado
-          </h2>
-          <Link
-            href="/fluxo"
-            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-          >
-            Ver fluxo completo e simular →
-          </Link>
-        </div>
-        <BalanceChart months={state.projection.months} baseMonths={null} />
-        {state.warnings.length > 0 ? (
-          <ul className="flex flex-col gap-1 text-xs text-amber-900">
-            {state.warnings.map((warning) => (
-              <li key={warning} className="flex items-start gap-1.5">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span>{warning}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
-    </div>
+    <section
+      aria-labelledby="dashboard-projected-heading"
+      className="flex flex-col gap-2 border border-border bg-card p-4 sm:p-5"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="dashboard-projected-heading" className="text-base font-semibold text-foreground">
+          Saldo projetado
+        </h2>
+        <Link
+          href="/fluxo"
+          className="min-h-11 text-sm text-primary underline underline-offset-2 sm:min-h-0"
+        >
+          Ver fluxo completo e simular
+        </Link>
+      </div>
+      <BalanceChart months={state.projection.months} baseMonths={null} />
+      <p className="text-sm text-muted-foreground">
+        Só enxerga o que já está cadastrado: gastos variáveis dos meses futuros não entram, então o saldo real
+        tende a ficar abaixo da curva.
+      </p>
+      {state.warnings.length > 0 ? (
+        <ul className="flex flex-col gap-1 text-sm text-warning">
+          {state.warnings.map((warning) => (
+            <li key={warning} className="flex items-start gap-1.5">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>{warning}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   );
 }

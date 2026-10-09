@@ -45,7 +45,7 @@ function ProgressBar({ bp, label }: { bp: number; label: string }) {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(percent)}
-      className="h-2.5 w-full overflow-hidden rounded-full bg-secondary"
+      className="h-2.5 w-full overflow-hidden bg-secondary"
     >
       <div className={`${BAR_X_CLASS} bg-primary`} style={barScaleStyle(percent, 'x')} />
     </div>
@@ -89,7 +89,7 @@ function DeadlineLine({ goal }: { goal: GoalView }) {
 function GoalCard({ goal, onEdit, onDelete }: { goal: GoalView; onEdit: () => void; onDelete: () => void }) {
   const progress = goal.progress;
   return (
-    <article className="rounded-lg border border-border bg-card p-4 sm:p-5">
+    <article className="border border-border bg-card p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -130,7 +130,7 @@ function GoalCard({ goal, onEdit, onDelete }: { goal: GoalView; onEdit: () => vo
 
 function EmergencySuggestion({ data, onCreate }: { data: GoalsResponse['emergency']; onCreate: () => void }) {
   return (
-    <section aria-labelledby="emergency-heading" className="rounded-lg border border-primary/30 bg-primary/5 p-4 sm:p-5">
+    <section aria-labelledby="emergency-heading" className="border border-primary/30 bg-primary/5 p-4 sm:p-5">
       <div className="flex items-start gap-3">
         <PiggyBank className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0">
@@ -217,7 +217,7 @@ export function GoalsScreen() {
         actions={<Button onClick={() => setDialog({})}><Plus className="mr-1 h-4 w-4" aria-hidden="true" />Nova meta</Button>}
       />
 
-      {error ? <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{error}</p> : null}
+      {error ? <p className="mb-4 border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{error}</p> : null}
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Carregando metas…</p>
@@ -250,7 +250,7 @@ export function GoalsScreen() {
             if (event.target === event.currentTarget) setDialog(null);
           }}
         >
-          <div className="max-h-[90vh] w-full overflow-y-auto rounded-t-lg border border-border bg-background p-4 shadow-lg sm:max-w-lg sm:rounded-lg sm:p-6" role="dialog" aria-modal="true" aria-labelledby="goal-dialog-title">
+          <div className="max-h-[90vh] w-full overflow-y-auto border border-border bg-background p-4 shadow-lg sm:max-w-lg sm:p-6" role="dialog" aria-modal="true" aria-labelledby="goal-dialog-title">
             <div className="mb-5 flex items-start justify-between gap-4">
               <h2 id="goal-dialog-title" className="text-lg font-semibold">{dialog.goal ? 'Editar meta' : 'Nova meta'}</h2>
               <Button variant="ghost" size="sm" aria-label="Fechar" onClick={() => setDialog(null)}>Fechar</Button>

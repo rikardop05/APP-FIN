@@ -1,3 +1,5 @@
+import { toCompetence } from '@/lib/date';
+
 /**
  * Estado do CONTEUDO das listas de lancamentos.
  *
@@ -29,4 +31,33 @@ export function listContentState(input: {
   if (input.loading) return 'loading';
   if (input.failed) return 'error';
   return input.rowCount === 0 ? 'empty' : 'list';
+}
+
+/**
+ * Ordem de exibição da lista (impeccable distill): o MÊS ATUAL primeiro, depois os meses passados,
+ * e as parcelas FUTURAS no fim. O servidor ordena por data da compra, e uma parcela de novembro
+ * comprada em setembro subia ao topo da tela, antes do que acabou de acontecer.
+ *
+ * O critério é a COMPETÊNCIA (o eixo do app), não a data da compra:
+ * 1. competência atual: mais recente primeiro (`occurredOn` decrescente);
+ * 2. competências passadas: da mais recente para a mais antiga, e dentro delas a data decrescente;
+ * 3. competências futuras: da mais próxima para a mais distante (a data crescente).
+ * Empate mantém a ordem recebida (ordenação estável, que o servidor já fez por data e criação).
+ */
+export function sortForDisplay<T extends { competence: string; occurredOn: string }>(
+  rows: readonly T[],
+  today: string,
+): T[] {
+  const current = toCompetence(today);
+  const bucket = (row: T): number => (row.competence === current ? 0 : row.competence < current ? 1 : 2);
+  return [...rows].sort((a, b) => {
+    const byBucket = bucket(a) - bucket(b);
+    if (byBucket !== 0) return byBucket;
+    if (bucket(a) === 2) {
+      if (a.competence !== b.competence) return a.competence < b.competence ? -1 : 1;
+      return a.occurredOn < b.occurredOn ? -1 : a.occurredOn > b.occurredOn ? 1 : 0;
+    }
+    if (bucket(a) === 1 && a.competence !== b.competence) return a.competence < b.competence ? 1 : -1;
+    return a.occurredOn < b.occurredOn ? 1 : a.occurredOn > b.occurredOn ? -1 : 0;
+  });
 }

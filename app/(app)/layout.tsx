@@ -9,7 +9,7 @@ import { BottomNav } from '@/components/nav/bottom-nav';
  *
  * Acessibilidade: o primeiro foco da página é "Pular para o conteúdo", que leva ao `<main>`
  * sem atravessar as 9 rotas da navegação. No celular, o fundo do `<main>` soma a área segura
- * do iPhone (`env(safe-area-inset-bottom)`, 0 nos demais), a mesma que o BottomNav ocupa, e as
+ * do iPhone (`env(safe-area-inset-bottom)`, 0 nos demais), a mesma que o BottomNav ocupa (`--bottom-nav-h`, em globals.css), e as
  * laterais usam `max(margem, env(safe-area-inset-left/right))` para o entalhe do iPhone deitado
  * (o iOS ignora a trava de retrato do manifesto). Sem entalhe, os valores são os de antes.
  */
@@ -18,7 +18,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen flex-col md:flex-row">
       <a
         href="#conteudo"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-[max(1rem,env(safe-area-inset-left))] focus:top-4 focus:z-50 focus:rounded-md focus:border focus:border-border focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-[max(1rem,env(safe-area-inset-left))] focus:top-4 focus:z-50 focus:border focus:border-border focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
       >
         Pular para o conteúdo
       </a>
@@ -26,7 +26,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <main
         id="conteudo"
         tabIndex={-1}
-        className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 pb-[calc(6rem+env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-6 focus:outline-none sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))] md:pb-10"
+        className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 pb-[calc(var(--bottom-nav-h)+2rem)] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-6 focus:outline-none sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))] md:pb-10"
       >
         {children}
       </main>

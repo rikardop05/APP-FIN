@@ -35,7 +35,7 @@ import {
 } from './view';
 
 const inputClass =
-  'h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring';
+  'h-11 w-full border border-input bg-card px-3 text-base sm:h-9 sm:text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring';
 
 function Field({ label, htmlFor, error, hint, children }: { label: string; htmlFor: string; error?: string; hint?: string; children: ReactNode }) {
   return (
@@ -176,28 +176,28 @@ export function PositionsScreen({ initial, today }: { initial: PositionsData; to
         actions={<Link href="/investimentos" className="text-sm font-medium underline underline-offset-2">Voltar ao planejador</Link>}
       />
 
-      <div className="mt-4 flex flex-col gap-1 rounded-lg border border-border bg-secondary/40 px-4 py-3 text-sm" role="note">
+      <div className="mt-4 flex flex-col gap-1 border border-border bg-secondary/40 px-4 py-3 text-sm" role="note">
         <p><strong className="font-semibold">Valores em R$ de hoje.</strong> {NOMINAL_NOTICE}</p>
         <p className="text-muted-foreground">Retorno passado não é garantia de retorno futuro.</p>
       </div>
 
       {event ? (
-        <p className="mt-4 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900" role="status">
+        <p className="mt-4 border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900" role="status">
           {confirmationText(event)}
         </p>
       ) : null}
 
       {data.plan === null ? (
-        <section className="mt-6 rounded-lg border border-border bg-card p-4 sm:p-5" aria-labelledby="noplan-heading">
+        <section className="mt-6 border border-border bg-card p-4 sm:p-5" aria-labelledby="noplan-heading">
           <h2 id="noplan-heading" className="font-semibold">Sem plano de renda passiva</h2>
           <p className="mt-1 text-sm text-muted-foreground">{NO_PLAN_TEXT}</p>
-          <Link href="/investimentos" className="mt-3 inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+          <Link href="/investimentos" className="mt-3 inline-flex h-11 items-center bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
             Criar o plano em Investimentos
           </Link>
         </section>
       ) : null}
 
-      <section className="mt-6 rounded-lg border border-border bg-card p-4 sm:p-5" aria-labelledby="adherence-heading">
+      <section className="mt-6 border border-border bg-card p-4 sm:p-5" aria-labelledby="adherence-heading">
         <h2 id="adherence-heading" className="font-semibold">Aporte efetivo × planejado</h2>
         {data.plan !== null ? (
           <p className="text-sm text-muted-foreground">
@@ -207,7 +207,7 @@ export function PositionsScreen({ initial, today }: { initial: PositionsData; to
           <p className="text-sm text-muted-foreground">O que você aportou nos últimos 12 meses fechados e no mês em andamento.</p>
         )}
         {summary ? (
-          <div className="mt-3 rounded-md bg-secondary/50 px-3 py-2 text-sm">
+          <div className="mt-3 bg-secondary/50 px-3 py-2 text-sm">
             <p className="font-medium">{summary.headline}</p>
             {summary.detail ? <p className="text-muted-foreground">{summary.detail}</p> : null}
           </div>
@@ -239,7 +239,7 @@ export function PositionsScreen({ initial, today }: { initial: PositionsData; to
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={Math.round(row.barBp / 100)}
-                  className="h-2 w-full overflow-hidden rounded-full bg-secondary"
+                  className="h-2 w-full overflow-hidden bg-secondary"
                 >
                   <div className={`${BAR_X_CLASS} ${row.belowPlan && !row.inProgress ? 'bg-amber-500' : 'bg-primary'}`} style={barScaleStyle(row.barBp / 100, 'x')} />
                 </div>
@@ -249,7 +249,7 @@ export function PositionsScreen({ initial, today }: { initial: PositionsData; to
         </ul>
       </section>
 
-      <section id="position-form" className="mt-6 rounded-lg border border-border bg-card p-4 sm:p-5" aria-labelledby="register-heading">
+      <section id="position-form" className="mt-6 border border-border bg-card p-4 sm:p-5" aria-labelledby="register-heading">
         <h2 id="register-heading" className="font-semibold">{editingId === null ? 'Registrar posição' : 'Editar registro'}</h2>
         <p className="text-sm text-muted-foreground">O total que você tem investido em uma data (soma de tudo, em R$ de hoje).</p>
         <form className="mt-4 flex flex-col gap-4" onSubmit={(submitEvent) => void submit(submitEvent)} noValidate>
@@ -264,7 +264,7 @@ export function PositionsScreen({ initial, today }: { initial: PositionsData; to
           <Field label="Observação (opcional)" htmlFor="position-note" error={errors.note} hint={`Até ${String(NOTE_MAX)} caracteres.`}>
             <input id="position-note" className={inputClass} value={values.note} onChange={(e) => edit('note', e.target.value)} autoComplete="off" />
           </Field>
-          {failure ? <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{failure}</p> : null}
+          {failure ? <p className="border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{failure}</p> : null}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             {editingId !== null ? <Button variant="outline" onClick={resetForm} disabled={saving}>Cancelar edição</Button> : null}
             <Button type="submit" disabled={saving}>{saving ? 'Salvando…' : editingId === null ? 'Registrar posição' : 'Salvar alterações'}</Button>
@@ -275,7 +275,7 @@ export function PositionsScreen({ initial, today }: { initial: PositionsData; to
       <section className="mt-6 flex flex-col gap-3" aria-labelledby="records-heading">
         <h2 id="records-heading" className="font-semibold">Registros e comparação com os cenários</h2>
         {snapshots.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+          <p className="border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
             Nenhuma posição registrada ainda. Registre o total que você tem investido hoje para acompanhar se está na curva.
           </p>
         ) : (
@@ -283,7 +283,7 @@ export function PositionsScreen({ initial, today }: { initial: PositionsData; to
             const lines = comparisonLines(comparisonFor(data, snapshot));
             const current = isCurrentPortfolio(data, snapshot);
             return (
-              <article key={snapshot.id} className="rounded-lg border border-border bg-card p-4 sm:p-5">
+              <article key={snapshot.id} className="border border-border bg-card p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-lg font-semibold"><Money value={snapshot.portfolioCents} sign="never" /></p>

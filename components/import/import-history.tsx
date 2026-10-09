@@ -2,13 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, History, Undo2 } from 'lucide-react';
+import { Undo2 } from 'lucide-react';
 
-import { Badge, Button } from '@/components/ui-kit';
+import { Button, Faixa, Selo, type SeloTone } from '@/components/ui-kit';
 import { formatDateBR } from '@/lib/date';
 
 import { ImportHistoryEmptyState } from './import-history-empty-state';
-import { revertedMessage, rowCountLabel } from './import-history-text';
+import {
+  batchRowsText,
+  batchStatusLabel,
+  batchTitle,
+  revertedMessage,
+  rowCountLabel,
+} from './import-history-text';
 import { apiErrorSchema } from './schemas';
 import {
   importBatchesResponseSchema,
@@ -38,19 +44,10 @@ type RevertState =
   | { kind: 'reverted'; batchId: string; transactionsDeleted: number }
   | { kind: 'error'; batchId: string; message: string };
 
-function statusLabel(status: ImportBatchHistoryItem['status']): string {
-  if (status === 'committed') return 'Confirmada';
-  if (status === 'reverted') return 'Desfeita';
-  if (status === 'pending') return 'Pendente';
-  return 'Falhou';
-}
-
-function statusVariant(
-  status: ImportBatchHistoryItem['status'],
-): 'neutral' | 'success' | 'warning' | 'danger' {
-  if (status === 'committed') return 'success';
+function statusTone(status: ImportBatchHistoryItem['status']): SeloTone {
+  if (status === 'committed') return 'ok';
   if (status === 'reverted') return 'neutral';
-  if (status === 'pending') return 'warning';
+  if (status === 'pending') return 'attention';
   return 'danger';
 }
 
@@ -189,15 +186,9 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
   }
 
   return (
-    <section
-      aria-label="Histórico de importações"
-      className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5"
-    >
-      <div className="mb-4 flex flex-col gap-1">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-          <History className="h-5 w-5" aria-hidden="true" />
-          Histórico de importações
-        </h2>
+    <section aria-label="Histórico de importações" className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-lg font-semibold text-foreground">Histórico de importações</h2>
         <p className="text-sm text-muted-foreground">
           Cada lote pode ser desfeito — a confirmação mostra a data e quantos
           lançamentos serão apagados.
@@ -209,10 +200,9 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
       ) : null}
 
       {state.kind === 'error' ? (
-        <div role="alert" className="flex gap-2 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <Faixa tone="danger" role="alert">
           <span>{state.message}</span>
-        </div>
+        </Faixa>
       ) : null}
 
       {state.kind === 'ready' && state.batches.length === 0 ? (
@@ -236,28 +226,24 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
               revertState.kind === 'reverted' && revertState.batchId === batch.id;
             const canRevert = batch.status === 'committed';
             return (
-              <li
-                key={batch.id}
-                className="rounded-lg border border-border bg-background p-3 sm:p-4"
-              >
+              <li key={batch.id} className="border border-border bg-card p-3 sm:p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-col gap-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="truncate text-sm font-medium text-foreground">
-                        {batch.fileName}
+                        {batchTitle(batch)}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {rowCountLabel(batch.rowsImported)}
+                        {batchRowsText(batch.status, batch.rowsImported)}
                       </span>
                     </div>
                     <span className="text-xs text-muted-foreground">
                       {formatDateBR(batch.createdAt.slice(0, 10))}
+                      {batchTitle(batch) === batch.fileName ? '' : ` · ${batch.fileName}`}
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Badge variant={statusVariant(batch.status)}>
-                      {statusLabel(batch.status)}
-                    </Badge>
+                    <Selo tone={statusTone(batch.status)} label={batchStatusLabel(batch.status)} />
                     {canRevert ? (
                       <Button
                         id={revertTriggerId(batch.id)}
@@ -268,7 +254,7 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
                         disabled={isReverting}
                         aria-label={`Desfazer importação de ${batch.fileName}`}
                       >
-                        <Undo2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                        <Undo2 className="h-3.5 w-3.5" aria-hidden="true" />
                         Desfazer
                       </Button>
                     ) : null}
@@ -286,10 +272,10 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
                     onKeyDown={(event) => {
                       if (event.key === 'Escape') cancelConfirm();
                     }}
-                    className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+                    className="mt-3 border border-warning bg-warning-soft p-3 text-sm text-foreground"
                   >
                     <p id={`revert-prompt-${batch.id}`} className="font-medium">{revertPrompt(confirmingBatch)}</p>
-                    <p id={`revert-detail-${batch.id}`} className="mt-1 text-xs text-amber-900/80">
+                    <p id={`revert-detail-${batch.id}`} className="mt-1 text-xs text-muted-foreground">
                       Esta ação remove os lançamentos do lote. O histórico do
                       lote é preservado como desfeito.
                     </p>
@@ -317,17 +303,13 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
                 ) : null}
 
                 {revertError ? (
-                  <div
-                    role="alert"
-                    className="mt-3 flex gap-2 rounded-md border border-red-300 bg-red-50 p-3 text-xs text-red-900"
-                  >
-                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <Faixa tone="danger" role="alert" className="mt-3">
                     <span>{revertError}</span>
-                  </div>
+                  </Faixa>
                 ) : null}
 
                 {justReverted && revertState.kind === 'reverted' ? (
-                  <p ref={resultRef} tabIndex={-1} role="status" className="mt-2 text-xs text-emerald-700">
+                  <p ref={resultRef} tabIndex={-1} role="status" className="mt-2 text-xs font-medium text-success">
                     {revertedMessage(revertState.transactionsDeleted)}
                   </p>
                 ) : null}

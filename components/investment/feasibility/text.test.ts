@@ -88,3 +88,21 @@ describe('alerta do topo e base da sobra', () => {
     expect(surplusBasisText({ ...surplus(1), monthsWithData: 1 })).toContain('média de 1 mês');
   });
 });
+
+describe('surplusExcludedText: a tela diz quais meses ficaram fora da média', () => {
+  it('sem exclusão (ou campo ausente) não diz nada', async () => {
+    const { surplusExcludedText } = await import('./text');
+    expect(surplusExcludedText(surplus(10_000))).toBeNull();
+    expect(surplusExcludedText({ ...surplus(10_000), excludedMonths: [] })).toBeNull();
+  });
+
+  it('nomeia os meses fora, no singular e no plural', async () => {
+    const { surplusExcludedText } = await import('./text');
+    expect(surplusExcludedText({ ...surplus(10_000), excludedMonths: ['2026-07'] })).toMatch(
+      /^Ficou fora da média 1 mês, por não terem receita lançada: /,
+    );
+    const two = surplusExcludedText({ ...surplus(10_000), excludedMonths: ['2026-07', '2026-08'] });
+    expect(two).toMatch(/^Ficaram fora da média 2 meses/);
+    expect(two).toMatch(/ e /);
+  });
+});

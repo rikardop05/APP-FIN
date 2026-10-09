@@ -1,13 +1,12 @@
-import { BarChart3 } from 'lucide-react';
-
 import type { Competence } from '@/lib/date';
 import type { BasisPoints, Cents } from '@/lib/money';
+import { PageHeader } from '@/components/ui-kit';
 
-import { CommitmentChart } from './commitment-chart';
-import { CommitmentSummary } from './commitment-summary';
+import { CommittedCard, type CommittedMonth } from './committed-card';
+import { Headline } from './headline';
 import { IncomeExpenseChart } from './income-expense-chart';
 import type { IncomeExpenseMonth } from './income-expense-series';
-import { KpisRow } from './kpis-row';
+import { MonthSummary } from './month-summary';
 import { PassiveIncomeCard } from './passive-income/passive-income-card';
 import type { PassiveIncomeState } from './passive-income/passive-income';
 import {
@@ -17,21 +16,21 @@ import {
   type OverdueRecurringListItem,
   type UncategorizedItem,
 } from './pendencias-list';
+import { monthName, nextMonthCommitment, pendingSummary } from './presentation';
 import { ProjectedBalance, type ProjectedState } from './projected-balance';
 import { SpendingByCategory } from './spending-by-category';
 
 type DashboardScreenProps = {
-  competence: string;
-  commitmentMonths: number;
+  competence: Competence;
   kpis: {
     incomeCents: Cents;
     expenseCents: Cents;
+    /** Só o LANÇADO; o planejado vem em `plannedContributionCents`. */
     contributionsCents: Cents;
+    plannedContributionCents: Cents | null;
     surplusCents: Cents;
     savingsRateBp: BasisPoints | null;
     essentialShareBp: BasisPoints | null;
-    futureInstallmentsCents: Cents;
-    uncategorizedCount: number;
   };
   spending: {
     categoryId: string;
@@ -43,22 +42,21 @@ type DashboardScreenProps = {
   }[];
   commitment: {
     totalCents: Cents;
-    lastCommittedCompetence: string | null;
-    windowEnd: string;
-    /** `futureCommitment().byCompetence` — alimenta o gráfico 4. */
-    byCompetence: { competence: Competence; totalCents: Cents }[];
+    lastCommittedCompetence: Competence | null;
+    windowEnd: Competence;
+    /** `futureCommitment().breakdown`: as três linhas fecham exatamente com `totalCents`. */
+    breakdown: { currentStatementCents: Cents; laterInstallmentsCents: Cents; laterPurchasesCents: Cents };
+    /** `futureCommitment().byCompetence`: alimenta os canhotos presos e o "mês que vem". */
+    byCompetence: CommittedMonth[];
   };
   /**
-   * Os campos abaixo são OBRIGATÓRIOS de propósito: um componente opcional que a
-   * página esquece de passar compila, passa no lint e some da tela (foi o que
-   * aconteceu com o saldo projetado). Obrigatório faz o `tsc` pegar o esquecimento.
-   * "Não deu para carregar" é um valor explícito (`null` / `unavailable`), nunca omissão.
+   * Os campos abaixo são OBRIGATÓRIOS de propósito: um componente opcional que a página esquece de
+   * passar compila e some da tela. "Não deu para carregar" é um valor explícito, nunca omissão.
    */
-  /** Gráfico 1: últimos 12 meses, de `buildIncomeExpenseSeries`. */
   incomeExpense: IncomeExpenseMonth[];
-  /** Gráfico 3: a MESMA projeção de `/fluxo` (`loadProjectedCashflow`). */
+  /** A MESMA projeção de `/fluxo` (`loadProjectedCashflow`). */
   projected: ProjectedState;
-  /** Gráfico 5: renda passiva (T-306). `none` = sem plano; `unavailable` = o planejador falhou. */
+  /** Renda passiva (T-306). `none` = sem plano; `unavailable` = o planejador falhou. */
   passiveIncome: PassiveIncomeState;
   pendencias: {
     uncategorizedCount: number;
@@ -71,32 +69,18 @@ type DashboardScreenProps = {
 };
 
 /**
- * Composição do dashboard (T-115).
+ * Painel (onda 2, Carnê de Prestações). Esta tela NÃO calcula nada: todo número vem dos motores
+ * (`monthlyKpis`, `spendingByCategory`, `futureCommitment`, `divergentStatements`, projeção do fluxo).
  *
- * Esta tela NÃO calcula nada — todos os números exibidos vêm dos motores
- * puros em `lib/finance/kpis.ts` e `lib/finance/commitment.ts`:
- * - KPIs → `monthlyKpis` (CONTRACTS §14);
- * - Gastos por categoria → `spendingByCategory` (CONTRACTS §14);
- * - Resumo de comprometimento → `futureCommitment` (CONTRACTS §5), lendo
- *   apenas `totalCents` e `lastCommittedCompetence` (sem invólucro novo
- *   no motor — instrução do Orquestrador);
- * - Faturas divergentes → `divergentStatements` (CONTRACTS §14);
- * - Não categorizados → lista bruta de `transactions` com
- *   `category_id IS NULL`, contada por `monthlyKpis.uncategorizedCount`.
- *
- * Estrutura em três faixas (SPEC §5.8):
- * 1. KPIs do mês (8 cartões nesta FASE 1 — Receita, Despesa, Sobra/Déficit,
- *    Taxa de poupança, Essenciais, Aportes, Parcelas a vencer, Não
- *    categorizados);
- * 2. Os quatro gráficos da SPEC §5.8 desta fase (T-208): receita × despesa,
- *    gastos por categoria, saldo projetado e comprometimento em cartão. O saldo
- *    projetado é o MESMO de `/fluxo`, vindo de `loadProjectedCashflow`;
- * 3. Resumo de comprometimento + fila de pendências (não categorizados, faturas
- *    divergentes, orçamentos estourados, despesas fixas não realizadas).
+ * Ordem pensada para responder em 10 segundos, inclusive no celular: o FUTURO antes do passado.
+ * 1. Três números do mês: sobra (com a base), veredito de 12 meses e comprometido do mês que vem;
+ *    pendências só como contagem com link.
+ * 2. Comprometido nos cartões (futuro) e saldo projetado (futuro).
+ * 3. O mês corrente e o passado: resumo, receita × despesa, gastos por categoria.
+ * 4. Renda passiva (20 anos) atrás de "ver mais" e a lista de pendências por último.
  */
 export function DashboardScreen({
   competence,
-  commitmentMonths,
   kpis,
   spending,
   commitment,
@@ -105,50 +89,63 @@ export function DashboardScreen({
   passiveIncome,
   pendencias,
 }: DashboardScreenProps) {
+  const pending = pendingSummary({
+    uncategorizedCount: pendencias.uncategorizedCount,
+    divergentCount: pendencias.divergentStatements.length,
+    overBudgetCount: pendencias.overBudget?.length ?? 0,
+    overdueRecurringCount: pendencias.overdueRecurring.count,
+  });
+
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          <BarChart3 className="h-7 w-7" aria-hidden="true" />
-          Painel
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Como estamos este mês e para onde estamos indo. Tudo vem do motor —
-          nenhum número é calculado aqui.
-        </p>
-      </header>
+      <PageHeader title="Painel" description={`Como estamos em ${monthName(competence)} e para onde vamos.`} />
 
-      <KpisRow
+      <Headline
         competence={competence}
-        commitmentMonths={commitmentMonths}
+        incomeCents={kpis.incomeCents}
+        expenseCents={kpis.expenseCents}
+        surplusCents={kpis.surplusCents}
+        projected={projected}
+        nextMonth={nextMonthCommitment(commitment.byCompetence)}
+        pending={pending}
+        pendingUnavailable={pendencias.overBudget === null}
+      />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <CommittedCard
+          competence={competence}
+          windowEnd={commitment.windowEnd}
+          totalCents={commitment.totalCents}
+          lastCommittedCompetence={commitment.lastCommittedCompetence}
+          breakdown={commitment.breakdown}
+          byCompetence={commitment.byCompetence}
+        />
+        <ProjectedBalance state={projected} />
+      </div>
+
+      <MonthSummary
+        competence={competence}
         incomeCents={kpis.incomeCents}
         expenseCents={kpis.expenseCents}
         contributionsCents={kpis.contributionsCents}
-        surplusCents={kpis.surplusCents}
+        plannedContributionCents={kpis.plannedContributionCents}
         savingsRateBp={kpis.savingsRateBp}
         essentialShareBp={kpis.essentialShareBp}
-        futureInstallmentsCents={kpis.futureInstallmentsCents}
-        uncategorizedCount={kpis.uncategorizedCount}
       />
 
-      {/* Linha 2 (SPEC §5.8): os gráficos 1 a 4, mais o 5 (renda passiva, T-306) logo abaixo. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <IncomeExpenseChart months={incomeExpense} currentCompetence={competence} />
         <SpendingByCategory items={spending} competence={competence} />
-        <ProjectedBalance state={projected} />
-        <div className="flex flex-col gap-6">
-          <CommitmentChart entries={commitment.byCompetence} />
-          <CommitmentSummary
-            competence={competence}
-            commitmentMonths={commitmentMonths}
-            totalCents={commitment.totalCents}
-            lastCommittedCompetence={commitment.lastCommittedCompetence}
-            windowEnd={commitment.windowEnd}
-          />
-        </div>
       </div>
 
-      <PassiveIncomeCard state={passiveIncome} />
+      <details className="group">
+        <summary className="min-h-11 cursor-pointer border border-border bg-card px-4 py-3 text-sm font-medium text-foreground sm:px-5">
+          Renda passiva em 20 anos
+        </summary>
+        <div className="mt-3">
+          <PassiveIncomeCard state={passiveIncome} />
+        </div>
+      </details>
 
       <PendenciasList
         uncategorizedCount={pendencias.uncategorizedCount}

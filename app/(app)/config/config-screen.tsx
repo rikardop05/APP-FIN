@@ -323,7 +323,7 @@ export function ConfigScreen() {
       {error ? (
         <div
           role="alert"
-          className="mt-4 flex flex-col gap-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 sm:flex-row sm:items-center sm:justify-between"
+          className="mt-4 flex flex-col gap-3 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 sm:flex-row sm:items-center sm:justify-between"
         >
           <span>{error}</span>
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
@@ -333,7 +333,7 @@ export function ConfigScreen() {
       ) : null}
 
       {loading ? (
-        <div className="mt-4 rounded-lg border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">
+        <div className="mt-4 border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">
           Carregando configurações…
         </div>
       ) : (
@@ -365,7 +365,7 @@ export function ConfigScreen() {
             ) : (
               <ul className="flex flex-col gap-3">
                 {categories.map((root) => (
-                  <li key={root.id} className="rounded-lg border border-border bg-card p-4">
+                  <li key={root.id} className="border border-border bg-card p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h3 className="truncate font-medium">{root.name}</h3>
@@ -483,12 +483,12 @@ export function ConfigScreen() {
                 {rules.map((rule, index) => (
                   <li
                     key={rule.id}
-                    className="rounded-lg border border-border bg-card p-4"
+                    className="border border-border bg-card p-4"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="flex min-w-0 items-start gap-3">
                         <span
-                          className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-medium"
+                          className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center bg-secondary text-xs font-medium"
                           aria-hidden="true"
                         >
                           {index + 1}
@@ -568,7 +568,7 @@ export function ConfigScreen() {
               </p>
             </div>
             {members.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+              <p className="border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
                 Nenhum membro cadastrado.
               </p>
             ) : (
@@ -576,7 +576,7 @@ export function ConfigScreen() {
                 {members.map((member) => (
                   <li
                     key={member.id}
-                    className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm"
+                    className="flex items-center gap-2 border border-border bg-card px-3 py-2 text-sm"
                   >
                     <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                     {member.name}
@@ -597,11 +597,11 @@ export function ConfigScreen() {
               </p>
             </div>
             {settings === null ? (
-              <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+              <p className="border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
                 Premissas indisponíveis.
               </p>
             ) : (
-              <div className="rounded-lg border border-border bg-card p-4">
+              <div className="border border-border bg-card p-4">
                 <SettingsForm initial={settings} busy={saving} onSubmit={(values) => void saveSettings(values)} />
               </div>
             )}
@@ -620,7 +620,7 @@ export function ConfigScreen() {
           }}
         >
           <div
-            className="max-h-[90vh] w-full overflow-y-auto rounded-t-lg border border-border bg-background p-4 shadow-lg sm:max-w-xl sm:rounded-lg sm:p-6"
+            className="max-h-[90vh] w-full overflow-y-auto border border-border bg-background p-4 shadow-lg sm:max-w-xl sm:p-6"
             role="dialog"
             aria-modal="true"
             aria-labelledby="config-dialog-title"

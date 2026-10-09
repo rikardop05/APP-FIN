@@ -1,0 +1,5 @@
+IBM Plex Sans e IBM Plex Sans Condensed
+Copyright 2017 IBM Corp. (https://github.com/IBM/plex)
+Licenca: SIL Open Font License 1.1 (https://openfontlicense.org)
+Subconjunto latin, baixado do Google Fonts em 2026-10-08 e servido do proprio projeto via next/font/local
+(nenhum pedido a terceiros em tempo de execucao).

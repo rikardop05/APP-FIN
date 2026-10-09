@@ -161,12 +161,12 @@ function OccurrencesPreview({
   );
 
   return (
-    <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3">
-      <p className="text-xs font-medium text-amber-900">
+    <div className="mt-3 rounded-md border border-warning/50 bg-warning-soft p-3">
+      <p className="text-xs font-medium text-warning">
         {previewText.title(previewMonths)}
       </p>
       {occurrences.length === 0 ? (
-        <p className="mt-1 text-xs text-amber-900/80">
+        <p className="mt-1 text-xs text-warning">
           {previewText.empty(previewMonths)}
         </p>
       ) : (
@@ -174,9 +174,9 @@ function OccurrencesPreview({
           {occurrences.map((occurrence: PlannedOccurrence) => (
             <li
               key={occurrence.competence}
-              className="flex items-center justify-between text-xs tabular"
+              className="flex items-center justify-between text-xs num"
             >
-              <span className="text-amber-950">
+              <span className="text-warning">
                 {formatDateBR(occurrence.date)} · {previewText.occurrenceMonth(occurrence.competence)}
               </span>
               <Money value={occurrence.amountCents} sign="never" />
@@ -1001,12 +1001,12 @@ export function RecurringScreen({
   return (
     <div className="flex flex-col gap-6">
       {error && !creatingExpense && !editingExpense && !creatingIncome && !editingIncome ? (
-        <div role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900">
+        <div role="alert" className="border border-destructive/50 bg-destructive-soft p-3 text-sm text-destructive">
           {error}
         </div>
       ) : null}
       {deleted ? (
-        <div role="status" className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
+        <div role="status" className="border border-success/50 bg-success-soft p-3 text-sm text-success">
           Item desativado. As ocorrências previstas não aparecem mais no fluxo de caixa.
         </div>
       ) : null}

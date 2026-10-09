@@ -32,6 +32,7 @@ function planTransactions(
     amountCents: installment.amountCents,
     creditCardId,
     status,
+    installment: true,
   }));
 }
 
@@ -76,21 +77,28 @@ describe('futureCommitment', () => {
       {
         competence: '2026-03',
         totalCents: -15000,
+        // Tudo e parcela de plano: parcela = total, compra = 0.
+        installmentCents: -15000,
+        purchaseCents: 0,
         byCardId: { 'card-a': -10000, 'card-c': -5000 },
       },
       {
         competence: '2026-04',
         totalCents: -15001,
+        installmentCents: -15001,
+        purchaseCents: 0,
         byCardId: { 'card-a': -10000, 'card-b': -5001 },
       },
       {
         competence: '2026-05',
         totalCents: -15000,
+        installmentCents: -15000,
+        purchaseCents: 0,
         byCardId: { 'card-a': -10000, 'card-b': -5000 },
       },
-      { competence: '2026-06', totalCents: 0, byCardId: {} },
-      { competence: '2026-07', totalCents: 0, byCardId: {} },
-      { competence: '2026-08', totalCents: 0, byCardId: {} },
+      { competence: '2026-06', totalCents: 0, installmentCents: 0, purchaseCents: 0, byCardId: {} },
+      { competence: '2026-07', totalCents: 0, installmentCents: 0, purchaseCents: 0, byCardId: {} },
+      { competence: '2026-08', totalCents: 0, installmentCents: 0, purchaseCents: 0, byCardId: {} },
     ]);
 
     expect(result.totalCents).toBe(-45001);
@@ -490,5 +498,88 @@ describe('futureCommitment', () => {
         cards: [],
       }),
     ).toThrow(RangeError);
+  });
+});
+
+describe('futureCommitment: detalhamento do card "Comprometido nos cartoes"', () => {
+  const tx = (over: Partial<Tx> & Pick<Tx, 'competence' | 'amountCents'>): Tx => ({
+    creditCardId: 'card-a',
+    status: 'posted',
+    installment: false,
+    statementPaid: false,
+    ...over,
+  });
+
+  // Out: compra a vista -100,00 e parcela -30,00. Nov: parcela -30,00 e compra
+  // feita depois do fechamento -25,00. Dez: parcela -30,00 e estorno +5,00.
+  const linhas: Tx[] = [
+    tx({ competence: '2026-10', amountCents: cents(-10000) }),
+    tx({ competence: '2026-10', amountCents: cents(-3000), installment: true }),
+    tx({ competence: '2026-11', amountCents: cents(-3000), installment: true, status: 'planned' }),
+    tx({ competence: '2026-11', amountCents: cents(-2500) }),
+    tx({ competence: '2026-12', amountCents: cents(-3000), installment: true, status: 'planned' }),
+    tx({ competence: '2026-12', amountCents: cents(500) }),
+  ];
+
+  it('cada mes separa parcela de compra ja lancada, e as duas fecham o total do mes', () => {
+    const result = futureCommitment({ fromCompetence: '2026-10', months: 3, cards: [CARD_A], transactions: linhas });
+    expect(result.byCompetence.map((m) => [m.competence, m.installmentCents, m.purchaseCents, m.totalCents])).toEqual([
+      // -3000 + -10000 = -13000
+      ['2026-10', -3000, -10000, -13000],
+      // -3000 + -2500 = -5500
+      ['2026-11', -3000, -2500, -5500],
+      // -3000 + 500 = -2500
+      ['2026-12', -3000, 500, -2500],
+    ]);
+  });
+
+  it('breakdown: fatura do mes corrente + parcelas seguintes + compras ja lancadas em faturas futuras = total', () => {
+    const result = futureCommitment({ fromCompetence: '2026-10', months: 3, cards: [CARD_A], transactions: linhas });
+    expect(result.breakdown).toEqual({
+      // Mes corrente inteiro: -13000.
+      currentStatementCents: -13000,
+      // Parcelas de nov e dez: -3000 + -3000 = -6000.
+      laterInstallmentsCents: -6000,
+      // Compras de nov e dez: -2500 + 500 = -2000.
+      laterPurchasesCents: -2000,
+    });
+    // -13000 + -6000 + -2000 = -21000.
+    expect(result.totalCents).toBe(-21000);
+  });
+
+  it('fatura marcada como PAGA sai do comprometimento e do uso de limite; vencida e nao paga continua', () => {
+    const outubroPago = linhas.map((linha) => (linha.competence === '2026-10' ? { ...linha, statementPaid: true } : linha));
+    const result = futureCommitment({ fromCompetence: '2026-10', months: 3, cards: [CARD_A], transactions: outubroPago });
+    // Outubro some inteiro; sobram nov (-5500) e dez (-2500) = -8000.
+    expect(result.byCompetence[0]).toMatchObject({ totalCents: 0, installmentCents: 0, purchaseCents: 0 });
+    expect(result.totalCents).toBe(-8000);
+    expect(result.breakdown.currentStatementCents).toBe(0);
+    expect(result.limitUsage[0]?.usedCents).toBe(-8000);
+
+    // Sem a marca de paga, outubro (mesmo vencido) continua contando: -21000.
+    expect(futureCommitment({ fromCompetence: '2026-10', months: 3, cards: [CARD_A], transactions: linhas }).totalCents).toBe(-21000);
+  });
+
+  it('fatura futura paga adiantada tambem sai', () => {
+    const novembroPago = linhas.map((linha) => (linha.competence === '2026-11' ? { ...linha, statementPaid: true } : linha));
+    const result = futureCommitment({ fromCompetence: '2026-10', months: 3, cards: [CARD_A], transactions: novembroPago });
+    // -21000 sem novembro (-5500) = -15500.
+    expect(result.totalCents).toBe(-15500);
+    expect(result.breakdown).toEqual({ currentStatementCents: -13000, laterInstallmentsCents: -3000, laterPurchasesCents: 500 });
+  });
+
+  it('sem os campos novos: compra a vista e nao paga (compatibilidade)', () => {
+    const result = futureCommitment({
+      fromCompetence: '2026-10',
+      months: 1,
+      cards: [CARD_A],
+      transactions: [{ competence: '2026-10', amountCents: cents(-1000), creditCardId: 'card-a', status: 'posted' }],
+    });
+    expect(result.byCompetence[0]).toMatchObject({ installmentCents: 0, purchaseCents: -1000, totalCents: -1000 });
+  });
+
+  it('janela vazia: breakdown zerado', () => {
+    const result = futureCommitment({ fromCompetence: '2026-10', months: 0, cards: [], transactions: linhas });
+    expect(result.breakdown).toEqual({ currentStatementCents: 0, laterInstallmentsCents: 0, laterPurchasesCents: 0 });
   });
 });

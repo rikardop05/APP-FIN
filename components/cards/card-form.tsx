@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { formatBRL, parseBRL } from '@/lib/money';
-import { Button } from '@/components/ui-kit';
+import { Button, Input, Select } from '@/components/ui-kit';
 import type {
   AccountRecord,
   CardFormData,
@@ -11,7 +11,7 @@ import type {
   CardList,
 } from './schemas';
 import { cardFormSchema } from './schemas';
-import { Field, inputClassName, selectClassName } from './form-fields';
+import { Field } from './form-fields';
 
 type CardFormProps = {
   initial?: CardRecord;
@@ -81,18 +81,16 @@ export function CardForm({
     <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Nome do cartão" htmlFor="card-name" error={errors.name}>
-          <input
+          <Input
             id="card-name"
-            className={inputClassName}
             value={values.name}
             onChange={(event) => update('name', event.target.value)}
             autoComplete="off"
           />
         </Field>
         <Field label="Banco (opcional)" htmlFor="card-bank" error={errors.bank}>
-          <input
+          <Input
             id="card-bank"
-            className={inputClassName}
             value={values.bank}
             onChange={(event) => update('bank', event.target.value)}
             autoComplete="organization"
@@ -101,9 +99,8 @@ export function CardForm({
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Bandeira" htmlFor="card-brand" error={errors.brand}>
-          <select
+          <Select
             id="card-brand"
-            className={selectClassName}
             value={values.brand}
             onChange={(event) => {
               const result = cardFormSchema.shape.brand.safeParse(event.target.value);
@@ -115,12 +112,11 @@ export function CardForm({
             <option value="elo">Elo</option>
             <option value="amex">American Express</option>
             <option value="other">Outra</option>
-          </select>
+          </Select>
         </Field>
         <Field label="Responsável (opcional)" htmlFor="card-holder" error={errors.holderMemberId}>
-          <select
+          <Select
             id="card-holder"
-            className={selectClassName}
             value={values.holderMemberId ?? ''}
             onChange={(event) => update('holderMemberId', event.target.value || null)}
           >
@@ -130,14 +126,13 @@ export function CardForm({
                 {member.name}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Limite (opcional)" htmlFor="card-limit" error={errors.creditLimit}>
-          <input
+          <Input
             id="card-limit"
-            className={inputClassName}
             value={values.creditLimit}
             onChange={(event) => update('creditLimit', event.target.value)}
             inputMode="decimal"
@@ -145,9 +140,8 @@ export function CardForm({
           />
         </Field>
         <Field label="Conta para pagamento" htmlFor="card-payment-account" error={errors.paymentAccountId}>
-          <select
+          <Select
             id="card-payment-account"
-            className={selectClassName}
             value={values.paymentAccountId ?? ''}
             onChange={(event) => update('paymentAccountId', event.target.value || null)}
           >
@@ -157,28 +151,26 @@ export function CardForm({
                 {account.name}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Dia de fechamento" htmlFor="card-closing-day" error={errors.closingDay}>
-          <input
+          <Input
             id="card-closing-day"
             type="number"
             min={1}
             max={31}
-            className={inputClassName}
             value={values.closingDay}
             onChange={(event) => update('closingDay', event.target.value)}
           />
         </Field>
         <Field label="Dia de vencimento" htmlFor="card-due-day" error={errors.dueDay}>
-          <input
+          <Input
             id="card-due-day"
             type="number"
             min={1}
             max={31}
-            className={inputClassName}
             value={values.dueDay}
             onChange={(event) => update('dueDay', event.target.value)}
           />

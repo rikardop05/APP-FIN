@@ -1,21 +1,48 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Check, Copy, Rows3 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { Check } from 'lucide-react';
 import { z } from 'zod';
 import { formatDateBR } from '@/lib/date';
 import { formatBRL, parseBRL } from '@/lib/money';
 import type { Cents } from '@/lib/money';
 import type { RecalculateBody } from '@/app/api/import/recalculate/schema';
-import { Badge, Button, Checkbox, Input, Money, Select } from '@/components/ui-kit';
+import { competenceLong } from '@/components/cashflow/labels';
+import {
+  Button,
+  Canhoto,
+  Carimbo,
+  Checkbox,
+  Faixa,
+  Input,
+  Money,
+  Parcela,
+  Placar,
+  Select,
+} from '@/components/ui-kit';
 import { CompetenceWarningBanner } from './competence-warning-banner';
-import { defaultInclude, includedByDefaultCount, stateLabel } from './preview-state';
+import { BatchCover } from './batch-cover';
+import { StillHeldColumn } from './still-held-column';
+import { esperarDestacar } from './destacar';
+import { defaultInclude, includedByDefaultCount } from './preview-state';
+import {
+  applyBulk,
+  confirmBlockReason,
+  firstInvalidIndex,
+  FLAG_SELO,
+  flaggedIndexes,
+  placarFigures,
+  rowFieldLabel,
+  rowFlags,
+  stepFlagged,
+} from './review-model';
 import {
   apiErrorSchema,
   recalculateResponseSchema,
   type CategoryNode,
   type MemberItem,
   type SourceKind,
+  type StillHeld,
   type UploadResponse,
 } from './schemas';
 
@@ -67,13 +94,15 @@ type Calculation = {
   /** Parcelas futuras geradas pelo motor a partir de planos. */
   plannedRowsCount: number;
   competenceByIndex: Map<number, string | null>;
+  /** Coluna "Ainda presos": as parcelas que o lote projeta, por competência. */
+  stillHeld: StillHeld;
 };
 
 type ImportConfirmationProps = {
   preview: UploadResponse;
   sourceKind: SourceKind;
   sourceId: string;
-  /** Nome da origem (do cartão, quando é cartão): entra na frase do aviso de cadastro. */
+  /** Nome da origem (do cartão, quando é cartão): entra na capa e na frase do aviso de cadastro. */
   sourceName: string;
   members: MemberItem[];
   categories: CategoryNode[];
@@ -92,6 +121,9 @@ const commitResponseSchema = z.object({
   batchId: z.string().uuid(),
   plannedReconciled: z.number().int().nonnegative().default(0),
 });
+
+const KEEP = '__keep';
+const NONE = '__none';
 
 function flattenCategories(
   nodes: CategoryNode[],
@@ -182,11 +214,6 @@ function toConfirmedRow(draft: DraftRow): ConfirmedRow | null {
   };
 }
 
-function competenceLabel(value: string | null): string {
-  if (value === null) return '—';
-  return `${value.slice(5)}/${value.slice(0, 4)}`;
-}
-
 /**
  * Texto do rodapé que separa "linhas que o usuário marcou" de "parcelas futuras
  * projetadas". Os dois números lado a lado, com `totalCents` do motor cobrindo
@@ -208,9 +235,17 @@ function countLabel(includedRowsCount: number, plannedRowsCount: number): string
   return `${markedPart} + ${futurePart} (${includedRowsCount} no total)`;
 }
 
-function rowStatus(row: DraftRow): string {
-  return stateLabel(row.state);
+/** Data do canhoto: dd/mm/aaaa, ou travessão se a data da linha ainda não é válida. */
+function stubDate(text: string): string {
+  const parsed = isoDateSchema.safeParse(text);
+  return parsed.success ? formatDateBR(parsed.data).slice(0, 5) : '—';
 }
+
+const NOTE: Partial<Record<ImportPreviewRow['state'], string>> = {
+  duplicate: 'Já existe no sistema; chega desmarcada.',
+  credit_card_payment: 'Pagamento da fatura anterior: pertence ao extrato da conta.',
+  informational: 'Valor R$ 0,00: nem despesa nem receita.',
+};
 
 export function ImportConfirmation({
   preview,
@@ -230,10 +265,28 @@ export function ImportConfirmation({
   const [cardCycle, setCardCycle] = useState(preview.cardCycle);
   const [drafts, setDrafts] = useState<DraftRow[]>(() => initialDrafts(preview.preview.rows));
   const [busy, setBusy] = useState(false);
+  const [settling, setSettling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recalculating, setRecalculating] = useState(false);
-  const [expandedOriginal, setExpandedOriginal] = useState<number | null>(null);
+  // Linhas com o editor aberto. Começam abertas as de baixa confiança; as incompletas abrem sozinhas.
+  const [opened, setOpened] = useState<Set<number>>(
+    () =>
+      new Set(
+        initialDrafts(preview.preview.rows)
+          .filter((row) => row.lowConfidence)
+          .map((row) => row.index),
+      ),
+  );
+  const [selected, setSelected] = useState<Set<number>>(() => new Set());
+  const [onlyFlagged, setOnlyFlagged] = useState(false);
+  const [bulkCategory, setBulkCategory] = useState(KEEP);
+  const [bulkMember, setBulkMember] = useState(KEEP);
   const categoryOptions = useMemo(() => flattenCategories(categories), [categories]);
+  const categoryName = useMemo(
+    () => new Map(categoryOptions.map((option) => [option.id, option.label.replace(/^(— )+/, '')] as const)),
+    [categoryOptions],
+  );
+  const memberName = useMemo(() => new Map(members.map((member) => [member.id, member.name] as const)), [members]);
   const [calculation, setCalculation] = useState<Calculation>(() => ({
     totalCents: preview.preview.summary.totalCents,
     // Inicial coerente com `initialDrafts`: a MESMA regra (`defaultInclude`): duplicada, pagamento
@@ -245,12 +298,37 @@ export function ImportConfirmation({
     competenceByIndex: new Map(
       preview.preview.rows.map((row) => [row.index, row.competence] as const),
     ),
+    stillHeld: { months: [], totalCents: 0 as Cents, count: 0 },
   }));
 
   const invalidIncluded = useMemo(
     () => drafts.filter((draft) => draft.include && toConfirmedRow(draft) === null),
     [drafts],
   );
+  const invalidSet = useMemo(() => new Set(invalidIncluded.map((draft) => draft.index)), [invalidIncluded]);
+
+  const flagInputs = useMemo(
+    () =>
+      drafts.map((draft) => ({
+        ...draft,
+        invalid: invalidSet.has(draft.index),
+      })),
+    [drafts, invalidSet],
+  );
+  const flagged = useMemo(() => flaggedIndexes(flagInputs), [flagInputs]);
+  const visibleDrafts = onlyFlagged ? drafts.filter((draft) => flagged.includes(draft.index)) : drafts;
+  const includedCount = drafts.filter((draft) => draft.include).length;
+
+  const figures = placarFigures({
+    reportedTotalCents: preview.preview.reportedTotalCents,
+    totalCents: calculation.totalCents,
+  });
+  const blockReason = confirmBlockReason({
+    busy,
+    recalculating,
+    invalidCount: invalidIncluded.length,
+    includedCount,
+  });
 
   useEffect(() => {
     const confirmedRows = drafts
@@ -294,6 +372,7 @@ export function ImportConfirmation({
           competenceByIndex: new Map(
             result.competenceByIndex.map((item) => [item.index, item.competence] as const),
           ),
+          stillHeld: result.stillHeld,
         });
       })
       .catch((cause: unknown) => {
@@ -313,6 +392,73 @@ export function ImportConfirmation({
     setDrafts((current) =>
       current.map((draft) => (draft.index === index ? { ...draft, ...update } : draft)),
     );
+    setError(null);
+  }
+
+  /** Abre a linha, rola até ela e põe o foco no botão que a abre. */
+  const goToRow = useCallback((index: number) => {
+    setOpened((current) => new Set(current).add(index));
+    window.setTimeout(() => {
+      const target = document.getElementById(`linha-${index}-abrir`);
+      target?.focus();
+      target?.scrollIntoView({ block: 'center' });
+    }, 0);
+  }, []);
+
+  // J e K: próxima e anterior linha sinalizada. Fora de campo de texto, sem modificadores.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key !== 'j' && key !== 'k') return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName))
+      ) {
+        return;
+      }
+      const focusedIndex =
+        target instanceof HTMLElement && /^linha-(\d+)-abrir$/.test(target.id)
+          ? Number(target.id.split('-')[1])
+          : null;
+      const next = stepFlagged(flagged, focusedIndex, key === 'j' ? 1 : -1);
+      if (next === null) return;
+      event.preventDefault();
+      goToRow(next);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [flagged, goToRow]);
+
+  function toggleOpened(index: number) {
+    setOpened((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
+  function toggleSelected(index: number, checked: boolean) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (checked) next.add(index);
+      else next.delete(index);
+      return next;
+    });
+  }
+
+  const allVisibleSelected =
+    visibleDrafts.length > 0 && visibleDrafts.every((draft) => selected.has(draft.index));
+
+  function applyToSelected() {
+    const change: { categoryId?: string | null; memberId?: string | null } = {};
+    if (bulkCategory !== KEEP) change.categoryId = bulkCategory === NONE ? null : bulkCategory;
+    if (bulkMember !== KEEP) change.memberId = bulkMember === NONE ? null : bulkMember;
+    setDrafts((current) => applyBulk(current, selected, change));
+    setBulkCategory(KEEP);
+    setBulkMember(KEEP);
     setError(null);
   }
 
@@ -360,6 +506,9 @@ export function ImportConfirmation({
         );
       }
       const result = commitResponseSchema.parse(body);
+      // Assinatura: o picote se abre e os canhotos assentam, uma vez; sem espera se o sistema pede menos movimento.
+      setSettling(true);
+      await esperarDestacar();
       onCommitted(result.batchId, result.plannedReconciled);
     } catch (cause) {
       setError(
@@ -367,33 +516,57 @@ export function ImportConfirmation({
           ? cause.message
           : 'Não foi possível confirmar a importação.',
       );
+      setSettling(false);
     } finally {
       setBusy(false);
     }
   }
 
+  function handleConfirmClick() {
+    if (blockReason !== null) {
+      // Desabilitado de verdade para o leitor de tela (aria-disabled), mas clicável: leva à primeira linha inválida.
+      const first = firstInvalidIndex(flagInputs);
+      if (first !== null) goToRow(first);
+      return;
+    }
+    void commit();
+  }
+
+  const announcement =
+    `${includedCount} ${includedCount === 1 ? 'linha incluída' : 'linhas incluídas'}. ` +
+    `Incluído ${formatBRL(figures.includedCents, { sign: 'never' })}.` +
+    (figures.differenceCents === null
+      ? ' Sem total impresso para conferir.'
+      : figures.differenceCents === 0
+        ? ' O lote confere com o total da fatura.'
+        : ` Diferença de ${formatBRL(figures.differenceCents)} para o total da fatura.`);
+
   return (
-    <section className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
-      <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-            <Rows3 className="h-5 w-5" aria-hidden="true" />
-            Confirme as linhas
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Revise cada campo. Nada será gravado até você confirmar.
-          </p>
-        </div>
+    <section aria-label="Revisão da fatura" className="flex flex-col gap-4">
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">Revise o que vem sinalizado. Nada é gravado até você confirmar.</p>
         <Button variant="outline" size="sm" onClick={onBack} disabled={busy}>
           Voltar para a entrada
         </Button>
       </div>
 
+      <BatchCover
+        bankKey={preview.bankKey}
+        sourceName={sourceName}
+        competence={defaultCompetence}
+        documentDate={preview.preview.documentDate}
+        fileName={preview.fileName}
+        rowsRead={preview.preview.summary.rowsRead}
+      />
+
       {error ? (
-        <div role="alert" className="mt-4 flex gap-2 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <Faixa tone="danger" role="alert">
           <span>{error}</span>
-        </div>
+        </Faixa>
       ) : null}
 
       <CompetenceWarningBanner
@@ -407,209 +580,76 @@ export function ImportConfirmation({
       />
 
       {preview.previousBatches.some((batch) => batch.status === 'committed') ? (
-        <div className="mt-4 flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-          <Copy className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <div className="flex flex-col gap-1">
-            <p className="font-medium">Este arquivo já foi importado antes.</p>
-            {preview.previousBatches
-              .filter((batch) => batch.status === 'committed')
-              .map((batch) => (
-                <p key={batch.id} className="text-xs text-amber-900/80">
-                  Lote de {formatDateBR(batch.createdAt.slice(0, 10))} —
-                  arquivo {batch.fileName}.
-                </p>
-              ))}
-            <p className="text-xs text-amber-900/80">
-              Confirmar abaixo cria um novo lote — útil se a tentativa
-              anterior foi confirmada errada. Os lançamentos existentes não
-              serão sobrescritos.
-            </p>
-          </div>
-        </div>
+        <Faixa tone="attention" title="Este arquivo já foi importado antes.">
+          {preview.previousBatches
+            .filter((batch) => batch.status === 'committed')
+            .map((batch) => (
+              <p key={batch.id} className="text-xs text-muted-foreground">
+                Lote de {formatDateBR(batch.createdAt.slice(0, 10))} — arquivo {batch.fileName}.
+              </p>
+            ))}
+          <p className="text-xs text-muted-foreground">
+            Confirmar abaixo cria um novo lote — útil se a tentativa anterior foi confirmada errada. Os lançamentos
+            existentes não serão sobrescritos.
+          </p>
+        </Faixa>
       ) : null}
 
       {preview.preview.summary.rowsDuplicated > 0 ? (
-        <div className="mt-4 flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-          <Copy className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <Faixa tone="attention">
           <span>
-            {preview.preview.summary.rowsDuplicated} linha(s) duplicada(s) foram excluída(s) por padrão.
-            Você pode forçar a inclusão em cada linha.
+            {preview.preview.summary.rowsDuplicated} linha(s) duplicada(s) foram excluída(s) por padrão. Você pode
+            forçar a inclusão em cada linha.
           </span>
-        </div>
+        </Faixa>
       ) : null}
 
       {preview.preview.diagnostics.length > 0 ? (
-        <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-          <p className="font-medium">Linhas que precisam de conferência</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5">
+        <Faixa tone="attention" title="Linhas que precisam de conferência">
+          <ul className="list-disc space-y-1 pl-5">
             {preview.preview.diagnostics.map((diagnostic) => (
               <li key={`${diagnostic.line}-${diagnostic.message}`}>
                 Linha {diagnostic.line}: {diagnostic.message}
-                <span className="mt-1 block break-words text-xs text-amber-900/80">
+                <span className="block break-words text-xs text-muted-foreground">
                   Texto original: {diagnostic.raw}
                 </span>
               </li>
             ))}
           </ul>
-        </div>
+        </Faixa>
       ) : null}
 
-      <div className="mt-4 flex flex-col gap-4">
-        {drafts.map((draft) => {
-          const competence = calculation.competenceByIndex.get(draft.index) ?? null;
-          const invalid = invalidIncluded.some((row) => row.index === draft.index);
-          const isDuplicate = draft.state === 'duplicate';
-          const isPayment = draft.state === 'credit_card_payment';
-          const isInformational = draft.state === 'informational';
-          const needsAttention = isDuplicate || isPayment || isInformational;
-          return (
-            <article
-              key={draft.index}
-              className={`rounded-lg border p-4 ${
-                draft.lowConfidence
-                  ? 'border-amber-400 bg-amber-50/70'
-                  : needsAttention
-                    ? 'border-dashed border-amber-300 bg-amber-50/30'
-                    : 'border-border bg-background'
-              }`}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <Badge variant={needsAttention ? 'warning' : draft.lowConfidence ? 'warning' : 'neutral'}>
-                    {rowStatus(draft)}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">Linha {draft.index + 1}</span>
-                </div>
-                <Checkbox
-                  checked={draft.include}
-                  onChange={(event) =>
-                    updateDraft(draft.index, {
-                      include: event.target.checked,
-                      forceDuplicate: isDuplicate && event.target.checked,
-                    })
-                  }
-                  label={
-                    isDuplicate
-                      ? 'Incluir duplicada'
-                      : isPayment
-                        ? 'Incluir pagamento'
-                        : 'Incluir linha'
-                  }
-                />
-              </div>
-
-              {draft.lowConfidence ? (
-                <div className="mt-3 rounded-md border border-amber-300 bg-amber-100/70 p-3 text-sm text-amber-950">
-                  <p className="font-medium">Baixa confiança: confira o texto original</p>
-                  <p className="mt-1 break-words">{draft.rawDescription || 'Texto original não reconhecido.'}</p>
-                </div>
-              ) : null}
-
-              {isInformational ? (
-                <div className="mt-3 rounded-md border border-amber-300 bg-amber-100/70 p-3 text-sm text-amber-950">
-                  <p className="font-medium">Linha informativa — valor R$ 0,00, nem despesa nem receita.</p>
-                  <p className="mt-1">
-                    Não é importada. Se o valor estiver errado, corrija-o abaixo e marque a linha.
-                  </p>
-                </div>
-              ) : null}
-
-              {isPayment ? (
-                <div className="mt-3 rounded-md border border-amber-300 bg-amber-100/70 p-3 text-sm text-amber-950">
-                  <p className="font-medium">
-                    Pagamento da fatura anterior — pertence ao extrato da conta, não ao cartão.
-                  </p>
-                  <p className="mt-1">
-                    Incluir aqui conta o valor duas vezes quando o extrato da conta entrar. Marque só
-                    se quiser registrar o pagamento manualmente como exceção.
-                  </p>
-                </div>
-              ) : null}
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
-                  Data
-                  <Input
-                    type="date"
-                    value={draft.occurredOnText}
-                    onChange={(event) => updateDraft(draft.index, { occurredOnText: event.target.value })}
-                  />
-                </label>
-                <div className="flex flex-col gap-1 text-sm">
-                  <span className="font-medium text-foreground">Competência</span>
-                  <span aria-live="polite" className="flex h-9 items-center rounded-md border border-border bg-muted px-3 font-medium">
-                    {competenceLabel(competence)}
-                  </span>
-                </div>
-                <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
-                  Valor
-                  <Input
-                    value={draft.amountText}
-                    onChange={(event) => updateDraft(draft.index, { amountText: event.target.value })}
-                    inputMode="decimal"
-                    aria-label={`Valor da linha ${draft.index + 1}`}
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-sm font-medium text-foreground sm:col-span-2">
-                  Descrição
-                  <Input
-                    value={draft.description}
-                    onChange={(event) => updateDraft(draft.index, { description: event.target.value })}
-                    aria-label={`Descrição da linha ${draft.index + 1}`}
-                  />
-                </label>
-              </div>
-
-              <div className="mt-3 rounded-md border border-border p-3">
-                <Checkbox
-                  checked={draft.installmentEnabled}
-                  onChange={(event) =>
-                    updateDraft(draft.index, {
-                      installmentEnabled: event.target.checked,
-                      installmentCurrentText: event.target.checked
-                        ? draft.installmentCurrentText || '1'
-                        : '',
-                      installmentTotalText: event.target.checked
-                        ? draft.installmentTotalText || '2'
-                        : '',
-                    })
-                  }
-                  label="Esta linha é parcelada"
-                />
-                {draft.installmentEnabled ? (
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
-                      Parcela atual
-                      <Input
-                        type="number"
-                        min={1}
-                        max={99}
-                        value={draft.installmentCurrentText}
-                        onChange={(event) => updateDraft(draft.index, { installmentCurrentText: event.target.value })}
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
-                      Total de parcelas
-                      <Input
-                        type="number"
-                        min={1}
-                        max={99}
-                        value={draft.installmentTotalText}
-                        onChange={(event) => updateDraft(draft.index, { installmentTotalText: event.target.value })}
-                      />
-                    </label>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
+        <div className="flex min-w-0 flex-col gap-3">
+          <div className="flex flex-col gap-2 border-y border-border py-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <Checkbox
+                label="Selecionar todas"
+                checked={allVisibleSelected}
+                onChange={(event) =>
+                  setSelected(event.target.checked ? new Set(visibleDrafts.map((draft) => draft.index)) : new Set())
+                }
+              />
+              <Checkbox
+                label={`Só o que precisa de atenção (${flagged.length})`}
+                checked={onlyFlagged}
+                onChange={(event) => setOnlyFlagged(event.target.checked)}
+              />
+              <p className="text-xs text-muted-foreground">
+                <kbd className="num border border-border bg-card px-1">J</kbd> /{' '}
+                <kbd className="num border border-border bg-card px-1">K</kbd> pulam entre as linhas sinalizadas
+              </p>
+            </div>
+            {selected.size > 0 ? (
+              <div className="flex flex-wrap items-end gap-2" role="group" aria-label="Edição em lote">
+                <p className="w-full text-sm font-medium text-foreground sm:w-auto sm:pb-2">
+                  {selected.size === 1 ? '1 linha selecionada' : `${selected.size} linhas selecionadas`}
+                </p>
+                <label className="flex min-w-40 flex-1 flex-col gap-1 text-xs text-muted-foreground">
                   Categoria
-                  <Select
-                    value={draft.suggestedCategoryId ?? ''}
-                    onChange={(event) => updateDraft(draft.index, { suggestedCategoryId: event.target.value || null })}
-                  >
-                    <option value="">Sem categoria</option>
+                  <Select value={bulkCategory} onChange={(event) => setBulkCategory(event.target.value)}>
+                    <option value={KEEP}>Manter</option>
+                    <option value={NONE}>Sem categoria</option>
                     {categoryOptions.map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.label}
@@ -617,13 +657,11 @@ export function ImportConfirmation({
                     ))}
                   </Select>
                 </label>
-                <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
+                <label className="flex min-w-40 flex-1 flex-col gap-1 text-xs text-muted-foreground">
                   Responsável
-                  <Select
-                    value={draft.suggestedMemberId ?? ''}
-                    onChange={(event) => updateDraft(draft.index, { suggestedMemberId: event.target.value || null })}
-                  >
-                    <option value="">Família</option>
+                  <Select value={bulkMember} onChange={(event) => setBulkMember(event.target.value)}>
+                    <option value={KEEP}>Manter</option>
+                    <option value={NONE}>Família</option>
                     {members.map((member) => (
                       <option key={member.id} value={member.id}>
                         {member.name}
@@ -631,53 +669,316 @@ export function ImportConfirmation({
                     ))}
                   </Select>
                 </label>
-              </div>
-
-              {expandedOriginal === draft.index ? (
-                <div className="mt-3 rounded-md bg-muted p-3 text-xs text-muted-foreground">
-                  <p className="font-medium text-foreground">Texto original preservado</p>
-                  <p className="mt-1 break-words">{draft.rawDescription || 'Sem texto original.'}</p>
-                </div>
-              ) : null}
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <button
-                  type="button"
-                  className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                  onClick={() => setExpandedOriginal((current) => (current === draft.index ? null : draft.index))}
+                <Button
+                  variant="outline"
+                  onClick={applyToSelected}
+                  disabled={bulkCategory === KEEP && bulkMember === KEEP}
                 >
-                  {expandedOriginal === draft.index ? 'Ocultar texto original' : 'Ver texto original'}
-                </button>
-                {invalid ? (
-                  <span className="flex items-center gap-1 text-xs text-red-700">
-                    <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                    Complete os campos desta linha
-                  </span>
-                ) : null}
+                  Aplicar às selecionadas
+                </Button>
+                <Button variant="ghost" onClick={() => setSelected(new Set())}>
+                  Limpar seleção
+                </Button>
               </div>
-            </article>
-          );
-        })}
+            ) : null}
+          </div>
+
+          {visibleDrafts.length === 0 ? (
+            <p className="border border-dashed border-input px-3 py-6 text-center text-sm text-muted-foreground">
+              Nenhuma linha precisa de atenção. Desmarque o filtro para ver o lote inteiro.
+            </p>
+          ) : null}
+
+          <ul className={`flex flex-col gap-1.5 ${settling ? 'destacando' : ''}`}>
+            {visibleDrafts.map((draft, position) => {
+              const rowNumber = draft.index + 1;
+              const label = draft.description;
+              const competence = calculation.competenceByIndex.get(draft.index) ?? null;
+              const invalid = invalidSet.has(draft.index);
+              const flags = rowFlags({ state: draft.state, lowConfidence: draft.lowConfidence, invalid });
+              const isOpen = opened.has(draft.index) || invalid;
+              const isDuplicate = draft.state === 'duplicate';
+              const isPayment = draft.state === 'credit_card_payment';
+              const isInformational = draft.state === 'informational';
+              const amount = parseBRL(draft.amountText);
+              const installment = parseInstallment(draft);
+              const note = NOTE[draft.state];
+              const editorId = `linha-${draft.index}-editor`;
+              return (
+                <li key={draft.index} style={{ '--i': position } as CSSProperties}>
+                  <Canhoto
+                    as="article"
+                    ariaLabel={`Linha ${rowNumber}, ${label || 'sem descrição'}`}
+                    destaque={invalid ? 'danger' : flags.length > 0 ? 'attention' : undefined}
+                    className={draft.include ? undefined : 'opacity-80'}
+                    stub={stubDate(draft.occurredOnText)}
+                    marcas={flags.map((flag) => FLAG_SELO[flag])}
+                    valor={
+                      amount === null ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <Money value={amount} />
+                      )
+                    }
+                    footer={
+                      isOpen ? (
+                        <div id={editorId} className="flex flex-col gap-3">
+                          {draft.lowConfidence ? (
+                            <Faixa tone="attention" title="Baixa confiança: confira o texto original">
+                              <p className="break-words">{draft.rawDescription || 'Texto original não reconhecido.'}</p>
+                            </Faixa>
+                          ) : null}
+                          {isInformational ? (
+                            <Faixa tone="attention" title="Linha informativa — valor R$ 0,00, nem despesa nem receita.">
+                              <p>Não é importada. Se o valor estiver errado, corrija-o abaixo e marque a linha.</p>
+                            </Faixa>
+                          ) : null}
+                          {isPayment ? (
+                            <Faixa
+                              tone="attention"
+                              title="Pagamento da fatura anterior — pertence ao extrato da conta, não ao cartão."
+                            >
+                              <p>
+                                Incluir aqui conta o valor duas vezes quando o extrato da conta entrar. Marque só se
+                                quiser registrar o pagamento manualmente como exceção.
+                              </p>
+                            </Faixa>
+                          ) : null}
+                          {invalid ? (
+                            <Faixa tone="danger">
+                              <span>Complete os campos desta linha para poder confirmar.</span>
+                            </Faixa>
+                          ) : null}
+
+                          <div className="grid gap-3 sm:grid-cols-4">
+                            <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
+                              Data
+                              <Input
+                                type="date"
+                                value={draft.occurredOnText}
+                                aria-label={rowFieldLabel('Data', rowNumber, label)}
+                                onChange={(event) => updateDraft(draft.index, { occurredOnText: event.target.value })}
+                              />
+                            </label>
+                            <div className="flex flex-col gap-1 text-sm">
+                              <span className="font-medium text-foreground">Competência</span>
+                              <span className="flex h-11 items-center border border-border bg-muted px-3 font-medium sm:h-9">
+                                {competence === null ? '—' : competenceLong(competence)}
+                              </span>
+                            </div>
+                            <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
+                              Valor
+                              <Input
+                                value={draft.amountText}
+                                onChange={(event) => updateDraft(draft.index, { amountText: event.target.value })}
+                                inputMode="decimal"
+                                aria-label={rowFieldLabel('Valor', rowNumber, label)}
+                                aria-invalid={invalid && amount === null ? true : undefined}
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-sm font-medium text-foreground sm:col-span-4">
+                              Descrição
+                              <Input
+                                value={draft.description}
+                                onChange={(event) => updateDraft(draft.index, { description: event.target.value })}
+                                aria-label={rowFieldLabel('Descrição', rowNumber, label)}
+                                aria-invalid={invalid && draft.description.trim() === '' ? true : undefined}
+                              />
+                            </label>
+                          </div>
+
+                          <div className="flex flex-col gap-2 border-t border-border pt-3">
+                            <Checkbox
+                              checked={draft.installmentEnabled}
+                              aria-label={rowFieldLabel('Parcelada', rowNumber, label)}
+                              onChange={(event) =>
+                                updateDraft(draft.index, {
+                                  installmentEnabled: event.target.checked,
+                                  installmentCurrentText: event.target.checked
+                                    ? draft.installmentCurrentText || '1'
+                                    : '',
+                                  installmentTotalText: event.target.checked
+                                    ? draft.installmentTotalText || '2'
+                                    : '',
+                                })
+                              }
+                              label="Esta linha é parcelada"
+                            />
+                            {draft.installmentEnabled ? (
+                              <div className="grid max-w-md grid-cols-2 gap-3">
+                                <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
+                                  Parcela atual
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={99}
+                                    value={draft.installmentCurrentText}
+                                    aria-label={rowFieldLabel('Parcela atual', rowNumber, label)}
+                                    onChange={(event) =>
+                                      updateDraft(draft.index, { installmentCurrentText: event.target.value })
+                                    }
+                                  />
+                                </label>
+                                <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
+                                  Total de parcelas
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={99}
+                                    value={draft.installmentTotalText}
+                                    aria-label={rowFieldLabel('Total de parcelas', rowNumber, label)}
+                                    onChange={(event) =>
+                                      updateDraft(draft.index, { installmentTotalText: event.target.value })
+                                    }
+                                  />
+                                </label>
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
+                              Categoria
+                              <Select
+                                value={draft.suggestedCategoryId ?? ''}
+                                aria-label={rowFieldLabel('Categoria', rowNumber, label)}
+                                onChange={(event) =>
+                                  updateDraft(draft.index, { suggestedCategoryId: event.target.value || null })
+                                }
+                              >
+                                <option value="">Sem categoria</option>
+                                {categoryOptions.map((category) => (
+                                  <option key={category.id} value={category.id}>
+                                    {category.label}
+                                  </option>
+                                ))}
+                              </Select>
+                            </label>
+                            <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
+                              Responsável
+                              <Select
+                                value={draft.suggestedMemberId ?? ''}
+                                aria-label={rowFieldLabel('Responsável', rowNumber, label)}
+                                onChange={(event) =>
+                                  updateDraft(draft.index, { suggestedMemberId: event.target.value || null })
+                                }
+                              >
+                                <option value="">Família</option>
+                                {members.map((member) => (
+                                  <option key={member.id} value={member.id}>
+                                    {member.name}
+                                  </option>
+                                ))}
+                              </Select>
+                            </label>
+                          </div>
+
+                          <div className="bg-muted p-3 text-xs text-muted-foreground">
+                            <p className="font-medium text-foreground">Texto original preservado</p>
+                            <p className="mt-1 break-words">{draft.rawDescription || 'Sem texto original.'}</p>
+                          </div>
+                        </div>
+                      ) : null
+                    }
+                  >
+                    <div className="flex min-w-0 items-center gap-1">
+                      <Checkbox
+                        checked={selected.has(draft.index)}
+                        aria-label={rowFieldLabel('Selecionar', rowNumber, label)}
+                        onChange={(event) => toggleSelected(draft.index, event.target.checked)}
+                      />
+                      <button
+                        id={`linha-${draft.index}-abrir`}
+                        type="button"
+                        aria-expanded={isOpen}
+                        aria-controls={isOpen ? editorId : undefined}
+                        aria-label={`${isOpen ? 'Fechar' : 'Abrir'} a linha ${rowNumber}, ${label || 'sem descrição'}`}
+                        onClick={() => toggleOpened(draft.index)}
+                        className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8"
+                      >
+                        <span className="truncate">{label || 'Sem descrição'}</span>
+                        {installment ? <Parcela atual={installment.current} total={installment.total} className="text-xs text-muted-foreground" /> : null}
+                      </button>
+                      <Checkbox
+                        checked={draft.include}
+                        aria-label={rowFieldLabel(
+                          isDuplicate ? 'Incluir duplicada' : isPayment ? 'Incluir pagamento' : 'Incluir',
+                          rowNumber,
+                          label,
+                        )}
+                        onChange={(event) =>
+                          updateDraft(draft.index, {
+                            include: event.target.checked,
+                            forceDuplicate: isDuplicate && event.target.checked,
+                          })
+                        }
+                        label="Incluir"
+                      />
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {draft.suggestedCategoryId ? (categoryName.get(draft.suggestedCategoryId) ?? 'Categoria') : 'Sem categoria'}
+                      {' · '}
+                      {draft.suggestedMemberId ? (memberName.get(draft.suggestedMemberId) ?? 'Responsável') : 'Família'}
+                      {competence !== null ? ` · ${competenceLong(competence)}` : ''}
+                    </p>
+                    {note && !isOpen ? <p className="text-xs text-muted-foreground">{note}</p> : null}
+                  </Canhoto>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        <StillHeldColumn stillHeld={calculation.stillHeld} recalculating={recalculating} />
       </div>
 
-      {/*
-        No celular o BottomNav é fixo (z-30, 4rem + área segura do iPhone): o rodapé gruda logo
-        ACIMA dele, com a mesma soma, e não por baixo. A partir de md não há BottomNav: bottom-0.
-      */}
-      <footer className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 mt-2 flex flex-col gap-3 border-t border-border bg-card py-4 sm:flex-row sm:items-center sm:justify-between md:bottom-0">
-        <div className="flex flex-col gap-0.5">
-          <p className="text-xs text-muted-foreground">Total das linhas incluídas</p>
-          <p className="text-lg font-semibold text-foreground">
-            <Money value={calculation.totalCents} />
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {countLabel(calculation.includedRowsCount, calculation.plannedRowsCount)}
-          </p>
-        </div>
-        <Button type="button" onClick={() => void commit()} disabled={busy || recalculating || invalidIncluded.length > 0}>
-          <Check className="mr-2 h-4 w-4" aria-hidden="true" />
-          {busy ? 'Gravando…' : 'Confirmar importação'}
-        </Button>
-      </footer>
+      <Placar
+        position="sticky"
+        title="Lote"
+        items={[
+          {
+            label: 'Total da fatura',
+            value:
+              figures.reportedCents === null ? (
+                <span className="text-sm font-normal text-muted-foreground">não impresso</span>
+              ) : (
+                <Money value={figures.reportedCents} sign="never" />
+              ),
+          },
+          { label: 'Incluído', value: <Money value={figures.includedCents} sign="never" /> },
+          {
+            label: 'Diferença',
+            tone: figures.tone,
+            value:
+              figures.differenceCents === null ? (
+                <span className="text-sm font-normal text-muted-foreground">sem total para conferir</span>
+              ) : (
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <Money value={figures.differenceCents} />
+                  {figures.tone === 'ok' ? <Carimbo tone="ok">Confere</Carimbo> : null}
+                  {figures.tone === 'danger' ? <Carimbo tone="danger">Diverge</Carimbo> : null}
+                </span>
+              ),
+          },
+        ]}
+        action={
+          <div className="flex max-w-xs flex-col items-end gap-1">
+            <Button
+              type="button"
+              aria-disabled={blockReason !== null}
+              aria-describedby="confirmar-motivo"
+              className={blockReason !== null ? 'opacity-60' : undefined}
+              onClick={handleConfirmClick}
+            >
+              <Check className="h-4 w-4" aria-hidden="true" />
+              {busy ? 'Gravando…' : 'Confirmar importação'}
+            </Button>
+            <p id="confirmar-motivo" className="text-right text-xs text-muted-foreground">
+              {blockReason ?? countLabel(calculation.includedRowsCount, calculation.plannedRowsCount)}
+            </p>
+          </div>
+        }
+      />
     </section>
   );
 }

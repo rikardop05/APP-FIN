@@ -36,7 +36,7 @@ export function Verdict({ projection, baseProjection }: VerdictProps) {
     <section
       aria-labelledby="fluxo-verdict-heading"
       className={cn(
-        'flex flex-col gap-3 rounded-xl border p-4 shadow-sm sm:p-5',
+        'flex flex-col gap-3 border p-4 shadow-sm sm:p-5',
         first === null ? 'border-border bg-card' : 'border-red-300 bg-red-50',
       )}
     >

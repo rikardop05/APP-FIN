@@ -74,6 +74,15 @@ export function surplusBasisText(surplus: InvestmentSurplus): string {
   return `média de ${months} com lançamentos, entre ${competenceLabel(surplus.windowFrom)} e ${competenceLabel(surplus.windowTo)}`;
 }
 
+/** "Ficaram fora da média: julho de 2026 e agosto de 2026", ou `null` se nenhum mês saiu. */
+export function surplusExcludedText(surplus: InvestmentSurplus): string | null {
+  const excluded = surplus.excludedMonths ?? [];
+  if (excluded.length === 0) return null;
+  const names = excluded.map((month) => competenceLabel(month));
+  const list = names.length === 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} e ${names[names.length - 1] ?? ''}`;
+  return `${excluded.length === 1 ? 'Ficou fora da média 1 mês' : `Ficaram fora da média ${String(excluded.length)} meses`}, por não terem receita lançada: ${list}.`;
+}
+
 /** Alerta do topo: só quando há sobra conhecida e NENHUM cenário cabe nela. */
 export function noScenarioFits(scenarios: readonly InvestmentScenario[], surplus: InvestmentSurplus): boolean {
   return (

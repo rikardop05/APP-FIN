@@ -43,7 +43,7 @@ function CommitmentChart({
 }) {
   return (
     <div className="overflow-x-auto pb-2" role="img" aria-label="Gráfico de comprometimento por competência">
-      <div className="flex min-w-[720px] items-end gap-2 px-1 pt-4 sm:min-w-0 sm:gap-3">
+      <div className="flex min-w-[840px] items-end gap-2 px-1 pt-4 sm:min-w-0 sm:gap-3">
         {entries.map((entry) => {
           const isDebt = entry.totalCents < 0;
           const height = isDebt && maxMagnitude > 0
@@ -51,8 +51,8 @@ function CommitmentChart({
             : 0;
 
           return (
-            <div key={entry.competence} className="flex min-w-6 flex-1 flex-col items-center gap-2">
-              <div className="flex h-36 w-full items-end justify-center rounded-sm bg-secondary/50 px-1" title={isDebt ? undefined : 'Sem comprometimento devedor'}>
+            <div key={entry.competence} className="flex min-w-7 flex-1 flex-col items-center gap-2">
+              <div className="flex h-36 w-full items-end justify-center bg-secondary/50 px-1" title={isDebt ? undefined : 'Sem comprometimento devedor'}>
                 {isDebt ? (
                   <div
                     className={`${BAR_Y_CLASS} bg-primary`}
@@ -61,7 +61,7 @@ function CommitmentChart({
                   />
                 ) : null}
               </div>
-              <span className="text-[10px] tabular text-muted-foreground [writing-mode:vertical-rl] sm:[writing-mode:horizontal-tb]">
+              <span className="text-xs num text-muted-foreground [writing-mode:vertical-rl] sm:[writing-mode:horizontal-tb]">
                 {competenceMonth(entry.competence)}
               </span>
             </div>
@@ -107,7 +107,7 @@ function CommitmentTable({
 
       <div className="flex flex-col gap-2 sm:hidden">
         {entries.map((entry) => (
-          <article key={entry.competence} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-3">
+          <article key={entry.competence} className="flex items-center justify-between gap-3 border border-border px-3 py-3">
             <div className="min-w-0">
               <h4 className="font-medium">{competenceLabel(entry.competence)}</h4>
               <p className="text-xs text-muted-foreground">
@@ -165,7 +165,7 @@ function LimitUsage({
               </div>
               {hasLimit ? (
                 <div className="mt-4">
-                  <div className="h-2 overflow-hidden rounded-full bg-secondary" role="img" aria-label={`Uso de limite: ${formatBasisPoints(usageBp)}`}>
+                  <div className="h-2 overflow-hidden bg-secondary" role="img" aria-label={`Uso de limite: ${formatBasisPoints(usageBp)}`}>
                     <div className={`${BAR_X_CLASS} bg-primary`} style={barScaleStyle(width, 'x')} />
                   </div>
                 </div>
@@ -204,7 +204,7 @@ export function CommitmentSection({ cards, transactions, months, today }: Commit
       </div>
 
       {lastCommittedCompetence !== null ? (
-        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+        <div className="border border-primary/30 bg-card p-4">
           <p className="text-sm text-muted-foreground">
             {lastCommittedCompetence === result.byCompetence.at(-1)?.competence
               ? 'Comprometimento até'
@@ -224,7 +224,7 @@ export function CommitmentSection({ cards, transactions, months, today }: Commit
         />
       )}
 
-      <div className="rounded-lg border border-border bg-card p-4 sm:p-5">
+      <div className="border border-border bg-card p-4 sm:p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h3 className="font-semibold">Visão mensal</h3>
@@ -235,10 +235,10 @@ export function CommitmentSection({ cards, transactions, months, today }: Commit
         <CommitmentChart entries={result.byCompetence} maxMagnitude={maxMagnitude} />
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-4 sm:p-5">
+      <div className="border border-border bg-card p-4 sm:p-5">
         <div className="mb-3">
           <h3 className="font-semibold">Tabela por competência</h3>
-          <p className="text-sm text-muted-foreground">A saída comprometida é exibida pela sua magnitude.</p>
+          <p className="text-sm text-muted-foreground">A saída comprometida é exibida pela sua magnitude. Fatura marcada como paga não entra.</p>
         </div>
         <CommitmentTable entries={result.byCompetence} />
       </div>

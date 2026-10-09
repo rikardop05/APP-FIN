@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 
 import { recalculateResponseSchema } from '@/components/import/schemas';
 import { finalizeImport } from '@/lib/import/pipeline';
+import { summarizeStillHeld } from '@/lib/import/still-held';
 import { cents } from '@/lib/money';
 
 import { countRows } from './counts';
@@ -167,8 +168,17 @@ describe('resposta do recalculate — o que a tela faz parse', () => {
       totalCents: result.totals.includedCents,
       ...countRows(rows.length, result),
       competenceByIndex: rows.map((r) => ({ index: r.index, competence: '2026-09' })),
+      stillHeld: summarizeStillHeld(result),
     };
   }
+
+  it('"Ainda presos" fecha com o contador do rodape: uma parcela futura, um canhoto preso', () => {
+    const body = respond([row(0, { current: 2, total: 5 }), row(1, { current: 1, total: 2 }), row(2, null)]);
+    expect(body.stillHeld.count).toBe(body.plannedRowsCount);
+    expect(body.stillHeld.months.map((month) => month.competence)).toEqual(['2026-10', '2026-11', '2026-12']);
+    // O schema atual da tela ignora a chave nova sem quebrar (z.object descarta).
+    expect(recalculateResponseSchema.safeParse(body).success).toBe(true);
+  });
 
   it('sem parcelas: nenhuma futura, e o schema da tela aceita', () => {
     const body = respond([row(0, null), row(1, null)]);

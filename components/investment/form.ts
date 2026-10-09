@@ -155,7 +155,7 @@ const FIELD_LABELS: Record<string, string> = {
   name: 'Nome do plano',
   desiredIncome: 'Renda mensal desejada',
   portfolio: 'Patrimônio atual',
-  contribution: 'Aporte mensal atual',
+  contribution: 'Aporte mensal planejado',
   targetDate: 'Prazo desejado',
   inflation: 'Inflação esperada ao ano',
   tax: 'Imposto sobre o rendimento',
@@ -183,7 +183,7 @@ const FIELD_ORDER: readonly string[] = [
   ...SCENARIO_ORDER.flatMap((label) => [`${label}.return`, `${label}.withdrawal`]),
 ];
 
-/** Erros em ordem de tela, cada um com o rótulo do campo: "Aporte mensal atual: Informe...". */
+/** Erros em ordem de tela, cada um com o rótulo do campo: "Aporte mensal planejado: Informe...". */
 export function errorMessages(errors: FormErrors): string[] {
   const keys = Object.keys(errors).sort((a, b) => FIELD_ORDER.indexOf(a) - FIELD_ORDER.indexOf(b));
   return keys.map((key) => `${fieldLabel(key)}: ${errors[key] ?? ''}`);

@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { addCompetence, toCompetence } from '@/lib/date';
-import { parseBRL } from '@/lib/money';
+import { cents, parseBRL } from '@/lib/money';
 
 import {
   Badge,
@@ -16,6 +16,7 @@ import {
 } from '@/components/ui-kit';
 import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 
+import { changedCount, monthTotals, saveHint, totalLine } from './totals';
 import { buildSaveBody, type BudgetFieldValues } from './save-body';
 import { BAR_X_CLASS, barScaleStyle } from '@/components/dashboard/bar-scale';
 import { competenceLabel, competenceTitle, EXPECTED_LABEL, expectedUsageText, LIGHT_VIEW, remainingText, toFieldText } from './labels';
@@ -98,6 +99,8 @@ export function BudgetScreen({ today }: { today: string }) {
   }, [period, reloadKey]);
 
   const dirty = JSON.stringify(fields) !== JSON.stringify(baseline);
+  const changed = changedCount(fields, baseline);
+  const totals = data === null ? null : monthTotals(data.rows, data.warnBp);
 
   function setField(categoryId: string, text: string) {
     setFields((current) => ({ ...current, [categoryId]: text }));
@@ -266,6 +269,39 @@ export function BudgetScreen({ today }: { today: string }) {
 
         {data !== null && data.categories.length > 0 ? (
           <>
+            {totals !== null ? (
+              <section aria-labelledby="budget-total-heading" className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
+                <h2 id="budget-total-heading" className="text-sm font-medium text-muted-foreground">
+                  Total de {competenceLabel(period)}
+                </h2>
+                {totals.light === null ? (
+                  <p className="text-sm text-muted-foreground">Nenhuma categoria de despesa neste mês.</p>
+                ) : (
+                  <>
+                    <p className="flex flex-wrap items-baseline gap-x-2 text-lg font-semibold">
+                      {totalLine(totals)}
+                      <span className="text-sm font-normal text-muted-foreground">
+                        {LIGHT_VIEW[totals.light].label}{totals.usageBp === null ? '' : ` · ${formatBasisPoints(totals.usageBp)}`}
+                      </span>
+                    </p>
+                    <div
+                      className="h-2 overflow-hidden rounded-full bg-secondary"
+                      role="img"
+                      aria-label={expectedUsageText(totals.usageBp)}
+                    >
+                      <div
+                        className={`${BAR_X_CLASS} ${LIGHT_VIEW[totals.light].bar}`}
+                        style={barScaleStyle(totals.usageBp === null ? (totals.expectedCents > 0 ? 100 : 0) : Math.min(100, totals.usageBp / 100), 'x')}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {remainingText(cents(totals.remainingCents))}. Valores salvos.
+                    </p>
+                  </>
+                )}
+              </section>
+            ) : null}
+
             <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" disabled={busy} onClick={() => void suggest('previous')}>
@@ -276,6 +312,7 @@ export function BudgetScreen({ today }: { today: string }) {
                 </Button>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground" role="status">{saveHint(changed)}</span>
                 {dirty ? (
                   <Button
                     variant="ghost"
@@ -438,12 +475,12 @@ function CategoryRow({
             aria-label={`Orçamento de ${category.name}`}
             aria-invalid={invalid}
             disabled={disabled}
-            className={`pl-9 text-right tabular ${invalid ? 'border-red-500' : ''}`}
+            className={`pl-9 text-right num ${invalid ? 'border-destructive' : ''}`}
             onChange={(event) => onChange(event.target.value)}
           />
         </div>
         {invalid ? (
-          <span className="text-xs text-red-700" role="alert">
+          <span className="text-xs text-destructive" role="alert">
             Valor inválido.
           </span>
         ) : null}
@@ -473,7 +510,7 @@ function CategoryRow({
               <span className="text-muted-foreground">de</span>
               <Money value={row.plannedCents} sign="never" />
               {row.usageBp !== null ? (
-                <span className="tabular font-medium text-foreground">
+                <span className="num font-medium text-foreground">
                   · {formatBasisPoints(row.usageBp)}
                 </span>
               ) : null}
@@ -490,7 +527,7 @@ function CategoryRow({
                 />
               </div>
             ) : null}
-            <p className={`text-xs ${row.remainingCents < 0 ? 'text-red-700' : 'text-muted-foreground'}`}>
+            <p className={`text-xs ${row.remainingCents < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
               {remainingText(row.remainingCents)}
             </p>
           </div>
