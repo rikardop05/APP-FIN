@@ -85,7 +85,6 @@ describe('barras animam transform, não width/height', () => {
     'components/dashboard/spending-by-category.tsx',
     'components/cards/commitment/commitment-section.tsx',
     'components/budget/budget-screen.tsx',
-    'components/goals/goals-screen.tsx',
     'components/investment/positions/positions-screen.tsx',
   ];
   it.each(BARS)('%s: sem transition de width/height e sem style de width/height na barra', (file) => {

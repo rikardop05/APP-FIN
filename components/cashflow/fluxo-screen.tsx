@@ -51,7 +51,7 @@ export function FluxoScreen({ input, projection, composition, warnings, overdueU
   const shown = simulation?.projection ?? projection;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 sm:gap-6">
       {warnings.length > 0 ? (
         <Faixa tone="attention" aria-label="Avisos sobre os dados">
           {warnings.map((warning) => (

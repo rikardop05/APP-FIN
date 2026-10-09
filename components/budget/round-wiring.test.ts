@@ -22,6 +22,9 @@ describe('Orçamento', () => {
     expect(screen).toContain('/lancamentos/revisar');
     expect(screen).toContain('uncategorized=true');
   });
+  it('selo e letra só para atenção: a linha dentro do limite não leva selo', () => {
+    expect(screen).toContain('rowMarca(row.light)');
+  });
   it('a legenda da cor tem medida limitada', () => {
     expect(screen).toContain('max-w-[65ch]');
   });

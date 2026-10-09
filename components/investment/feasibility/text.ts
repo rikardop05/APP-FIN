@@ -86,6 +86,18 @@ export function surplusExcludedText(surplus: InvestmentSurplus): string | null {
   return `${excluded.length === 1 ? 'Ficou fora da média 1 mês' : `Ficaram fora da média ${String(excluded.length)} meses`}, por não terem receita lançada: ${list}.`;
 }
 
+/**
+ * UMA linha para "sem média": nenhum dos meses da janela teve receita lançada. Nomeia os meses quando a API
+ * os devolve, em vez de repetir "Sem histórico" e "ficaram fora" em duas frases.
+ */
+export function surplusNoHistoryText(surplus: InvestmentSurplus): string {
+  const excluded = surplus.excludedMonths ?? [];
+  if (excluded.length === 0) return 'Sem histórico: nenhum dos últimos 3 meses fechados teve receita lançada.';
+  const names = excluded.map((month) => competenceLabel(month));
+  const list = names.length === 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} e ${names[names.length - 1] ?? ''}`;
+  return `Sem histórico: nenhum dos últimos 3 meses fechados teve receita lançada (${list}).`;
+}
+
 /** Alerta do topo: só quando há sobra conhecida e NENHUM cenário cabe nela. */
 export function noScenarioFits(scenarios: readonly InvestmentScenario[], surplus: InvestmentSurplus): boolean {
   return (

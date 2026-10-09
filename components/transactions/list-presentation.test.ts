@@ -131,3 +131,28 @@ describe('groupByCompetence: agrupamento por mês com total', () => {
     expect(groupByCompetence([])).toEqual([]);
   });
 });
+
+import { commonMarks, rowMarkLabels } from './list-presentation';
+
+describe('selos que se repetem sobem para o cabeçalho do mês', () => {
+  const planned = { status: 'planned', categoryName: null };
+  const real = { status: 'posted', categoryName: 'Mercado' };
+
+  it('rowMarkLabels lê previsto e sem categoria', () => {
+    expect(rowMarkLabels(planned)).toEqual(['Previsto', 'Não categorizado']);
+    expect(rowMarkLabels(real)).toEqual([]);
+  });
+
+  it('sobe o que a MAIORIA das linhas tem, com a contagem', () => {
+    expect(commonMarks([planned, planned, planned])).toEqual([
+      { label: 'Previsto', count: 3 },
+      { label: 'Não categorizado', count: 3 },
+    ]);
+    expect(commonMarks([planned, planned, real])).toEqual([
+      { label: 'Previsto', count: 2 },
+      { label: 'Não categorizado', count: 2 },
+    ]);
+    expect(commonMarks([planned, real])).toEqual([]);
+    expect(commonMarks([planned])).toEqual([]);
+  });
+});

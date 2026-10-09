@@ -108,9 +108,11 @@ export function CardHolders({ card, members, onUpdated }: CardHoldersProps) {
   }
 
   return (
-    <details className="mt-5 border-t border-border pt-4" open={rows.length > 0}>
-      <summary className="cursor-pointer font-medium">
-        Finais e responsáveis <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+    <details className="mt-5 border-t border-border pt-2" open={rows.length > 0}>
+      <summary className="flex min-h-11 cursor-pointer items-center gap-2 font-medium">
+        <span>
+          Finais e responsáveis <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+        </span>
       </summary>
       <p className="mt-2 text-sm text-muted-foreground">{HOLDERS_NOTE}</p>
 

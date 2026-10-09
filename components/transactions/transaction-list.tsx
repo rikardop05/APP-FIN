@@ -16,10 +16,11 @@ import {
   Money,
   Parcela,
   Select,
+  Selo,
 } from '@/components/ui-kit';
 import type { Transaction, TransactionOptions } from './schemas';
 import { amountForInput, signedAmountCents } from './manual-sign';
-import { groupByCompetence, installmentLabel, stripInstallmentSuffix } from './list-presentation';
+import { commonMarks, groupByCompetence, installmentLabel, rowMarkLabels, stripInstallmentSuffix } from './list-presentation';
 
 const kindLabel: Record<Transaction['kind'], string> = {
   expense: 'Despesa',
@@ -251,10 +252,20 @@ export function TransactionList({
           </span>
         </p>
       </div>
-      {groups.map((group) => (
+      {groups.map((group) => {
+        const shared = commonMarks(group.rows);
+        return (
         <div key={group.competence} className="flex flex-col gap-1.5">
           <h3 className="flex flex-col gap-0.5 border-b-2 border-foreground pb-1 text-sm font-semibold sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-            <span className="first-letter:uppercase">{competenceLong(group.competence)}</span>
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="first-letter:uppercase">{competenceLong(group.competence)}</span>
+              {shared.map(({ label, count }) => (
+                <span key={label} className="inline-flex items-center gap-1">
+                  <Selo tone={label === 'Previsto' ? 'neutral' : 'attention'} label={label} />
+                  <span className="text-xs font-normal text-muted-foreground">{count} de {group.rows.length}</span>
+                </span>
+              ))}
+            </span>
             <span className="flex items-baseline gap-2 font-normal text-muted-foreground">
               {group.rows.length} {group.rows.length === 1 ? 'lançamento' : 'lançamentos'} · receitas − despesas{' '}
               <Money value={cents(group.totalCents)} className="font-semibold text-foreground" />
@@ -265,10 +276,10 @@ export function TransactionList({
               const title = rowTitle(row);
               const editing = editingId === row.id;
               const selected = selectedIds.includes(row.id);
-              const marcas = [
-                ...(row.status === 'planned' ? [{ label: 'Previsto', tone: 'neutral' as const }] : []),
-                ...(row.categoryName === null ? [{ label: 'Não categorizado', tone: 'attention' as const }] : []),
-              ];
+              // Selo na linha só quando ela difere do grupo (o que é comum a todas sobe para o cabeçalho do mês).
+              const marcas = rowMarkLabels(row)
+                .filter((label) => !shared.some((item) => item.label === label))
+                .map((label) => ({ label, tone: label === 'Previsto' ? ('neutral' as const) : ('attention' as const) }));
               return (
                 <li key={row.id}>
                   <Canhoto
@@ -326,7 +337,8 @@ export function TransactionList({
             })}
           </ul>
         </div>
-      ))}
+        );
+      })}
     </section>
   );
 }

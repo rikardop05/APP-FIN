@@ -1,5 +1,4 @@
 import Link from 'next/link';
-
 import type { Competence } from '@/lib/date';
 import type { BasisPoints, Cents } from '@/lib/money';
 import { PageHeader } from '@/components/ui-kit';
@@ -158,8 +157,8 @@ export function DashboardScreen({
         <SpendingByCategory items={spending} competence={competence} />
       </div>
 
-      <details className="group">
-        <summary className="min-h-11 cursor-pointer border border-border bg-card px-4 py-3 text-sm font-medium text-foreground sm:px-5">
+      <details>
+        <summary className="flex min-h-11 cursor-pointer items-center gap-2 border border-border bg-card px-4 py-3 text-sm font-medium text-foreground sm:px-5">
           Renda passiva em 20 anos
         </summary>
         <div className="mt-3">

@@ -58,3 +58,12 @@ describe('formatPercent: percentual sem casas decimais', () => {
     expect(LIGHT_VIEW.red.tone).toBe('danger');
   });
 });
+
+describe('selo da linha do Orçamento só para atenção', () => {
+  it('dentro do limite não leva selo; perto do limite e estourou levam', async () => {
+    const { rowMarca } = await import('./labels');
+    expect(rowMarca('green')).toBeNull();
+    expect(rowMarca('yellow')).toEqual({ label: 'Perto do limite', tone: 'attention' });
+    expect(rowMarca('red')).toEqual({ label: 'Estourou', tone: 'danger' });
+  });
+});

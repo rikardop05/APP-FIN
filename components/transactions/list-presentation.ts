@@ -115,3 +115,27 @@ export function groupByCompetence<T extends { competence: string; amountCents: n
   }
   return groups;
 }
+
+export type RowMarkLabel = 'Previsto' | 'Não categorizado';
+
+/** Os estados que a linha carrega como selo: previsto (ainda não lançado) e sem categoria. */
+export function rowMarkLabels(row: { status: string; categoryName: string | null }): RowMarkLabel[] {
+  const labels: RowMarkLabel[] = [];
+  if (row.status === 'planned') labels.push('Previsto');
+  if (row.categoryName === null) labels.push('Não categorizado');
+  return labels;
+}
+
+/**
+ * Selos que a MAIORIA das linhas do mês (mais da metade, com 2 ou mais linhas) tem: sobem para o cabeçalho do
+ * mês, com a contagem, em vez de se repetirem em cada canhoto. Na linha só fica selo quando ela difere do
+ * grupo: quem tem o selo da maioria o perde (o cabeçalho já o diz); quem não tem, segue sem selo.
+ */
+export function commonMarks(
+  rows: readonly { status: string; categoryName: string | null }[],
+): { label: RowMarkLabel; count: number }[] {
+  if (rows.length < 2) return [];
+  const counts = new Map<RowMarkLabel, number>();
+  for (const row of rows) for (const label of rowMarkLabels(row)) counts.set(label, (counts.get(label) ?? 0) + 1);
+  return [...counts.entries()].filter(([, count]) => count * 2 > rows.length).map(([label, count]) => ({ label, count }));
+}

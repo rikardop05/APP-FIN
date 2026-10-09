@@ -2,7 +2,7 @@ import { Faixa, Money } from '@/components/ui-kit';
 
 import type { InvestmentScenario, InvestmentSurplus } from '../schemas';
 
-import { feasibilityLine, noScenarioFits, surplusBasisText, surplusExcludedText } from './text';
+import { feasibilityLine, noScenarioFits, surplusBasisText, surplusExcludedText, surplusNoHistoryText } from './text';
 
 /**
  * T-304 (RF-INV-05): a ligação do planejador com a sobra real do orçamento. Só desenha o
@@ -21,9 +21,9 @@ export function SurplusSummary({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1 border-y border-foreground py-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Sobra média mensal</p>
+        <h3 className="text-base font-semibold text-foreground">Sobra média mensal</h3>
         {surplus.averageMonthlyCents === null ? (
-          <p className="text-sm text-muted-foreground">Sem histórico: nenhum dos últimos 3 meses fechados teve receita lançada.</p>
+          <p className="text-sm text-muted-foreground">{surplusNoHistoryText(surplus)}</p>
         ) : (
           <>
             <p className="text-2xl font-semibold text-foreground">
@@ -33,7 +33,7 @@ export function SurplusSummary({
             <p className="text-sm text-muted-foreground">Receitas menos despesas, {surplusBasisText(surplus)}.</p>
           </>
         )}
-        {excluded ? <p className="text-sm text-muted-foreground">{excluded}</p> : null}
+        {excluded && surplus.averageMonthlyCents !== null ? <p className="text-sm text-muted-foreground">{excluded}</p> : null}
       </div>
       {noScenarioFits(scenarios, surplus) ? (
         <Faixa tone="attention" role="alert">

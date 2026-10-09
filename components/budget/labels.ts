@@ -80,3 +80,14 @@ export function remainingText(remainingCents: Cents): string {
     ? `Passa ${formatBRL(cents(-remainingCents), { sign: 'never' })} do orçamento contando o previsto`
     : `Restam ${formatBRL(remainingCents, { sign: 'never' })} contando o previsto`;
 }
+
+/**
+ * Selo (com letra) da linha do Orçamento: SÓ para o que pede atenção, perto do limite e estourou.
+ * Dentro do limite é o estado normal e não leva selo (contrato: selo e letra só em linha que precisa de
+ * atenção). `null` = sem selo.
+ */
+export function rowMarca(light: 'green' | 'yellow' | 'red'): { label: string; tone: LightView['tone'] } | null {
+  if (light === 'green') return null;
+  const view = LIGHT_VIEW[light];
+  return { label: view.label, tone: view.tone };
+}

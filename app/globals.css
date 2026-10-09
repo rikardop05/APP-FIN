@@ -213,6 +213,38 @@
   }
 }
 
+@layer base {
+  /*
+   * Marcador do <details>: o traço do mundo (um V de 1,5px na cor do texto) no lugar do triângulo nativo.
+   * Fecha apontando para a direita; aberto, para baixo. Vale para todo <summary>; quem não quer o marcador
+   * (menu "Mais ações") usa a classe `sem-marcador`.
+   */
+  summary:not(.sem-marcador) {
+    list-style: none;
+  }
+
+  summary:not(.sem-marcador)::-webkit-details-marker {
+    display: none;
+  }
+
+  summary:not(.sem-marcador)::before {
+    content: '';
+    display: inline-block;
+    flex-shrink: 0;
+    width: 0.45em;
+    height: 0.45em;
+    margin-right: 0.6em;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateY(-0.1em) rotate(-45deg);
+    transition: transform 120ms ease-out;
+  }
+
+  details[open] > summary:not(.sem-marcador)::before {
+    transform: translateY(-0.2em) rotate(45deg);
+  }
+}
+
 @layer components {
   /*
    * PICOTE: o separador do carnê. Tracejado de 1px, 6px de traço e 4px de vão, na cor do campo.

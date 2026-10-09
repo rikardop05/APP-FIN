@@ -411,7 +411,7 @@ export function LancamentosScreen({ today }: { today: string }) {
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row [&>*]:w-full sm:[&>*]:w-auto">
             {/* Celular: um primário e o resto num menu. Desktop: as três ações à vista. */}
             <details className="relative sm:hidden">
-              <summary className="inline-flex min-h-11 cursor-pointer list-none items-center justify-center border border-border px-4 text-sm font-medium hover:bg-muted">Mais ações</summary>
+              <summary className="sem-marcador inline-flex min-h-11 cursor-pointer list-none items-center justify-center border border-border px-4 text-sm font-medium hover:bg-muted">Mais ações</summary>
               <div className="mt-1 flex flex-col gap-1 border border-border bg-card p-1">
                 <Link href="/lancamentos/revisar" className="inline-flex min-h-11 items-center px-3 text-sm font-medium hover:bg-muted">Revisar sem categoria</Link>
                 <button type="button" onClick={() => void openApplyAll()} disabled={busy} className="inline-flex min-h-11 items-center px-3 text-left text-sm font-medium hover:bg-muted disabled:opacity-50">Aplicar regras aos não categorizados</button>

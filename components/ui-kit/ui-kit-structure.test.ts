@@ -217,3 +217,37 @@ describe('rodada pós-crítica: Fluxo, Metas, Lançamentos, Importar', () => {
     expect(read('components/import/import-confirmation.tsx')).toMatch(/<Placar\s+position="sticky"\s+collapsible/);
   });
 });
+
+describe('fixes da revisão final: details, Metas, Fluxo, Investimentos, Lançamentos', () => {
+  it('o marcador do details é o traço do mundo, não o triângulo nativo', () => {
+    const css = read('app/globals.css');
+    expect(css).toContain('summary:not(.sem-marcador)::before');
+    expect(css).toContain('-webkit-details-marker');
+  });
+
+  it('Metas: toda meta é um carnê (canhoto destacado), sem barra de progresso e com lixeira discreta', () => {
+    const goals = read('components/goals/goals-screen.tsx');
+    expect(goals).not.toContain('ProgressBar');
+    expect(goals).toContain('Guardado até agora');
+    expect(goals).not.toMatch(/Trash2 className="[^"]*text-destructive/);
+  });
+
+  it('Fluxo: três tratamentos de mês e a coluna da direita rotulada uma vez', () => {
+    const month = read('components/cashflow/month-table.tsx');
+    expect(month).toContain('mudo');
+    expect(month).toContain('Saldo no fim do mês');
+    expect(read('components/cashflow/verdict.tsx')).toContain('<details');
+  });
+
+  it('Investimentos: o título da sobra não é kicker em caixa alta e há uma linha só sem histórico', () => {
+    const f = read('components/investment/feasibility/feasibility.tsx');
+    expect(f).not.toContain('uppercase tracking-wide');
+    expect(f).toContain('surplusNoHistoryText');
+  });
+
+  it('Lançamentos: selos comuns ao mês sobem para o cabeçalho do grupo', () => {
+    const list = read('components/transactions/transaction-list.tsx');
+    expect(list).toContain('commonMarks(group.rows)');
+    expect(list).toContain('!shared.some((item) => item.label === label)');
+  });
+});

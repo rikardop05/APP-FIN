@@ -37,12 +37,16 @@ export function MonthTable({ months, composition, adjustments }: MonthTableProps
   const zero = cents(0);
   return (
     <>
+      <p className="text-right text-xs font-medium text-muted-foreground">Saldo no fim do mês</p>
       <ol className="flex flex-col gap-1.5" aria-label="Projeção de caixa mês a mês">
         {months.map((month, position) => {
           const part = composition[month.competence];
           const outflows = (month.expenseCents + month.installmentsCents + month.statementsCents + month.contributionsCents) as Cents;
           // Preso = mês futuro que já carrega compromisso de cartão; o mês corrente é o canhoto atual.
           const preso = position > 0 && (month.statementsCents !== 0 || month.installmentsCents !== 0);
+          // Três tratamentos: atual (sólido), futuro comprometido (preso, tracejado) e futuro sem nada comprometido
+          // (mudo: sem caixa nem borda, que é o que só o canhoto quitado/atual tem).
+          const mudo = position > 0 && !preso;
           return (
             <Canhoto
               as="li"
@@ -50,6 +54,7 @@ export function MonthTable({ months, composition, adjustments }: MonthTableProps
               ariaLabel={`${competenceLong(month.competence)}: fechamento`}
               stub={<MonthStub competence={month.competence} />}
               preso={preso}
+              className={mudo ? 'border-transparent bg-transparent text-muted-foreground' : undefined}
               destaque={month.negative ? 'danger' : undefined}
               marcas={month.negative ? [{ label: 'Saldo negativo', tone: 'danger' }] : undefined}
               valor={<Money value={month.closingCents} className="font-semibold" />}
@@ -109,7 +114,7 @@ export function MonthTable({ months, composition, adjustments }: MonthTableProps
         </p>
         <p className="flex flex-wrap items-center gap-2">
           <span className="inline-block h-4 w-8 border border-dashed border-input" aria-hidden="true" />
-          <span>canhoto tracejado: mês futuro que já carrega fatura ou parcela de cartão.</span>
+          <span>canhoto tracejado: mês futuro que já carrega fatura ou parcela de cartão. Sem caixa: mês futuro sem nada comprometido.</span>
         </p>
         <p>
           &ldquo;Entradas&rdquo; e &ldquo;Saídas&rdquo; mostram o mês; saída maior que entrada não

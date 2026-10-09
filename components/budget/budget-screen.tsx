@@ -20,7 +20,7 @@ import {
 import { changedCount, monthTotals, saveHint, totalLine } from './totals';
 import { buildSaveBody, type BudgetFieldValues } from './save-body';
 import { BAR_X_CLASS, barScaleStyle } from '@/components/dashboard/bar-scale';
-import { competenceLabel, competenceTitle, EXPECTED_LABEL, expectedUsageText, formatPercent, LIGHT_VIEW, remainingText, toFieldText } from './labels';
+import { competenceLabel, competenceTitle, EXPECTED_LABEL, expectedUsageText, formatPercent, LIGHT_VIEW, remainingText, rowMarca, toFieldText } from './labels';
 import {
   summarizeUncategorized,
   uncategorizedResponseSchema,
@@ -478,7 +478,6 @@ function CategoryRow({
   // O semáforo é do valor SALVO: se o campo diverge, a cor não corresponde ao digitado.
   const typed = text.trim() === '' ? null : parseBRL(text);
   const stale = row !== undefined && typed !== row.plannedCents;
-  const view = row === undefined || stale ? null : LIGHT_VIEW[row.light];
   const inputId = `orcamento-${category.id}`;
   // O talão é UM número: o uso do orçamento, sem casas. Sem orçamento salvo, traço.
   const usage = row !== undefined && !stale && row.usageBp !== null ? formatPercent(row.usageBp) : '—';
@@ -487,7 +486,8 @@ function CategoryRow({
     <Canhoto
       as="div"
       stub={usage}
-      marca={view === null ? undefined : { label: view.label, tone: view.tone }}
+      // Selo e letra só para o que pede atenção (perto do limite, estourou); dentro do limite não leva selo.
+      marca={row === undefined || stale ? undefined : (rowMarca(row.light) ?? undefined)}
       valor={
         <div className="flex w-full flex-col gap-1 sm:w-44">
           <div className="relative">

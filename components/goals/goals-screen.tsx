@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PiggyBank, Pencil, Plus, Target, Trash2 } from 'lucide-react';
 
-import { BAR_X_CLASS, barScaleStyle } from '@/components/dashboard/bar-scale';
-import { Badge, Button, Canhoto, Carimbo, DateText, EmptyState, Money, PageHeader, Parcela } from '@/components/ui-kit';
+import { Badge, Button, Canhoto, DateText, EmptyState, Money, PageHeader, Parcela } from '@/components/ui-kit';
 import { competenceShort } from '@/components/cashflow/labels';
 import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 import { basisPoints } from '@/lib/money';
@@ -36,22 +35,6 @@ async function readGoals(response: Response): Promise<GoalsResponse> {
   const parsed = goalsResponseSchema.safeParse(body);
   if (!parsed.success) throw new Error('A resposta do servidor está inválida.');
   return parsed.data;
-}
-
-function ProgressBar({ bp, label }: { bp: number; label: string }) {
-  const percent = Math.min(100, Math.max(0, bp / 100));
-  return (
-    <div
-      role="progressbar"
-      aria-label={label}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(percent)}
-      className="h-2.5 w-full overflow-hidden bg-secondary"
-    >
-      <div className={`${BAR_X_CLASS} bg-primary`} style={barScaleStyle(percent, 'x')} />
-    </div>
-  );
 }
 
 function DeadlineLine({ goal }: { goal: GoalView }) {
@@ -88,7 +71,7 @@ function DeadlineLine({ goal }: { goal: GoalView }) {
   }
 }
 
-/** Os aportes que faltam, como canhotos presos (tracejados): o carnê da meta. */
+/** Os aportes que faltam, como canhotos presos (tracejados): só quando há prazo. */
 function GoalCarne({ goal }: { goal: GoalView }) {
   const summary = deadlineSummary(goal);
   if (summary.kind !== 'monthly' || goal.targetDate === null) return null;
@@ -110,13 +93,9 @@ function GoalCarne({ goal }: { goal: GoalView }) {
     </Canhoto>
   );
   return (
-    <div className="mt-4 flex flex-col gap-2">
-      <p className="flex flex-wrap items-center gap-2 text-sm">
-        <Carimbo tone="ok">Guardado</Carimbo>
-        <Money value={goal.currentCents} sign="never" className="font-semibold" />
-        <span className="text-muted-foreground">
-          · faltam {list.length} {list.length === 1 ? 'aporte' : 'aportes'}, ainda presos:
-        </span>
+    <div className="flex flex-col gap-1.5">
+      <p className="text-sm text-muted-foreground">
+        Faltam {list.length} {list.length === 1 ? 'aporte' : 'aportes'}, ainda presos:
       </p>
       <ol className="flex flex-col gap-1" aria-label={`Aportes que faltam para ${goal.name}`}>
         {visible.map(row)}
@@ -133,10 +112,15 @@ function GoalCarne({ goal }: { goal: GoalView }) {
   );
 }
 
+/**
+ * A meta é um carnê, com ou sem prazo. O que já foi guardado é um canhoto DESTACADO (sólido): o talão traz o
+ * percentual do alvo (ou "Guardado", sem alvo) e o valor é "atual de alvo". Os aportes que faltam são
+ * canhotos presos numerados, e só existem quando há prazo.
+ */
 function GoalCard({ goal, onEdit, onDelete }: { goal: GoalView; onEdit: () => void; onDelete: () => void }) {
   const progress = goal.progress;
   return (
-    <article className="border border-border bg-card p-4 sm:p-5">
+    <article className="flex flex-col gap-2 border-t-2 border-foreground pt-3" aria-label={`Meta ${goal.name}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -154,23 +138,31 @@ function GoalCard({ goal, onEdit, onDelete }: { goal: GoalView; onEdit: () => vo
             <Pencil className="h-4 w-4" aria-hidden="true" />
           </Button>
           <Button variant="ghost" size="sm" aria-label={`Excluir ${goal.name}`} onClick={onDelete}>
-            <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
       </div>
 
-      {progress !== null && goal.targetCents !== null ? (
-        <div className="mt-4 flex flex-col gap-2">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
-            <span><Money value={goal.currentCents} sign="never" /> de <Money value={goal.targetCents} sign="never" /></span>
-            <span className="font-medium">{formatBasisPoints(basisPoints(progress.progressBp))}</span>
-          </div>
-          <ProgressBar bp={progress.progressBp} label={`Progresso de ${goal.name}`} />
-        </div>
-      ) : null}
-      <div className="mt-3">
+      <Canhoto
+        as="div"
+        stub={
+          progress !== null && goal.targetCents !== null
+            ? formatBasisPoints(basisPoints(progress.progressBp))
+            : 'Guardado'
+        }
+        valor={
+          goal.targetCents !== null ? (
+            <span className="text-sm">
+              <Money value={goal.currentCents} sign="never" /> de <Money value={goal.targetCents} sign="never" />
+            </span>
+          ) : (
+            <Money value={goal.currentCents} sign="never" />
+          )
+        }
+      >
+        <span className="text-sm font-medium text-foreground">Guardado até agora</span>
         <DeadlineLine goal={goal} />
-      </div>
+      </Canhoto>
       <GoalCarne goal={goal} />
     </article>
   );

@@ -42,7 +42,7 @@ export function Verdict({ projection, baseProjection, overdueUnpaidCents = cents
     <section
       aria-labelledby="fluxo-verdict-heading"
       className={cn(
-        'flex flex-col gap-3 border p-4 sm:p-5',
+        'flex flex-col gap-2 border p-3 sm:gap-3 sm:p-5',
         first === null ? 'border-border bg-card' : 'border-destructive/50 bg-destructive-soft',
       )}
     >
@@ -101,13 +101,17 @@ export function Verdict({ projection, baseProjection, overdueUnpaidCents = cents
         </div>
       </div>
 
-      <p className="max-w-prose border-t border-border pt-3 text-sm text-muted-foreground">
-        <strong className="font-medium text-foreground">Esta projeção é otimista por construção.</strong>{' '}
-        Ela só enxerga o que já está cadastrado: receitas, despesas fixas, parcelas e faturas.
-        Gastos variáveis dos meses futuros — mercado, lazer, combustível — não entram. Então
-        &ldquo;não fica negativo&rdquo; quer dizer &ldquo;não fica negativo com os compromissos
-        conhecidos&rdquo;, e o saldo real tende a ficar abaixo da curva.
-      </p>
+      <details className="border-t border-border pt-2 text-sm text-muted-foreground">
+        <summary className="inline-flex min-h-11 cursor-pointer items-center font-medium text-foreground sm:min-h-0">
+          Esta projeção é otimista por construção.
+        </summary>
+        <p className="mt-1 max-w-prose">
+          Ela só enxerga o que já está cadastrado: receitas, despesas fixas, parcelas e faturas.
+          Gastos variáveis dos meses futuros — mercado, lazer, combustível — não entram. Então
+          &ldquo;não fica negativo&rdquo; quer dizer &ldquo;não fica negativo com os compromissos
+          conhecidos&rdquo;, e o saldo real tende a ficar abaixo da curva.
+        </p>
+      </details>
     </section>
   );
 }

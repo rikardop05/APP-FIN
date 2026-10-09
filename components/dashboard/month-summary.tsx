@@ -54,7 +54,7 @@ export function MonthSummary({
       </dl>
 
       <details className="border-t border-border">
-        <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm text-muted-foreground sm:px-5">
+        <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-4 py-3 text-sm text-muted-foreground sm:px-5">
           Mais indicadores
         </summary>
         <dl className="grid grid-cols-1 divide-y divide-border border-t border-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">

@@ -106,3 +106,16 @@ describe('surplusExcludedText: a tela diz quais meses ficaram fora da média', (
     expect(two).toMatch(/ e /);
   });
 });
+
+describe('surplusNoHistoryText: uma linha só quando não há média', () => {
+  it('sem lista de meses, a frase simples', async () => {
+    const { surplusNoHistoryText } = await import('./text');
+    expect(surplusNoHistoryText(surplus(null))).toBe('Sem histórico: nenhum dos últimos 3 meses fechados teve receita lançada.');
+  });
+
+  it('com os meses fora, nomeia-os na mesma linha', async () => {
+    const { surplusNoHistoryText } = await import('./text');
+    const text = surplusNoHistoryText({ ...surplus(null), excludedMonths: ['2026-07', '2026-08'] });
+    expect(text).toMatch(/^Sem histórico: nenhum dos últimos 3 meses fechados teve receita lançada \(.+ e .+\)\.$/);
+  });
+});
