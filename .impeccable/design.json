@@ -1,0 +1,540 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-09T12:23:12.247Z",
+  "title": "Design System: APPFIN",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Papel de Carnê",
+        "canonical": "hsl(156 22% 95%)",
+        "cssVar": "--background",
+        "darkCanonical": "hsl(180 30% 7%)",
+        "tonalRamp": [
+          "hsl(156 22% 15%)",
+          "hsl(156 22% 26%)",
+          "hsl(156 22% 38%)",
+          "hsl(156 22% 49%)",
+          "hsl(156 22% 61%)",
+          "hsl(156 22% 72%)",
+          "hsl(156 22% 84%)",
+          "hsl(156 22% 95%)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Tinta",
+        "canonical": "hsl(180 47% 11%)",
+        "cssVar": "--foreground",
+        "darkCanonical": "hsl(156 20% 92%)",
+        "tonalRamp": [
+          "hsl(180 47% 15%)",
+          "hsl(180 47% 26%)",
+          "hsl(180 47% 38%)",
+          "hsl(180 47% 49%)",
+          "hsl(180 47% 61%)",
+          "hsl(180 47% 72%)",
+          "hsl(180 47% 84%)",
+          "hsl(180 47% 95%)"
+        ]
+      },
+      "stub-paper": {
+        "role": "neutral",
+        "displayName": "Papel do Canhoto",
+        "canonical": "hsl(156 30% 98%)",
+        "cssVar": "--card",
+        "darkCanonical": "hsl(180 26% 10%)",
+        "tonalRamp": [
+          "hsl(156 30% 15%)",
+          "hsl(156 30% 26%)",
+          "hsl(156 30% 38%)",
+          "hsl(156 30% 49%)",
+          "hsl(156 30% 61%)",
+          "hsl(156 30% 72%)",
+          "hsl(156 30% 84%)",
+          "hsl(156 30% 95%)"
+        ]
+      },
+      "carne-green": {
+        "role": "primary",
+        "displayName": "Verde-Carnê",
+        "canonical": "hsl(168 52% 32%)",
+        "cssVar": "--primary",
+        "darkCanonical": "hsl(166 45% 52%)",
+        "tonalRamp": [
+          "hsl(168 52% 15%)",
+          "hsl(168 52% 26%)",
+          "hsl(168 52% 38%)",
+          "hsl(168 52% 49%)",
+          "hsl(168 52% 61%)",
+          "hsl(168 52% 72%)",
+          "hsl(168 52% 84%)",
+          "hsl(168 52% 95%)"
+        ]
+      },
+      "band": {
+        "role": "neutral",
+        "displayName": "Faixa",
+        "canonical": "hsl(156 16% 90%)",
+        "cssVar": "--secondary",
+        "darkCanonical": "hsl(180 18% 14%)",
+        "tonalRamp": [
+          "hsl(156 16% 15%)",
+          "hsl(156 16% 26%)",
+          "hsl(156 16% 38%)",
+          "hsl(156 16% 49%)",
+          "hsl(156 16% 61%)",
+          "hsl(156 16% 72%)",
+          "hsl(156 16% 84%)",
+          "hsl(156 16% 95%)"
+        ]
+      },
+      "band-deep": {
+        "role": "neutral",
+        "displayName": "Faixa Funda",
+        "canonical": "hsl(156 18% 87%)",
+        "cssVar": "--accent",
+        "darkCanonical": "hsl(180 18% 17%)",
+        "tonalRamp": [
+          "hsl(156 18% 15%)",
+          "hsl(156 18% 26%)",
+          "hsl(156 18% 38%)",
+          "hsl(156 18% 49%)",
+          "hsl(156 18% 61%)",
+          "hsl(156 18% 72%)",
+          "hsl(156 18% 84%)",
+          "hsl(156 18% 95%)"
+        ]
+      },
+      "faded-ink": {
+        "role": "neutral",
+        "displayName": "Tinta Atenuada",
+        "canonical": "hsl(180 15% 34%)",
+        "cssVar": "--muted-foreground",
+        "darkCanonical": "hsl(160 12% 66%)",
+        "tonalRamp": [
+          "hsl(180 15% 15%)",
+          "hsl(180 15% 26%)",
+          "hsl(180 15% 38%)",
+          "hsl(180 15% 49%)",
+          "hsl(180 15% 61%)",
+          "hsl(180 15% 72%)",
+          "hsl(180 15% 84%)",
+          "hsl(180 15% 95%)"
+        ]
+      },
+      "stamp-red": {
+        "role": "state",
+        "displayName": "Vermelho de Carimbo",
+        "canonical": "hsl(4 65% 46%)",
+        "cssVar": "--destructive",
+        "darkCanonical": "hsl(4 72% 62%)",
+        "tonalRamp": [
+          "hsl(4 65% 15%)",
+          "hsl(4 65% 26%)",
+          "hsl(4 65% 38%)",
+          "hsl(4 65% 49%)",
+          "hsl(4 65% 61%)",
+          "hsl(4 65% 72%)",
+          "hsl(4 65% 84%)",
+          "hsl(4 65% 95%)"
+        ]
+      },
+      "stamp-red-soft": {
+        "role": "state",
+        "displayName": "Carimbo Suave",
+        "canonical": "hsl(4 60% 94%)",
+        "cssVar": "--destructive-soft",
+        "darkCanonical": "hsl(4 40% 16%)",
+        "tonalRamp": [
+          "hsl(4 60% 15%)",
+          "hsl(4 60% 26%)",
+          "hsl(4 60% 38%)",
+          "hsl(4 60% 49%)",
+          "hsl(4 60% 61%)",
+          "hsl(4 60% 72%)",
+          "hsl(4 60% 84%)",
+          "hsl(4 60% 95%)"
+        ]
+      },
+      "confere-green": {
+        "role": "state",
+        "displayName": "Verde Confere",
+        "canonical": "hsl(158 55% 24%)",
+        "cssVar": "--success",
+        "darkCanonical": "hsl(152 45% 58%)",
+        "tonalRamp": [
+          "hsl(158 55% 15%)",
+          "hsl(158 55% 26%)",
+          "hsl(158 55% 38%)",
+          "hsl(158 55% 49%)",
+          "hsl(158 55% 61%)",
+          "hsl(158 55% 72%)",
+          "hsl(158 55% 84%)",
+          "hsl(158 55% 95%)"
+        ]
+      },
+      "confere-green-soft": {
+        "role": "state",
+        "displayName": "Confere Suave",
+        "canonical": "hsl(156 40% 90%)",
+        "cssVar": "--success-soft",
+        "darkCanonical": "hsl(160 35% 14%)",
+        "tonalRamp": [
+          "hsl(156 40% 15%)",
+          "hsl(156 40% 26%)",
+          "hsl(156 40% 38%)",
+          "hsl(156 40% 49%)",
+          "hsl(156 40% 61%)",
+          "hsl(156 40% 72%)",
+          "hsl(156 40% 84%)",
+          "hsl(156 40% 95%)"
+        ]
+      },
+      "caution-amber": {
+        "role": "state",
+        "displayName": "Âmbar de Conferência",
+        "canonical": "hsl(34 88% 26%)",
+        "cssVar": "--warning",
+        "darkCanonical": "hsl(40 80% 62%)",
+        "tonalRamp": [
+          "hsl(34 88% 15%)",
+          "hsl(34 88% 26%)",
+          "hsl(34 88% 38%)",
+          "hsl(34 88% 49%)",
+          "hsl(34 88% 61%)",
+          "hsl(34 88% 72%)",
+          "hsl(34 88% 84%)",
+          "hsl(34 88% 95%)"
+        ]
+      },
+      "caution-amber-soft": {
+        "role": "state",
+        "displayName": "Âmbar Suave",
+        "canonical": "hsl(42 92% 90%)",
+        "cssVar": "--warning-soft",
+        "darkCanonical": "hsl(38 40% 15%)",
+        "tonalRamp": [
+          "hsl(42 92% 15%)",
+          "hsl(42 92% 26%)",
+          "hsl(42 92% 38%)",
+          "hsl(42 92% 49%)",
+          "hsl(42 92% 61%)",
+          "hsl(42 92% 72%)",
+          "hsl(42 92% 84%)",
+          "hsl(42 92% 95%)"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Régua",
+        "canonical": "hsl(160 12% 76%)",
+        "cssVar": "--border",
+        "darkCanonical": "hsl(180 14% 22%)",
+        "tonalRamp": [
+          "hsl(160 12% 15%)",
+          "hsl(160 12% 26%)",
+          "hsl(160 12% 38%)",
+          "hsl(160 12% 49%)",
+          "hsl(160 12% 61%)",
+          "hsl(160 12% 72%)",
+          "hsl(160 12% 84%)",
+          "hsl(160 12% 95%)"
+        ]
+      },
+      "field-edge": {
+        "role": "neutral",
+        "displayName": "Borda de Campo",
+        "canonical": "hsl(165 10% 52%)",
+        "cssVar": "--input",
+        "darkCanonical": "hsl(175 12% 42%)",
+        "tonalRamp": [
+          "hsl(165 10% 15%)",
+          "hsl(165 10% 26%)",
+          "hsl(165 10% 38%)",
+          "hsl(165 10% 49%)",
+          "hsl(165 10% 61%)",
+          "hsl(165 10% 72%)",
+          "hsl(165 10% 84%)",
+          "hsl(165 10% 95%)"
+        ]
+      },
+      "spine-muted": {
+        "role": "neutral",
+        "displayName": "Lombada Atenuada",
+        "canonical": "hsl(160 14% 72%)",
+        "cssVar": "--sidebar-muted",
+        "darkCanonical": "hsl(160 12% 62%)",
+        "tonalRamp": [
+          "hsl(160 14% 15%)",
+          "hsl(160 14% 26%)",
+          "hsl(160 14% 38%)",
+          "hsl(160 14% 49%)",
+          "hsl(160 14% 61%)",
+          "hsl(160 14% 72%)",
+          "hsl(160 14% 84%)",
+          "hsl(160 14% 95%)"
+        ]
+      },
+      "spine-rule": {
+        "role": "neutral",
+        "displayName": "Régua da Lombada",
+        "canonical": "hsl(180 25% 24%)",
+        "cssVar": "--sidebar-border",
+        "darkCanonical": "hsl(180 18% 16%)",
+        "tonalRamp": [
+          "hsl(180 25% 15%)",
+          "hsl(180 25% 26%)",
+          "hsl(180 25% 38%)",
+          "hsl(180 25% 49%)",
+          "hsl(180 25% 61%)",
+          "hsl(180 25% 72%)",
+          "hsl(180 25% 84%)",
+          "hsl(180 25% 95%)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Número-manchete do Painel. Raro."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Título de página (PageHeader) e nome do banco na capa do lote."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Título de seção e de coluna lateral; 18px e 22px nas variações maiores."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Texto de trabalho de toda tela; campos em 16px no celular."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Rótulo de dado, selo, badge, aba inferior; piso de 12px."
+      },
+      "numeral": {
+        "displayName": "Numeral",
+        "purpose": "Todo valor e numeração de parcela (.num, Money, Parcela); 600 nos totais do placar."
+      }
+    },
+    "shadows": [
+      {
+        "name": "regua-inferior",
+        "value": "0 1px 0 hsl(var(--border))",
+        "purpose": "Régua de 1px desenhada como sombra (shadow-md)."
+      },
+      {
+        "name": "folha-solta",
+        "value": "0 0 0 1px hsl(var(--foreground) / 0.18), 0 10px 24px -10px hsl(var(--foreground) / 0.35)",
+        "purpose": "Só diálogo modal e painel flutuante (shadow-lg)."
+      }
+    ],
+    "motion": [
+      {
+        "name": "destaca",
+        "value": "420ms ease-out; translateX 0, -10px, 0; delay i*18ms",
+        "purpose": "Assinatura: canhoto e picote se soltam ao confirmar o lote."
+      },
+      {
+        "name": "assenta",
+        "value": "280ms ease-in; opacity 1 to 0.55, translateY 3px; delay 420ms + i*18ms",
+        "purpose": "Assinatura: a linha assenta no histórico."
+      },
+      {
+        "name": "accordion",
+        "value": "0.2s ease-out",
+        "purpose": "Abrir e fechar acordeões."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation and transition 0.01ms; destacar desligado",
+        "purpose": "prefers-reduced-motion: nada se move e ninguém espera."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      },
+      {
+        "name": "2xl",
+        "value": "1400px"
+      }
+    ],
+    "layout": {
+      "mainMaxWidth": "1152px",
+      "sidebarWidth": "240px",
+      "bottomNavHeight": "calc(4rem + env(safe-area-inset-bottom))",
+      "touchTarget": "44px mobile, 36px from sm",
+      "darkMode": "prefers-color-scheme (automatic, no class)"
+    },
+    "patterns": [
+      {
+        "name": "picote",
+        "value": "1px; repeating-linear-gradient(hsl(var(--input)) 0 6px, transparent 6px 10px)",
+        "purpose": "Separador do carnê, horizontal e vertical."
+      },
+      {
+        "name": "guilhoche",
+        "value": "SVG 56x28, stroke 0.8px, 22% on paper / 10% on ink / 12% dark",
+        "purpose": "Fundo de segurança só em áreas de identidade."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ação principal (Confirmar importação, Salvar). Verde-carnê, cantos retos.",
+      "html": "<button class=\"ds-btn-primary\">Confirmar importação</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 16px;border:1px solid transparent;border-radius:0;font-family:var(--font-ui),system-ui,sans-serif;font-size:14px;line-height:20px;font-weight:500;cursor:pointer;transition:color .15s,background-color .15s,border-color .15s;background:hsl(var(--primary));color:hsl(var(--primary-foreground));border-color:hsl(var(--primary));}.ds-btn-primary:hover{background:hsl(var(--primary) / 0.9);}.ds-btn-primary:focus-visible{outline:none;box-shadow:0 0 0 2px hsl(var(--background)),0 0 0 4px hsl(var(--ring));}"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Ação secundária sobre papel: borda de campo, papel do canhoto.",
+      "html": "<button class=\"ds-btn-outline\">Só o que precisa de atenção</button>",
+      "css": ".ds-btn-outline{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 16px;border:1px solid transparent;border-radius:0;font-family:var(--font-ui),system-ui,sans-serif;font-size:14px;line-height:20px;font-weight:500;cursor:pointer;transition:color .15s,background-color .15s,border-color .15s;background:hsl(var(--card));color:hsl(var(--foreground));border-color:hsl(var(--input));}.ds-btn-outline:hover{background:hsl(var(--secondary) / 0.6);}.ds-btn-outline:focus-visible{outline:none;box-shadow:0 0 0 2px hsl(var(--background)),0 0 0 4px hsl(var(--ring));}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Ação terciária, sem fundo; tinta atenuada.",
+      "html": "<button class=\"ds-btn-ghost\">Desfazer lote</button>",
+      "css": ".ds-btn-ghost{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 16px;border:1px solid transparent;border-radius:0;font-family:var(--font-ui),system-ui,sans-serif;font-size:14px;line-height:20px;font-weight:500;cursor:pointer;transition:color .15s,background-color .15s,border-color .15s;background:transparent;color:hsl(var(--muted-foreground));}.ds-btn-ghost:hover{background:hsl(var(--secondary) / 0.6);color:hsl(var(--foreground));}.ds-btn-ghost:focus-visible{outline:none;box-shadow:0 0 0 2px hsl(var(--background)),0 0 0 4px hsl(var(--ring));}"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Campo: papel do canhoto, borda de campo, anel verde no foco, borda vermelha em aria-invalid.",
+      "html": "<input class=\"ds-input\" placeholder=\"Descrição\" />",
+      "css": ".ds-input{height:36px;width:100%;padding:0 12px;border:1px solid hsl(var(--input));border-radius:0;background:hsl(var(--card));color:hsl(var(--foreground));font-family:var(--font-ui),system-ui,sans-serif;font-size:14px;outline:none;}.ds-input::placeholder{color:hsl(var(--muted-foreground));}.ds-input:focus-visible{box-shadow:0 0 0 2px hsl(var(--ring));}.ds-input[aria-invalid=true]{border-color:hsl(var(--destructive));}"
+    },
+    {
+      "name": "Selo",
+      "kind": "chip",
+      "refersTo": "selo-attention",
+      "description": "Estado da linha: letra no quadradinho cheio mais o texto por extenso. A cor nunca é a única pista.",
+      "html": "<span class=\"ds-selo ds-selo-att\"><span class=\"ds-selo-box\">D</span><span class=\"ds-selo-txt\">Duplicada</span></span> <span class=\"ds-selo ds-selo-dng\"><span class=\"ds-selo-box\">I</span><span class=\"ds-selo-txt\">Inválida</span></span>",
+      "css": ".ds-selo{display:inline-flex;align-items:stretch;border:1px solid;font-family:var(--font-ui),system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:500;}.ds-selo-box{display:flex;width:20px;align-items:center;justify-content:center;font-weight:600;}.ds-selo-txt{padding:2px 6px;}.ds-selo-att{border-color:hsl(var(--warning));background:hsl(var(--warning-soft));color:hsl(var(--warning));}.ds-selo-att .ds-selo-box{background:hsl(var(--warning));color:hsl(var(--warning-foreground));}.ds-selo-dng{border-color:hsl(var(--destructive));background:hsl(var(--destructive-soft));color:hsl(var(--destructive));}.ds-selo-dng .ds-selo-box{background:hsl(var(--destructive));color:hsl(var(--destructive-foreground));}"
+    },
+    {
+      "name": "Carimbo",
+      "kind": "custom",
+      "description": "Veredito do lote: moldura dupla, caixa alta, girado -3 graus. Verde para CONFERE/PAGO, vermelho para DIVERGE.",
+      "html": "<span class=\"ds-carimbo ds-carimbo-ok\">Confere</span> <span class=\"ds-carimbo ds-carimbo-dng\">Diverge</span>",
+      "css": ".ds-carimbo{display:inline-block;transform:rotate(-3deg);border:2px solid;outline:1px solid;outline-offset:2px;padding:2px 8px;margin:6px;font-family:var(--font-ui),system-ui,sans-serif;font-size:12px;line-height:16px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;}.ds-carimbo-ok{color:hsl(var(--success));border-color:hsl(var(--success));outline-color:hsl(var(--success));}.ds-carimbo-dng{color:hsl(var(--destructive));border-color:hsl(var(--destructive));outline-color:hsl(var(--destructive));}"
+    },
+    {
+      "name": "Canhoto",
+      "kind": "card",
+      "refersTo": "canhoto",
+      "description": "Linha de lançamento: canhoto numérico, picote vertical, corpo, valor. A versão presa (parcela futura) é tracejada e atenuada.",
+      "html": "<div class=\"ds-canhoto\"><div class=\"ds-canhoto-stub ds-num\">03/10</div><div class=\"ds-picote-v\"></div><div class=\"ds-canhoto-body\">PADARIA X</div><div class=\"ds-canhoto-val ds-num\">-R$ 42,90</div></div><div class=\"ds-canhoto ds-canhoto-preso\"><div class=\"ds-canhoto-stub ds-num\">04/10</div><div class=\"ds-picote-v\"></div><div class=\"ds-canhoto-body\">PADARIA X</div><div class=\"ds-canhoto-val ds-num\">R$ 42,90</div></div>",
+      "css": ".ds-canhoto{display:grid;grid-template-columns:68px auto minmax(0,1fr) auto;min-height:44px;align-items:stretch;margin-bottom:4px;border:1px solid hsl(var(--border));background:hsl(var(--card));color:hsl(var(--foreground));font-family:var(--font-ui),system-ui,sans-serif;font-size:14px;}.ds-canhoto-preso{border-style:dashed;border-color:hsl(var(--input));color:hsl(var(--muted-foreground));}.ds-canhoto-stub{display:flex;align-items:center;justify-content:center;padding:8px;}.ds-canhoto-body{display:flex;align-items:center;padding:8px 12px;}.ds-canhoto-val{display:flex;align-items:center;padding:0 12px;font-size:16px;}.ds-num{font-family:var(--font-numeral),'Arial Narrow','Roboto Condensed',sans-serif;font-variant-numeric:tabular-nums lining-nums;font-weight:500;letter-spacing:.01em;}.ds-picote-v{width:1px;align-self:stretch;background-image:repeating-linear-gradient(180deg,hsl(var(--input)) 0 6px,transparent 6px 10px);}"
+    },
+    {
+      "name": "Placar",
+      "kind": "custom",
+      "refersTo": "placar",
+      "description": "Rodapé de totais com régua de tinta de 2px; título sobre guilhochê; a Diferença em verde quando zera, vermelho quando diverge.",
+      "html": "<section class=\"ds-placar\"><div class=\"ds-placar-id\"><span>Lote</span></div><dl class=\"ds-placar-dl\"><div><dt>Total da fatura</dt><dd class=\"ds-num\">R$ 2.418,30</dd></div><div><dt>Incluído</dt><dd class=\"ds-num\">R$ 2.418,30</dd></div><div><dt>Diferença</dt><dd class=\"ds-num ds-ok\">R$ 0,00</dd></div></dl></section>",
+      "css": ".ds-placar{display:flex;border-top:2px solid hsl(var(--foreground));background:hsl(var(--card));font-family:var(--font-ui),system-ui,sans-serif;}.ds-placar-id{display:flex;align-items:center;width:112px;padding:8px 16px;background-color:hsl(var(--secondary));background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='28' viewBox='0 0 56 28'%3E%3Cg fill='none' stroke='%232E8C7A' stroke-opacity='.22' stroke-width='.8'%3E%3Cpath d='M0 14C7 0 21 0 28 14S49 28 56 14'/%3E%3Cpath d='M0 14C7 28 21 28 28 14S49 0 56 14'/%3E%3Cpath d='M0 7C7-7 21-7 28 7S49 21 56 7'/%3E%3Cpath d='M0 21C7 7 21 7 28 21S49 35 56 21'/%3E%3C/g%3E%3C/svg%3E\");background-size:56px 28px;}.ds-placar-id span{background:hsl(var(--card));padding:2px 6px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:hsl(var(--foreground));}.ds-placar-dl{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;flex:1;margin:0;}.ds-placar-dl>div{padding:8px 12px;border-left:1px solid hsl(var(--border));}.ds-placar-dl dt{font-size:12px;color:hsl(var(--muted-foreground));}.ds-placar-dl dd{margin:0;font-size:18px;color:hsl(var(--foreground));}.ds-placar-dl dd.ds-num{font-weight:600;}.ds-placar-dl dd.ds-ok{color:hsl(var(--success));}.ds-num{font-family:var(--font-numeral),'Arial Narrow','Roboto Condensed',sans-serif;font-variant-numeric:tabular-nums lining-nums;font-weight:500;letter-spacing:.01em;}"
+    },
+    {
+      "name": "Lombada (Sidebar)",
+      "kind": "nav",
+      "refersTo": "nav-spine",
+      "description": "Navegação lateral em tinta; marca sobre guilhochê claro; item ativo em papel com régua esquerda.",
+      "html": "<nav class=\"ds-spine\"><div class=\"ds-spine-mark\"><span>APPFIN</span></div><a class=\"ds-spine-item ds-spine-active\" href=\"#\">Importar</a><a class=\"ds-spine-item\" href=\"#\">Lançamentos</a><a class=\"ds-spine-item\" href=\"#\">Cartões</a></nav>",
+      "css": ".ds-spine{display:flex;flex-direction:column;gap:2px;width:240px;padding-bottom:16px;background:hsl(var(--sidebar));color:hsl(var(--sidebar-foreground));font-family:var(--font-ui),system-ui,sans-serif;}.ds-spine-mark{margin-bottom:12px;padding:24px;border-bottom:1px solid hsl(var(--sidebar-border));background-color:hsl(var(--sidebar));background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='28' viewBox='0 0 56 28'%3E%3Cg fill='none' stroke='%23F1F6F4' stroke-opacity='.10' stroke-width='.8'%3E%3Cpath d='M0 14C7 0 21 0 28 14S49 28 56 14'/%3E%3Cpath d='M0 14C7 28 21 28 28 14S49 0 56 14'/%3E%3Cpath d='M0 7C7-7 21-7 28 7S49 21 56 7'/%3E%3Cpath d='M0 21C7 7 21 7 28 21S49 35 56 21'/%3E%3C/g%3E%3C/svg%3E\");background-size:56px 28px;}.ds-spine-mark span{background:hsl(var(--sidebar));padding:0 4px;font-size:18px;font-weight:600;letter-spacing:.1em;}.ds-spine-item{display:flex;align-items:center;min-height:44px;margin:0 12px;padding:0 12px;border-left:2px solid transparent;color:hsl(var(--sidebar-muted));font-size:14px;font-weight:500;text-decoration:none;transition:background-color .15s,color .15s;}.ds-spine-item:hover{background:hsl(var(--sidebar-foreground) / 0.1);color:hsl(var(--sidebar-foreground));}.ds-spine-item:focus-visible{outline:none;box-shadow:0 0 0 2px hsl(var(--sidebar-foreground));}.ds-spine-active{border-left-color:hsl(var(--sidebar-foreground));background:hsl(var(--sidebar-accent));color:hsl(var(--sidebar-accent-foreground));}"
+    }
+  ],
+  "narrative": {
+    "northStar": "O Carnê de Prestações",
+    "overview": "O futuro comprometido é um carnê. Cada lançamento é um canhoto, cada parcela futura é um canhoto ainda preso, e a interface inteira é papel de carnê: verde-água muito claro, tinta verde-escura quase preta, réguas de 1px e cantos retos. O mundo foi construído primeiro na revisão da fatura (Importar) e cobre todas as telas autenticadas: Painel, Lançamentos, Cartões, Fluxo, Orçamento, Metas, Investimentos e Config.\n\nA densidade é de documento de trabalho, não de app de banco: linhas de 44px, texto corrido em 14px, rótulos em 12px, valores em numerais condensados tabulares que alinham em coluna. A identidade mora em poucos lugares e é impressa, não iluminada: o guilhochê (fundo de segurança) só nas áreas de identidade, o picote tracejado entre canhoto e corpo, e o carimbo de moldura dupla para CONFERE e DIVERGE. O vermelho é tinta de carimbo e nunca marca despesa; a direção do dinheiro vem do sinal.\n\nO modo escuro é automático (`prefers-color-scheme`), sem classe `dark`: os mesmos tokens trocam para uma mesa de tinta profunda com papel verde-claro como texto. O contraste de texto (4,5:1 ou mais) é verificado por teste em `components/ui-kit/tokens.test.ts`. A interface rejeita a cara de fintech (roxo, neon, cartão brilhante) e a de ERP frio.",
+    "keyCharacteristics": [
+      "Papel verde-água, tinta verde-escura, um verde-carnê de identidade; vermelho só como carimbo.",
+      "Cantos retos em tudo (raio 0, inclusive `full`).",
+      "Réguas de 1px; régua de tinta de 2px para totais e cabeçalhos de tabela.",
+      "Picote tracejado (1px, 6px de traço, 4px de vão) separa canhotos e fecha cabeçalhos de página.",
+      "Uma face de trabalho (IBM Plex Sans) e uma face de numerais (IBM Plex Sans Condensed) para todo valor.",
+      "Estado nunca só por cor: selo com letra, badge com ícone, faixa com ícone.",
+      "Um único movimento de assinatura: \"destacar\" os canhotos ao confirmar o lote."
+    ],
+    "rules": [
+      {
+        "name": "The Carimbo Rule",
+        "body": "Vermelho é tinta de carimbo: só perigo, erro e divergência. Despesa nunca é vermelha; a direção do valor vem do sinal (`Money` com `sign=\"auto\"`).",
+        "section": "colors"
+      },
+      {
+        "name": "The Token, Not Palette Rule",
+        "body": "Tela nova usa os tokens (`text-destructive`, `bg-warning-soft`, `border-success/50`). A paleta crua `red`/`amber`/`emerald` do Tailwind está remapeada para esses tokens (50 a 200 = tom suave, 300 a 400 = tom a 50%, 500 a 950 = tom pleno) só como rede de segurança para telas anteriores ao redesenho; qualquer outra cor crua do Tailwind fica fora do mundo.",
+        "section": "colors"
+      },
+      {
+        "name": "The Soft Ground, Ink Text Rule",
+        "body": "Em faixas e selos de estado, o fundo é o tom suave e a borda é o tom; o texto corrido de uma faixa fica na tinta, e a cor só reforça.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Numeral Face Rule",
+        "body": "Todo valor monetário passa por `Money` e todo número de parcela por `Parcela`; os dois usam a classe `.num`. É a mesma face do placar à célula, sempre tabular, para alinhar em coluna.",
+        "section": "typography"
+      },
+      {
+        "name": "The 12px Floor Rule",
+        "body": "A escala começa em 12px (`text-xs`). Nenhum rótulo de 10 ou 11px, nem tamanho arbitrário.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ruled Paper Rule",
+        "body": "Superfície em repouso não tem sombra. Separação é régua (1px), régua de tinta (2px) ou picote; sombra só para o que flutua acima da página.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Guilhoché Rule",
+        "body": "O fundo de segurança (ondas de 56 por 28px, traço de 0,8px a 22% de opacidade, 10% sobre a tinta, 12% no escuro) aparece só em área de identidade: capa do lote, bloco de título do placar, marca da lombada. Nunca atrás de número ou texto corrido; o que se escreve sobre ele ganha uma tarja sólida de papel do canhoto.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do passar todo valor por `Money` e toda numeração por `Parcela`, para que caiam na face condensada tabular.",
+      "Do separar canhoto e corpo com o picote vertical e blocos empilhados com o picote horizontal.",
+      "Do sinalizar estado com letra (Selo) ou ícone (Badge, Faixa) além da cor.",
+      "Do usar borda tracejada na cor de campo para o que ainda não aconteceu (parcela presa) e para o vazio.",
+      "Do fechar totais e cabeçalhos de tabela com a régua de tinta de 2px.",
+      "Do somar `--bottom-nav-h` em todo elemento fixo ao pé da tela no celular.",
+      "Do manter 44px de alvo de toque no celular."
+    ],
+    "donts": [
+      "Don't pintar despesa de vermelho; vermelho é carimbo de perigo, erro e divergência.",
+      "Don't pôr número ou texto corrido sobre o guilhochê sem tarja sólida, nem usar o guilhochê fora das áreas de identidade.",
+      "Don't arredondar cantos nem usar pílula.",
+      "Don't dar sombra a cartão ou painel em repouso; sombra é só da folha que flutua (diálogo).",
+      "Don't usar cores cruas do Tailwind fora da rede de segurança (`sky`, `blue`, `violet` etc.), nem hex solto em componente.",
+      "Don't usar texto abaixo de 12px.",
+      "Don't usar o carimbo para algo que não seja o veredito PAGO, CONFERE ou DIVERGE."
+    ]
+  }
+}
