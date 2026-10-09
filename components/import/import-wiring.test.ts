@@ -81,8 +81,9 @@ describe('polish final da seleção pelo canhoto', () => {
     expect(confirmation).not.toMatch(/>[^<{]*talão[^<{]*</);
   });
 
-  it('o talão do canhoto de seleção não tem caixinha: visto de carimbo só quando selecionado', () => {
-    expect(confirmation).toContain('-rotate-6 border-2 border-primary');
+  it('o talão do canhoto de seleção não tem caixinha: visto reto e simples só quando selecionado (inclinado é só do carimbo de veredito)', () => {
+    expect(confirmation).not.toContain('-rotate-6');
+    expect(confirmation).toContain('<Check className="h-4 w-4 text-primary" strokeWidth={3}');
     expect(confirmation).not.toContain('flex h-4 w-4 items-center justify-center border');
     expect(confirmation).toContain('hover:bg-primary/10');
     expect(confirmation).toContain('active:bg-primary/25');

@@ -747,12 +747,7 @@ export function ImportConfirmation({
                         )}
                       >
                         {selected.has(draft.index) ? (
-                          <span
-                            aria-hidden="true"
-                            className="-rotate-6 border-2 border-primary px-1 text-primary"
-                          >
-                            <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                          </span>
+                          <Check className="h-4 w-4 text-primary" strokeWidth={3} aria-hidden="true" />
                         ) : null}
                         {installment ? (
                           <Parcela atual={installment.current} total={installment.total} />
