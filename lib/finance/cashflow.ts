@@ -255,3 +255,53 @@ export function projectCashflow(input: CashflowInput): CashflowProjection {
     minClosingCents: minClosing,
   };
 }
+
+/** Segunda leitura do veredito: a projecao com as faturas anteriores nao pagas descontadas. */
+export interface OverdueStatementsScenario {
+  /** Quanto foi descontado no mes corrente (magnitude da divida; 0 sem divida). */
+  consideredCents: Cents;
+  /** Pior fechamento da janela nesta leitura; null com janela vazia. */
+  minClosingCents: Cents | null;
+  /** Mes do pior fechamento (o primeiro, em empate); null com janela vazia. */
+  minClosingCompetence: Competence | null;
+  /** Primeiro mes com fechamento negativo nesta leitura; null se nenhum. */
+  firstNegativeCompetence: Competence | null;
+}
+
+/**
+ * Projecao "e se eu pagar agora as faturas de competencias anteriores que nao estao
+ * marcadas como pagas" (decisao do Ricardo, 2026-10-09: a projecao PRINCIPAL nao muda,
+ * isto so avisa). O valor entra como fatura devida no PRIMEIRO mes da janela
+ * (`statementsDue`, o mesmo canal das faturas na projecao), entao abate o fechamento
+ * dele e de todos os seguintes pelo encadeamento.
+ *
+ * `overdueUnpaidCents` chega com o sinal do Comprometido (`breakdown.overdueUnpaidCents`:
+ * negativo = a pagar). Saldo credor (so estorno) nao vira entrada de caixa: considerado 0.
+ * Nao altera `input`.
+ */
+export function projectWithOverdueStatements(
+  input: CashflowInput,
+  overdueUnpaidCents: Cents,
+): OverdueStatementsScenario {
+  const debt = cents(overdueUnpaidCents);
+  const consideredCents = debt < 0 ? cents(-debt) : cents(0);
+  const projection = projectCashflow(
+    consideredCents === 0
+      ? input
+      : {
+          ...input,
+          statementsDue: [...input.statementsDue, { competence: input.fromCompetence, amountCents: consideredCents }],
+        },
+  );
+
+  let worst: CashflowMonth | null = null;
+  for (const month of projection.months) {
+    if (worst === null || month.closingCents < worst.closingCents) worst = month;
+  }
+  return {
+    consideredCents,
+    minClosingCents: worst === null ? null : worst.closingCents,
+    minClosingCompetence: worst === null ? null : worst.competence,
+    firstNegativeCompetence: projection.firstNegativeCompetence,
+  };
+}

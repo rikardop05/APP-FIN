@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { projectCashflow, type CashflowInput } from '@/lib/finance/cashflow';
+import { projectCashflow, projectWithOverdueStatements, type CashflowInput } from '@/lib/finance/cashflow';
 import { cents } from '@/lib/money';
 
 function occ(competence: string, amountCents: number) {
@@ -300,5 +300,67 @@ describe('projectCashflow — janela, sinais e validacao', () => {
     // so por statementsDue, contado uma vez.
     const key = 'creditCardPayments';
     expect(Object.prototype.hasOwnProperty.call(baseInput({}), key)).toBe(false);
+  });
+});
+
+describe('projectWithOverdueStatements — segunda leitura do veredito (2026-10-09)', () => {
+  // Saldo 10.000,00 em out/26; faturas de 6.000,00 em nov e 3.000,00 em dez.
+  // Sem as vencidas: out 10.000,00 -> nov 4.000,00 -> dez 1.000,00 (pior: dez, 1.000,00).
+  const input = baseInput({
+    openingBalanceCents: cents(1_000_000),
+    fromCompetence: '2026-10',
+    months: 3,
+    statementsDue: [entry('2026-11', 600_000), entry('2026-12', 300_000)],
+  });
+
+  it('desconta as faturas anteriores nao pagas no mes corrente e diz se e quando fica negativo', () => {
+    // Vencidas: -5.418,32 (sinal do Comprometido). Considerado: 5.418,32.
+    // out: 10.000,00 - 5.418,32 = 4.581,68
+    // nov: 4.581,68 - 6.000,00 = -1.418,32 -> primeiro negativo
+    // dez: -1.418,32 - 3.000,00 = -4.418,32 -> pior fechamento
+    expect(projectWithOverdueStatements(input, cents(-541_832))).toEqual({
+      consideredCents: 541_832,
+      minClosingCents: -441_832,
+      minClosingCompetence: '2026-12',
+      firstNegativeCompetence: '2026-11',
+    });
+  });
+
+  it('a projecao principal nao muda: a entrada nao e alterada', () => {
+    const before = projectCashflow(input);
+    projectWithOverdueStatements(input, cents(-541_832));
+    expect(projectCashflow(input)).toEqual(before);
+    expect(input.statementsDue).toHaveLength(2);
+    expect(before.minClosingCents).toBe(100_000);
+    expect(before.firstNegativeCompetence).toBeNull();
+  });
+
+  it('sem fatura vencida: considerado zero, leitura igual a principal', () => {
+    expect(projectWithOverdueStatements(input, cents(0))).toEqual({
+      consideredCents: 0,
+      minClosingCents: 100_000,
+      minClosingCompetence: '2026-12',
+      firstNegativeCompetence: null,
+    });
+  });
+
+  it('saldo credor (so estorno) nao vira entrada: considerado zero', () => {
+    expect(projectWithOverdueStatements(input, cents(5_000)).consideredCents).toBe(0);
+    expect(projectWithOverdueStatements(input, cents(5_000)).minClosingCents).toBe(100_000);
+  });
+
+  it('empate no pior fechamento aponta o PRIMEIRO mes', () => {
+    const flat = baseInput({ openingBalanceCents: cents(1_000), fromCompetence: '2026-10', months: 3 });
+    // 1.000 - 400 = 600 nos tres meses.
+    expect(projectWithOverdueStatements(flat, cents(-400))).toMatchObject({ minClosingCents: 600, minClosingCompetence: '2026-10' });
+  });
+
+  it('janela vazia: sem fechamento, sem mes', () => {
+    expect(projectWithOverdueStatements(baseInput({ months: 0 }), cents(-100))).toEqual({
+      consideredCents: 100,
+      minClosingCents: null,
+      minClosingCompetence: null,
+      firstNegativeCompetence: null,
+    });
   });
 });

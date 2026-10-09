@@ -38,8 +38,11 @@ export default async function FluxoPage() {
           projection={projection}
           composition={base.composition}
           warnings={base.warnings}
-          overdueUnpaidCents={cents(Math.abs(base.overdueUnpaidStatements.totalCents))}
+          // A frase "sem contar R$ X" usa o que a projeção de fato NÃO leva (vencimento antes da janela ou sem
+          // vencimento): `consideredCents` da segunda leitura, não o total do Comprometido.
+          overdueUnpaidCents={cents(base.withOverdueStatements.consideredCents)}
           overdueUnpaidCompetences={base.overdueUnpaidStatements.competences}
+          withOverdueStatements={base.withOverdueStatements}
         />
       ) : (
         <EmptyState

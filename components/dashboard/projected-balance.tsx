@@ -4,6 +4,7 @@ import { AlertTriangle, LineChart } from 'lucide-react';
 import { BalanceChart } from '@/components/cashflow/balance-chart';
 import { EmptyState } from '@/components/ui-kit';
 import type { CashflowProjection } from '@/lib/finance/cashflow';
+import type { OverdueScenario } from './presentation';
 
 /**
  * Os três estados possíveis da projeção no painel. É um tipo FECHADO e a prop é
@@ -17,7 +18,13 @@ import type { CashflowProjection } from '@/lib/finance/cashflow';
  *                  que está tudo bem —, e o erro vai para o log da página.
  */
 export type ProjectedState =
-  | { kind: 'ok'; projection: CashflowProjection; warnings: readonly string[] }
+  | {
+      kind: 'ok';
+      projection: CashflowProjection;
+      warnings: readonly string[];
+      /** Segunda leitura (Esquadro): a projeção com as faturas anteriores não pagas descontadas. */
+      withOverdue?: OverdueScenario;
+    }
   | { kind: 'empty' }
   | { kind: 'unavailable' };
 

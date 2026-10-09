@@ -14,6 +14,9 @@ import {
   variationView,
   verdictLine,
   verdictOverdueNote,
+  verdictDivergence,
+  verdictDivergenceText,
+  monthsList,
 } from './presentation';
 
 const c = (n: number) => n as Cents;
@@ -139,5 +142,34 @@ describe('ressalva do veredito', () => {
   it('só aparece com faturas anteriores não pagas', () => {
     expect(verdictOverdueNote(c(0))).toBeNull();
     expect(verdictOverdueNote(c(541832))).toBe('sem contar R$ 5.418,32 de faturas anteriores não marcadas como pagas');
+  });
+});
+
+describe('veredito dividido pelas faturas anteriores não pagas', () => {
+  const scenario = (consideredCents: number, firstNegativeCompetence: string | null) => ({
+    consideredCents: c(consideredCents),
+    firstNegativeCompetence,
+  });
+  it('diverge só quando a principal não fica negativa e a leitura com as faturas fica', () => {
+    expect(verdictDivergence(null, scenario(541832, '2027-02'), ['2026-07', '2026-09'])).toEqual({
+      competence: '2027-02',
+      overdueCompetences: ['2026-07', '2026-09'],
+    });
+  });
+  it('concordam: as duas negativas, nenhuma, ou nada vencido', () => {
+    expect(verdictDivergence('2027-01', scenario(541832, '2026-12'), ['2026-07'])).toBeNull();
+    expect(verdictDivergence(null, scenario(541832, null), ['2026-07'])).toBeNull();
+    expect(verdictDivergence(null, scenario(0, '2027-02'), [])).toBeNull();
+    expect(verdictDivergence(null, null, ['2026-07'])).toBeNull();
+  });
+  it('a frase nomeia o mês e as faturas, no plural certo', () => {
+    expect(verdictDivergenceText({ competence: '2027-02', overdueCompetences: ['2026-07', '2026-09'] })).toBe(
+      'Fica negativo em fev/2027 se as faturas de jul e set não foram pagas',
+    );
+    expect(verdictDivergenceText({ competence: '2027-02', overdueCompetences: ['2026-09'] })).toBe(
+      'Fica negativo em fev/2027 se a fatura de set não foi paga',
+    );
+    expect(monthsList(['2026-07', '2026-09', '2026-10'])).toBe('jul, set e out');
+    expect(monthsList(['2026-12', '2027-01'])).toBe('dez/2026 e jan/2027');
   });
 });

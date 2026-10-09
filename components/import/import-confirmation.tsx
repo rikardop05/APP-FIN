@@ -31,6 +31,8 @@ import { defaultInclude, includedByDefaultCount } from './preview-state';
 import {
   announcementFor,
   applyBulk,
+  confirmWithDifferenceLabel,
+  mayBeMissing,
   confirmBlockReason,
   firstInvalidIndex,
   FLAG_SELO,
@@ -286,6 +288,8 @@ export function ImportConfirmation({
   );
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const [onlyFlagged, setOnlyFlagged] = useState(false);
+  // P1b: com o placar divergindo, "Mostrar o que pode faltar" filtra as linhas que podem explicar a diferença.
+  const [onlyMissing, setOnlyMissing] = useState(false);
   const [bulkCategory, setBulkCategory] = useState(KEEP);
   const [bulkMember, setBulkMember] = useState(KEEP);
   const categoryOptions = useMemo(() => flattenCategories(categories), [categories]);
@@ -323,7 +327,12 @@ export function ImportConfirmation({
     [drafts, invalidSet],
   );
   const flagged = useMemo(() => flaggedIndexes(flagInputs), [flagInputs]);
-  const visibleDrafts = onlyFlagged ? drafts.filter((draft) => flagged.includes(draft.index)) : drafts;
+  const missingCandidates = drafts.filter((draft) => mayBeMissing(draft));
+  const visibleDrafts = onlyMissing
+    ? missingCandidates
+    : onlyFlagged
+      ? drafts.filter((draft) => flagged.includes(draft.index))
+      : drafts;
   const includedCount = drafts.filter((draft) => draft.include).length;
 
   const figures = placarFigures({
@@ -532,6 +541,13 @@ export function ImportConfirmation({
     }
   }
 
+  /** P1b: filtra para as linhas que podem explicar a diferença e leva a vista até a lista. */
+  function showWhatMayBeMissing() {
+    setOnlyFlagged(false);
+    setOnlyMissing(true);
+    window.setTimeout(() => document.getElementById('lista-linhas')?.scrollIntoView({ block: 'start' }), 0);
+  }
+
   function handleConfirmClick() {
     if (blockReason !== null) {
       // Desabilitado de verdade para o leitor de tela (aria-disabled), mas clicável: leva à primeira linha inválida.
@@ -712,6 +728,19 @@ export function ImportConfirmation({
             </p>
           ) : null}
 
+          <div id="lista-linhas" className="flex flex-col gap-3">
+          {onlyMissing ? (
+            <Faixa tone="attention" role="status">
+              <span>
+                {missingCandidates.length === 0
+                  ? 'Nenhuma linha excluída, duplicada ou de baixa confiança: a diferença pode estar fora do lote. Confira o total impresso.'
+                  : `${missingCandidates.length} ${missingCandidates.length === 1 ? 'linha pode' : 'linhas podem'} explicar a diferença: excluídas, duplicadas ou de baixa confiança.`}{' '}
+                <button type="button" className="font-medium underline underline-offset-2" onClick={() => setOnlyMissing(false)}>
+                  Mostrar todas
+                </button>
+              </span>
+            </Faixa>
+          ) : null}
           <ul className={`flex flex-col gap-1.5 ${settling ? 'destacando' : ''}`}>
             {visibleDrafts.map((draft, position) => {
               const rowNumber = draft.index + 1;
@@ -965,6 +994,7 @@ export function ImportConfirmation({
               );
             })}
           </ul>
+          </div>
         </div>
 
         <StillHeldColumn stillHeld={calculation.stillHeld} recalculating={recalculating} />
@@ -1001,33 +1031,47 @@ export function ImportConfirmation({
               ),
           },
         ]}
-        action={(expanded) => (
-          <div className={cn('flex flex-col gap-1 sm:items-end', expanded ? 'w-full items-stretch' : 'items-end')}>
-            <Button
-              type="button"
-              aria-disabled={blockReason !== null}
-              aria-describedby="confirmar-motivo"
-              aria-label="Confirmar importação"
-              className={expanded ? 'w-full sm:w-auto' : 'sm:w-auto'}
-              onClick={handleConfirmClick}
-            >
-              <Check className="h-4 w-4" aria-hidden="true" />
-              {busy ? 'Gravando…' : (
-                <>
-                  <span className="sm:hidden">{expanded ? 'Confirmar importação' : 'Confirmar'}</span>
-                  <span className="hidden sm:inline">Confirmar importação</span>
-                </>
-              )}
-            </Button>
-            {/* Fechado no celular o motivo fica só para leitor de tela; aberto e no desktop é visível. */}
-            <p
-              id="confirmar-motivo"
-              className={cn('text-xs text-muted-foreground sm:text-right lg:whitespace-nowrap', expanded ? 'text-right' : 'max-sm:sr-only')}
-            >
-              {blockReason ?? countLabel(calculation.includedRowsCount, calculation.plannedRowsCount)}
-            </p>
-          </div>
-        )}
+        action={(expanded) => {
+          const diverge = figures.tone === 'danger' && figures.differenceCents !== null;
+          const confirmLabel = diverge
+            ? confirmWithDifferenceLabel(formatBRL(Math.abs(figures.differenceCents ?? 0) as Cents, { sign: 'never' }))
+            : 'Confirmar importação';
+          return (
+            <div className={cn('flex flex-col gap-1 sm:items-end', expanded ? 'w-full items-stretch' : 'items-end')}>
+              {/* Divergindo, a ação primária é achar o que pode faltar; confirmar continua permitido, mas como contorno. */}
+              {diverge ? (
+                <Button type="button" className={expanded ? 'w-full sm:w-auto' : 'sm:w-auto'} onClick={showWhatMayBeMissing}>
+                  <span className="sm:hidden">{expanded ? 'Mostrar o que pode faltar' : 'O que falta?'}</span>
+                  <span className="hidden sm:inline">Mostrar o que pode faltar</span>
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant={diverge ? 'outline' : 'primary'}
+                aria-disabled={blockReason !== null}
+                aria-describedby="confirmar-motivo"
+                aria-label={confirmLabel}
+                className={cn(expanded ? 'w-full sm:w-auto' : 'sm:w-auto', diverge && !expanded && 'max-sm:hidden')}
+                onClick={handleConfirmClick}
+              >
+                <Check className="h-4 w-4" aria-hidden="true" />
+                {busy ? 'Gravando…' : (
+                  <>
+                    <span className="sm:hidden">{expanded || diverge ? confirmLabel : 'Confirmar'}</span>
+                    <span className="hidden sm:inline">{confirmLabel}</span>
+                  </>
+                )}
+              </Button>
+              {/* Fechado no celular o motivo fica só para leitor de tela; aberto e no desktop é visível. */}
+              <p
+                id="confirmar-motivo"
+                className={cn('text-xs text-muted-foreground sm:text-right lg:whitespace-nowrap', expanded ? 'text-right' : 'max-sm:sr-only')}
+              >
+                {blockReason ?? countLabel(calculation.includedRowsCount, calculation.plannedRowsCount)}
+              </p>
+            </div>
+          );
+        }}
       />
     </section>
   );

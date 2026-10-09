@@ -129,6 +129,7 @@ export function DashboardScreen({
         projected={projected}
         pending={pending}
         overdueUnpaidCents={-commitment.breakdown.overdueUnpaidCents as Cents}
+        overdueCompetences={commitment.overdueCompetences}
         pendingUnavailable={pendencias.overBudget === null}
       />
 

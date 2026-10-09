@@ -72,7 +72,7 @@ export default async function DashboardPage() {
   try {
     const loaded = await loadProjectedCashflow(householdId, today);
     projected = loaded.hasProjectableData
-      ? { kind: 'ok', projection: loaded.projection, warnings: loaded.warnings }
+      ? { kind: 'ok', projection: loaded.projection, warnings: loaded.warnings, withOverdue: loaded.withOverdueStatements }
       : { kind: 'empty' };
   } catch (error) {
     console.error('[dashboard] saldo projetado indisponivel:', error);

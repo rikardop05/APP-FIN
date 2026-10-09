@@ -264,6 +264,8 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('getOverdueUnpaidStateme
       expect(await getOverdueUnpaidStatements(f.householdId, '2026-10')).toEqual({
         totalCents: -146401,
         competences: ['2026-07'],
+        // Sem cash_date: a projecao nao as leva, entao entram no valor a descontar.
+        notInProjectionCents: -146401,
       });
     } finally {
       await f.cleanup();
@@ -274,7 +276,32 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('getOverdueUnpaidStateme
     const f = await createFixture('aviso-fluxo-vazio');
     try {
       const { getOverdueUnpaidStatements } = await import('./dashboard');
-      expect(await getOverdueUnpaidStatements(f.householdId, '2026-10')).toEqual({ totalCents: 0, competences: [] });
+      expect(await getOverdueUnpaidStatements(f.householdId, '2026-10')).toEqual({ totalCents: 0, competences: [], notInProjectionCents: 0 });
+    } finally {
+      await f.cleanup();
+    }
+  });
+});
+
+describe.skipIf(process.env.DATABASE_URL === undefined)('getOverdueUnpaidStatements: o que a projecao ja leva (achado do Corvo, 2026-10-09)', () => {
+  it('fatura anterior que VENCE dentro da janela fica no aviso, mas nao entra no valor a descontar', async () => {
+    const f = await createFixture('vence-na-janela');
+    try {
+      const { getOverdueUnpaidStatements } = await import('./dashboard');
+      // Cartao que fecha dia 28 e vence dia 5: a fatura de set/26 vence em 05/10.
+      const setembro = await f.statement('2026-09', 'closed');
+      await f.tx('2026-09', -287449, { statementId: setembro, cashDate: '2026-10-05' });
+      // Fatura de jul/26, vencida em 10/07, antes da janela: a projecao nao a leva.
+      const julho = await f.statement('2026-07', 'open');
+      await f.tx('2026-07', -146901, { statementId: julho, cashDate: '2026-07-10' });
+
+      expect(await getOverdueUnpaidStatements(f.householdId, '2026-10')).toEqual({
+        // Aviso (mesma regra do Comprometido): -287449 + -146901 = -434350.
+        totalCents: -434350,
+        competences: ['2026-07', '2026-09'],
+        // So julho: setembro vence em outubro e ja esta em statementsDue da projecao.
+        notInProjectionCents: -146901,
+      });
     } finally {
       await f.cleanup();
     }

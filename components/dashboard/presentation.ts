@@ -1,4 +1,4 @@
-import { competenceLong, competenceShort } from '@/components/cashflow/labels';
+import { competenceLong, competenceMonth, competenceShort } from '@/components/cashflow/labels';
 import type { Competence } from '@/lib/date';
 import { formatBRL, type BasisPoints, type Cents } from '@/lib/money';
 
@@ -220,3 +220,51 @@ export function verdictOverdueNote(overdueMagnitudeCents: Cents): string | null 
   if (overdueMagnitudeCents <= 0) return null;
   return `sem contar ${formatBRL(overdueMagnitudeCents)} de faturas anteriores não marcadas como pagas`;
 }
+
+/** A segunda leitura do veredito (Esquadro): a projeção com as faturas anteriores não pagas descontadas. */
+export type OverdueScenario = {
+  /** Valor descontado (magnitude; 0 = nada vencido). */
+  consideredCents: Cents;
+  firstNegativeCompetence: Competence | null;
+};
+
+export type VerdictDivergence = { competence: Competence; overdueCompetences: readonly Competence[] };
+
+/**
+ * As duas leituras DIVERGEM quando a principal não fica negativa e a com as faturas anteriores não pagas
+ * fica. Aí o veredito deixa de ser verde: depende de essas faturas terem sido pagas. Quem decide é o
+ * cenário do Esquadro (`firstNegativeCompetence`); aqui só se compara. Se as duas concordam (as duas
+ * negativas, ou nenhuma), devolve `null` e o veredito atual segue, com a ressalva.
+ */
+export function verdictDivergence(
+  mainFirstNegative: Competence | null,
+  scenario: OverdueScenario | null | undefined,
+  overdueCompetences: readonly Competence[],
+): VerdictDivergence | null {
+  if (mainFirstNegative !== null) return null;
+  if (scenario === null || scenario === undefined) return null;
+  if (scenario.consideredCents <= 0 || scenario.firstNegativeCompetence === null) return null;
+  return { competence: scenario.firstNegativeCompetence, overdueCompetences };
+}
+
+/**
+ * `['2026-07','2026-09']` -> `jul e set`; três ou mais: `jul, set e out`. Se as faturas cruzam a virada do
+ * ano, cada mês leva o ano (`dez/2026 e jan/2027`), para não ficar ambíguo.
+ */
+export function monthsList(competences: readonly Competence[]): string {
+  const years = new Set(competences.map((competence) => competence.slice(0, 4)));
+  const names = competences.map((competence) => (years.size > 1 ? competenceShort(competence) : competenceMonth(competence)));
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} e ${names[names.length - 1] ?? ''}`;
+}
+
+/** A frase do veredito dividido: "Fica negativo em fev/2027 se as faturas de jul e set não foram pagas". */
+export function verdictDivergenceText(divergence: VerdictDivergence): string {
+  const invoices = divergence.overdueCompetences.length === 1 ? 'a fatura de' : 'as faturas de';
+  const verb = divergence.overdueCompetences.length === 1 ? 'não foi paga' : 'não foram pagas';
+  return `Fica negativo em ${competenceShort(divergence.competence)} se ${invoices} ${monthsList(divergence.overdueCompetences)} ${verb}`;
+}
+
+/** O selo do veredito dividido e o link que leva a resolver (marcar como paga). */
+export const DIVERGENCE_SELO_LABEL = 'Depende das faturas';
+export const DIVERGENCE_LINK_LABEL = 'Já paguei: marcar em Cartões';

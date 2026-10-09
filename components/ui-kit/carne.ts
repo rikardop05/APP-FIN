@@ -102,6 +102,7 @@ export const ESTADO_LETRA: Record<string, string> = {
   'Perto do limite': 'L',
   Estourou: 'X',
   'Sem limite': 'Q',
+  'Depende das faturas': 'W',
 };
 
 /** Letra do estado: a da tabela central, ou (estado novo, ainda sem entrada) a inicial do rótulo. */

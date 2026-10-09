@@ -792,7 +792,30 @@ function projectCashflow(input: CashflowInput): {
   firstNegativeCompetence: Competence | null
   minClosingCents: Cents
 }
+
+/**
+ * Segunda leitura do veredito (decisão do Ricardo, 2026-10-09: a projeção PRINCIPAL não muda, isto só avisa).
+ * Roda projectCashflow com as faturas de competências anteriores não pagas descontadas no PRIMEIRO mês da janela
+ * (entram em statementsDue). overdueUnpaidCents vem com o sinal do Comprometido (negativo = a pagar); saldo credor
+ * não vira entrada (considerado 0). Não altera `input`. Empate no pior fechamento: o primeiro mês.
+ */
+function projectWithOverdueStatements(input: CashflowInput, overdueUnpaidCents: Cents): {
+  consideredCents: Cents                       // quanto foi descontado (magnitude)
+  minClosingCents: Cents | null                // pior fechamento nesta leitura; null com janela vazia
+  minClosingCompetence: Competence | null      // mês do pior fechamento
+  firstNegativeCompetence: Competence | null   // primeiro mês negativo nesta leitura
+}
 ```
+
+> **Onde chega à tela:** `loadProjectedCashflow` (`/app/_lib/load-cashflow.ts`, Painel e `/fluxo`) devolve
+> `overdueUnpaidStatements` (`totalCents` e `competences`, mesma regra do Comprometido; e `notInProjectionCents`, a
+> parte que a projeção NÃO leva) e `withOverdueStatements` (esta leitura), ao lado de `projection`, que não muda.
+>
+> **Sem dupla contagem (achado do Corvo, 2026-10-09):** a projeção põe linha de cartão em `statementsDue` pelo mês do
+> VENCIMENTO (`cash_date`), e o Comprometido recorta pela COMPETÊNCIA. Fatura de competência anterior que vence dentro
+> da janela (cartão que fecha dia 28 e vence dia 5) já está na projeção. Por isso a segunda leitura desconta só
+> `notInProjectionCents`: linhas com `cash_date` antes do primeiro dia da janela, ou sem `cash_date`. O valor
+> efetivamente descontado volta em `withOverdueStatements.consideredCents`.
 
 ## 12. Investimento — `/lib/finance/investment.ts`
 

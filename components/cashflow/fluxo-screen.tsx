@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 
 import { Faixa } from '@/components/ui-kit';
 import { cents, type Cents } from '@/lib/money';
+import type { OverdueStatementsScenario } from '@/lib/finance/cashflow';
 
 import type { MonthComposition } from '@/app/_lib/to-cashflow-input';
 import { type CashflowInput, type CashflowProjection, projectCashflow } from '@/lib/finance/cashflow';
@@ -26,6 +27,8 @@ type FluxoScreenProps = {
   overdueUnpaidCents?: Cents;
   /** Competências dessas faturas, em ordem. */
   overdueUnpaidCompetences?: readonly Competence[];
+  /** Segunda leitura do veredito (Esquadro); só vale sem simulação. */
+  withOverdueStatements?: OverdueStatementsScenario;
 };
 
 /**
@@ -35,7 +38,7 @@ type FluxoScreenProps = {
  *
  * Não há conta de dinheiro neste arquivo.
  */
-export function FluxoScreen({ input, projection, composition, warnings, overdueUnpaidCents = cents(0), overdueUnpaidCompetences = [] }: FluxoScreenProps) {
+export function FluxoScreen({ input, projection, composition, warnings, overdueUnpaidCents = cents(0), overdueUnpaidCompetences = [], withOverdueStatements }: FluxoScreenProps) {
   const [items, setItems] = useState<WhatIfItem[]>([]);
   const window = useMemo(() => projection.months.map((month) => month.competence), [projection]);
 
@@ -66,7 +69,7 @@ export function FluxoScreen({ input, projection, composition, warnings, overdueU
         </Faixa>
       ) : null}
 
-      <Verdict projection={shown} baseProjection={simulation ? projection : null} overdueUnpaidCents={overdueUnpaidCents} overdueUnpaidCompetences={overdueUnpaidCompetences} />
+      <Verdict projection={shown} baseProjection={simulation ? projection : null} overdueUnpaidCents={overdueUnpaidCents} overdueUnpaidCompetences={overdueUnpaidCompetences} withOverdueStatements={simulation ? undefined : withOverdueStatements} />
 
       <section aria-labelledby="fluxo-table-heading" className="flex flex-col gap-3">
         <h2 id="fluxo-table-heading" className="text-lg font-semibold">

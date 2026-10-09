@@ -184,3 +184,20 @@ describe('successMessage', () => {
     );
   });
 });
+
+import { confirmWithDifferenceLabel, mayBeMissing } from './review-model';
+
+describe('P1b: o que pode explicar a diferença do placar', () => {
+  const ok = { include: true, state: 'new' as const, lowConfidence: false };
+
+  it('excluídas, duplicadas e de baixa confiança entram; linha normal incluída não', () => {
+    expect(mayBeMissing(ok)).toBe(false);
+    expect(mayBeMissing({ ...ok, include: false })).toBe(true);
+    expect(mayBeMissing({ ...ok, state: 'duplicate' })).toBe(true);
+    expect(mayBeMissing({ ...ok, lowConfidence: true })).toBe(true);
+  });
+
+  it('o rótulo do Confirmar leva o valor da diferença', () => {
+    expect(confirmWithDifferenceLabel('R$ 30,00')).toBe('Confirmar com diferença de R$ 30,00');
+  });
+});

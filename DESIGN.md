@@ -262,6 +262,7 @@ Retângulos de régua, sem pílula, sem sombra.
   | K | Falhou | M | Fechada |
   | Y | Dentro do limite | L | Perto do limite |
   | X | Estourou | Q | Sem limite |
+  | W | Depende das faturas | | |
 
 ### Carimbo (signature)
 Moldura dupla (borda de 2px mais contorno de 1px afastado 2px), texto de 12px em caixa alta, 600, tracking largo, girado -3°. Verde confere para PAGO/CONFERE, vermelho de carimbo para DIVERGE. Reservado a esse veredito.
@@ -278,6 +279,8 @@ A linha de lançamento ou parcela. Grade de quatro colunas: canhoto de 68px (num
 **Meta como carnê (Metas).** O que já foi guardado é um carimbo "Guardado" com o total (a meta não guarda aportes individuais); os aportes que faltam são canhotos presos numerados `01/12` (`Parcela`), um por mês até a data-alvo, com o valor mensal. Os primeiros quatro ficam à vista; o resto atrás de "Ver os outros".
 
 **Agrupamento por mês (Lançamentos).** A lista agrupa por competência com um cabeçalho de régua de tinta de 2px: o mês por extenso, a contagem e o total líquido do mês. J e K pulam entre as linhas.
+
+**Divergência pede atrito, não bloqueio.** Com o placar em DIVERGE, "Confirmar" continua permitido, mas vira contorno com o valor da diferença no rótulo ("Confirmar com diferença de R$ 30,00"), e a ação primária passa a ser "Mostrar o que pode faltar" (filtra as linhas excluídas, duplicadas e de baixa confiança). Em CONFERE nada muda. **Veredito que depende de fatura (Fluxo, igual ao Painel):** quando a projeção principal não fica negativa mas a leitura com as faturas anteriores não pagas ficaria, o veredito vira atenção (selo "Depende das faturas", letra W, tom atenção, nunca vermelho), diz em que mês fica negativo e leva a "Já paguei: marcar em Cartões".
 
 ### Placar (signature)
 Rodapé de totais (Total da fatura, Incluído, Diferença) com régua de tinta de 2px no topo, papel do canhoto, colunas divididas por régua. Bloco de título à esquerda sobre guilhochê, rótulo de 12px em caixa alta numa tarja sólida. Valores em numeral 600; a Diferença em verde confere quando zera e vermelho de carimbo quando diverge. Versão fixa acima da barra inferior no celular, no rodapé no desktop. No celular o placar **fecha numa linha** (o item principal, a Diferença, mais a ação) e abre no toque do botão de seta (`aria-expanded`), mostrando todos os totais; a partir de `sm` é sempre aberto.

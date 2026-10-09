@@ -8,6 +8,10 @@ import {
   contributionsTitle,
   pendingTitle,
   verdictOverdueNote,
+  verdictDivergence,
+  verdictDivergenceText,
+  DIVERGENCE_LINK_LABEL,
+  DIVERGENCE_SELO_LABEL,
   surplusBaseLine,
   surplusLabel,
   verdictLine,
@@ -28,6 +32,8 @@ type HeadlineProps = {
   pending: PendingSummary;
   /** Magnitude das faturas anteriores não pagas (0 = nenhuma): o veredito avisa que não as conta. */
   overdueUnpaidCents: Cents;
+  /** Meses das faturas anteriores não pagas (`futureCommitment().overdueCompetences`). */
+  overdueCompetences: readonly Competence[];
   /** A consulta de orçamento falhou: a faixa avisa que não deu para conferir. */
   pendingUnavailable: boolean;
 };
@@ -50,8 +56,21 @@ export function Headline({
   pending,
   pendingUnavailable,
   overdueUnpaidCents,
+  overdueCompetences,
 }: HeadlineProps) {
-  const overdueNote = verdictOverdueNote(overdueUnpaidCents);
+  // As duas leituras divergem (a principal não fica negativa, a com as faturas não pagas fica): o
+  // veredito deixa de ser verde e passa a depender dessas faturas.
+  const divergence =
+    projected.kind === 'ok'
+      ? verdictDivergence(projected.projection.firstNegativeCompetence, projected.withOverdue, overdueCompetences)
+      : null;
+  // "Sem contar R$ X": o que a projeção de fato NÃO leva (`consideredCents` da segunda leitura), não o
+  // total do Comprometido, que também inclui fatura de mês anterior que vence dentro da janela.
+  const notCountedCents =
+    projected.kind === 'ok' && projected.withOverdue !== undefined
+      ? projected.withOverdue.consideredCents
+      : overdueUnpaidCents;
+  const overdueNote = divergence === null ? verdictOverdueNote(notCountedCents) : null;
   const verdict =
     projected.kind === 'ok'
       ? verdictLine({
@@ -65,15 +84,25 @@ export function Headline({
     <div className="flex flex-col gap-3">
       <section aria-labelledby="dashboard-verdict-heading" className="flex flex-col gap-4 border border-border bg-card p-4 sm:p-5">
         <div className="flex flex-col items-start gap-2">
-          {verdict.tone === 'neutral' ? null : (
+          {divergence !== null ? (
+            <Selo tone="attention" label={DIVERGENCE_SELO_LABEL} />
+          ) : verdict.tone === 'neutral' ? null : (
             <Selo
               tone={verdict.tone === 'danger' ? 'danger' : 'ok'}
               label={verdict.tone === 'danger' ? 'Saldo negativo' : 'Sem saldo negativo'}
             />
           )}
           <h2 id="dashboard-verdict-heading" className="max-w-3xl text-2xl font-semibold text-foreground">
-            {verdict.text}
+            {divergence === null ? verdict.text : `${verdictDivergenceText(divergence)}.`}
           </h2>
+          {divergence !== null ? (
+            <p className="max-w-3xl text-sm text-muted-foreground">
+              Sem contar as faturas anteriores, o saldo não fica negativo.{' '}
+              <Link href="/cartoes" className="text-primary underline underline-offset-2">
+                {DIVERGENCE_LINK_LABEL}
+              </Link>
+            </p>
+          ) : null}
           {overdueNote ? (
             <p className="max-w-3xl text-sm text-muted-foreground">
               {overdueNote}.{' '}

@@ -93,3 +93,17 @@ describe('polish final da seleção pelo canhoto', () => {
     expect(confirmation).toContain("{installment ? `${stubDate(draft.occurredOnText)} · ` : ''}");
   });
 });
+
+describe('P1b: com o placar divergindo, Confirmar vira contorno e a ação primária é achar o que falta', () => {
+  it('Mostrar o que pode faltar é o primário e Confirmar com diferença vira outline', () => {
+    expect(confirmation).toContain('Mostrar o que pode faltar');
+    expect(confirmation).toContain("variant={diverge ? 'outline' : 'primary'}");
+    expect(confirmation).toContain('confirmWithDifferenceLabel');
+    expect(confirmation).toContain('showWhatMayBeMissing');
+    expect(confirmation).toContain('mayBeMissing');
+  });
+
+  it('em CONFERE nada muda: o rótulo continua Confirmar importação', () => {
+    expect(confirmation).toContain(": 'Confirmar importação';");
+  });
+});

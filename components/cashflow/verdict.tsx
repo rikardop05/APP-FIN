@@ -1,9 +1,18 @@
 import Link from 'next/link';
 import { AlertTriangle, ShieldCheck } from 'lucide-react';
 
-import { Money } from '@/components/ui-kit';
+import { Money, Selo } from '@/components/ui-kit';
 import { cents, type Cents } from '@/lib/money';
 import type { Competence } from '@/lib/date';
+
+// Regra única do veredito dividido: a mesma do Painel (components/dashboard/presentation.ts).
+import {
+  DIVERGENCE_LINK_LABEL,
+  DIVERGENCE_SELO_LABEL,
+  verdictDivergence,
+  verdictDivergenceText,
+  type OverdueScenario,
+} from '@/components/dashboard/presentation';
 import type { CashflowProjection } from '@/lib/finance/cashflow';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +25,8 @@ type VerdictProps = {
   /** Faturas anteriores de competências anteriores e não marcadas como pagas; a projeção não as conta. */
   overdueUnpaidCents?: Cents;
   overdueUnpaidCompetences?: readonly Competence[];
+  /** Segunda leitura (faturas anteriores não pagas descontadas); `undefined` com simulação ativa. */
+  withOverdueStatements?: OverdueScenario;
 };
 
 /**
@@ -29,7 +40,7 @@ type VerdictProps = {
  * Um app que diz "você está bem" tendo olhado metade da despesa é pior que um
  * que não diz nada.
  */
-export function Verdict({ projection, baseProjection, overdueUnpaidCents = cents(0), overdueUnpaidCompetences = [] }: VerdictProps) {
+export function Verdict({ projection, baseProjection, overdueUnpaidCents = cents(0), overdueUnpaidCompetences = [], withOverdueStatements }: VerdictProps) {
   const first = projection.firstNegativeCompetence;
   const firstMonth =
     first === null ? undefined : projection.months.find((month) => month.competence === first);
@@ -38,21 +49,27 @@ export function Verdict({ projection, baseProjection, overdueUnpaidCents = cents
       ? undefined
       : projection.months.find((month) => month.closingCents === projection.minClosingCents);
 
+  // P1a: a principal não fica negativa, mas com as faturas anteriores não pagas ficaria: o veredito vira atenção.
+  const divergence = verdictDivergence(first, withOverdueStatements, overdueUnpaidCompetences);
+
   return (
     <section
       aria-labelledby="fluxo-verdict-heading"
       className={cn(
         'flex flex-col gap-2 border p-3 sm:gap-3 sm:p-5',
-        first === null ? 'border-border bg-card' : 'border-destructive/50 bg-destructive-soft',
+        first !== null ? 'border-destructive/50 bg-destructive-soft' : divergence ? 'border-warning/60 bg-warning-soft' : 'border-border bg-card',
       )}
     >
       <div className="flex items-start gap-3">
-        {first === null ? (
+        {first === null && divergence ? (
+          <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-warning" aria-hidden="true" />
+        ) : first === null ? (
           <ShieldCheck className="mt-0.5 h-6 w-6 shrink-0 text-success" aria-hidden="true" />
         ) : (
           <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-destructive" aria-hidden="true" />
         )}
         <div className="flex flex-col gap-1">
+          {divergence ? <Selo tone="attention" label={DIVERGENCE_SELO_LABEL} className="self-start" /> : null}
           <h2
             id="fluxo-verdict-heading"
             className="text-lg font-semibold text-foreground"
@@ -81,13 +98,23 @@ export function Verdict({ projection, baseProjection, overdueUnpaidCents = cents
               {competenceShort(worst.competence)}.
             </p>
           ) : null}
+          {divergence ? (
+            <p className="text-base font-medium text-foreground">
+              {verdictDivergenceText(divergence)}.{' '}
+              <Link href="/cartoes" className="font-medium underline underline-offset-2">
+                {DIVERGENCE_LINK_LABEL}
+              </Link>
+            </p>
+          ) : null}
           {overdueUnpaidCents > 0 ? (
             <p className="text-sm text-foreground">
               Sem contar <Money value={overdueUnpaidCents} sign="never" /> de faturas anteriores não marcadas como pagas
               {overdueUnpaidCompetences.length > 0 ? ` (${overdueUnpaidCompetences.map((c) => competenceShort(c)).join(', ')})` : ''}.{' '}
-              <Link href="/cartoes" className="font-medium underline underline-offset-2">
-                Ver em Cartões
-              </Link>
+              {divergence ? null : (
+                <Link href="/cartoes" className="font-medium underline underline-offset-2">
+                  Ver em Cartões
+                </Link>
+              )}
             </p>
           ) : null}
           {baseProjection ? (

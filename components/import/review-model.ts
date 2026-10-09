@@ -206,3 +206,16 @@ export function successMessage(
   const tail = parts.length === 0 ? '' : ` ${parts.join(' e ')}.`;
   return `Importação confirmada. Os canhotos foram destacados.${tail}`;
 }
+
+/**
+ * Linhas que podem explicar uma DIFERENÇA no placar: as que ficaram fora do lote (excluídas, duplicadas) e as de
+ * baixa confiança (o parser pode ter errado o valor ou perdido a linha).
+ */
+export function mayBeMissing(row: { include: boolean; state: RowState; lowConfidence: boolean }): boolean {
+  return !row.include || row.state === 'duplicate' || row.lowConfidence;
+}
+
+/** Rótulo do Confirmar quando o placar diverge: o valor da diferença vai no próprio botão (atrito, não bloqueio). */
+export function confirmWithDifferenceLabel(differenceFormatted: string): string {
+  return `Confirmar com diferença de ${differenceFormatted}`;
+}

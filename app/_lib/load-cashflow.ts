@@ -2,7 +2,12 @@ import { toCompetence } from '@/lib/date';
 import { getCashflowData } from '@/lib/db/queries/cashflow';
 import { getOverdueUnpaidStatements, type OverdueUnpaidStatements } from '@/lib/db/queries/dashboard';
 import { topUpPlanned } from '@/lib/db/queries/recurring-planned-write';
-import { projectCashflow, type CashflowProjection } from '@/lib/finance/cashflow';
+import {
+  projectCashflow,
+  projectWithOverdueStatements,
+  type CashflowProjection,
+  type OverdueStatementsScenario,
+} from '@/lib/finance/cashflow';
 
 import { toCashflowInput, type CashflowBase } from './to-cashflow-input';
 
@@ -24,6 +29,12 @@ export type LoadedCashflow = CashflowBase & {
    * o campo existe para a tela avisar quanto fica de fora. `totalCents` negativo = a pagar.
    */
   overdueUnpaidStatements: OverdueUnpaidStatements;
+  /**
+   * Segunda leitura do veredito: a MESMA entrada da projeção, com
+   * `overdueUnpaidStatements.notInProjectionCents` descontado no mês corrente (pior fechamento, mês dele, primeiro mês negativo e o valor
+   * considerado). `projection` não muda: isto é só aviso (decisão do Ricardo, 2026-10-09).
+   */
+  withOverdueStatements: OverdueStatementsScenario;
 };
 
 /**
@@ -65,5 +76,13 @@ export async function loadProjectedCashflow(
       input.statementsDue.length +
       input.plannedContributions.length >
       0;
-  return { ...base, projection: projectCashflow(input), hasProjectableData, overdueUnpaidStatements };
+  return {
+    ...base,
+    projection: projectCashflow(input),
+    hasProjectableData,
+    overdueUnpaidStatements,
+    // So a parte que a projecao ainda nao leva (vencimento antes da janela): a fatura
+    // anterior que vence dentro da janela ja esta em `statementsDue`.
+    withOverdueStatements: projectWithOverdueStatements(input, overdueUnpaidStatements.notInProjectionCents),
+  };
 }

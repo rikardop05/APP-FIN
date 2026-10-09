@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 
-import { addCompetence, toCompetence, type Competence, type IsoDate } from '@/lib/date';
+import { addCompetence, competenceStart, toCompetence, type Competence, type IsoDate } from '@/lib/date';
 import { db } from '@/lib/db';
 import { COUNTED_STATUSES } from './counted-statuses';
 import type { CategoryNature, TransactionKind, TransactionStatus } from '@/lib/db';
@@ -59,6 +59,8 @@ export type DashboardCommitmentTransaction = {
   statementPaid: boolean;
   /** Linha de competencia anterior a janela, de fatura existente e nao paga: "Faturas vencidas nao pagas". */
   statementOverdue: boolean;
+  /** Dia em que a linha sai do caixa (vencimento da fatura); null quando desconhecido. */
+  cashDate: IsoDate | null;
 };
 
 export type DashboardCategory = {
@@ -415,6 +417,7 @@ export async function listCommitmentTransactions(
       // Linha de competencia ANTERIOR a janela que so esta aqui por ter fatura vencida e
       // nao paga (decisao do Ricardo, 2026-10-08, para qualquer competencia passada).
       statementOverdue: sql<boolean>`${transactions.competence} < ${fromCompetence}`,
+      cashDate: transactions.cashDate,
     })
     .from(transactions)
     .where(
@@ -446,6 +449,7 @@ export async function listCommitmentTransactions(
       installment: row.installment === true,
       statementPaid: row.statementPaid === true,
       statementOverdue: row.statementOverdue === true,
+      cashDate: row.cashDate,
     }));
 }
 
@@ -455,6 +459,14 @@ export type OverdueUnpaidStatements = {
   totalCents: Cents;
   /** Competências que entraram, em ordem. */
   competences: Competence[];
+  /**
+   * A parte de `totalCents` que a projeção do Fluxo NÃO leva: linhas com vencimento
+   * (`cash_date`) antes do primeiro dia de `fromCompetence`, ou sem vencimento. Fatura de
+   * competência anterior que vence DENTRO da janela (cartão que fecha dia 28 e vence dia 5)
+   * já está em `statementsDue` da projeção; descontá-la de novo seria contar duas vezes
+   * (achado do Corvo, 2026-10-09). É o valor da segunda leitura do veredito.
+   */
+  notInProjectionCents: Cents;
 };
 
 /**
@@ -470,7 +482,19 @@ export async function getOverdueUnpaidStatements(
 ): Promise<OverdueUnpaidStatements> {
   const transactionsBefore = await listCommitmentTransactions(householdId, fromCompetence, 0);
   const result = futureCommitment({ fromCompetence, months: 0, cards: [], transactions: transactionsBefore });
-  return { totalCents: result.breakdown.overdueUnpaidCents, competences: result.overdueCompetences };
+  // Mesma regra e mesmo motor, só sobre o que vence antes da janela de caixa (ou sem vencimento).
+  const windowStart = competenceStart(fromCompetence);
+  const outside = futureCommitment({
+    fromCompetence,
+    months: 0,
+    cards: [],
+    transactions: transactionsBefore.filter((row) => row.cashDate === null || row.cashDate < windowStart),
+  });
+  return {
+    totalCents: result.breakdown.overdueUnpaidCents,
+    competences: result.overdueCompetences,
+    notInProjectionCents: outside.breakdown.overdueUnpaidCents,
+  };
 }
 
 /**
