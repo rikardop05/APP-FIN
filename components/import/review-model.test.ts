@@ -132,7 +132,8 @@ describe('applyBulk', () => {
 describe('bankLabel', () => {
   it('nomeia os emissores conhecidos e não quebra nos outros', () => {
     expect(bankLabel('nubank_card')).toBe('Nubank');
-    expect(bankLabel('inter_card')).toBe('inter');
+    expect(bankLabel('inter_card')).toBe('Inter');
+    expect(bankLabel('santander')).toBe('Santander');
     expect(bankLabel(null)).toBe('Emissor não identificado');
   });
 });

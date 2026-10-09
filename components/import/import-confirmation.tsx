@@ -978,12 +978,12 @@ export function ImportConfirmation({
           },
         ]}
         action={
-          <div className="flex max-w-xs flex-col items-end gap-1">
+          <div className="flex w-full flex-col items-stretch gap-1 sm:max-w-xs sm:items-end">
             <Button
               type="button"
               aria-disabled={blockReason !== null}
               aria-describedby="confirmar-motivo"
-              className={blockReason !== null ? 'opacity-60' : undefined}
+              className={blockReason !== null ? 'w-full opacity-60 sm:w-auto' : 'w-full sm:w-auto'}
               onClick={handleConfirmClick}
             >
               <Check className="h-4 w-4" aria-hidden="true" />

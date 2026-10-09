@@ -44,13 +44,13 @@ export function Placar({ title, items, action, position = 'static', className }:
       )}
     >
       {title ? (
-        <Guilhoche className="flex items-center px-4 py-2 text-xs font-semibold uppercase tracking-widest text-foreground sm:w-28">
+        <Guilhoche className="hidden items-center px-4 py-2 text-xs font-semibold uppercase tracking-widest text-foreground sm:flex sm:w-28">
           <span className="bg-card px-1.5 py-0.5">{title}</span>
         </Guilhoche>
       ) : null}
       <dl className="grid flex-1 auto-cols-fr grid-flow-col divide-x divide-border">
         {items.map((item) => (
-          <div key={item.label} className="flex min-w-0 flex-col justify-center px-3 py-2">
+          <div key={item.label} className="flex min-w-0 flex-col justify-center px-3 py-1.5 sm:py-2">
             <dt className="text-xs text-muted-foreground">{item.label}</dt>
             <dd className={cn('num text-base font-semibold sm:text-lg', TONE_TEXT[item.tone ?? 'neutral'])}>
               {item.value}
@@ -59,7 +59,7 @@ export function Placar({ title, items, action, position = 'static', className }:
         ))}
       </dl>
       {action ? (
-        <div className="flex items-center justify-end border-t border-border p-2 sm:border-l sm:border-t-0">
+        <div className="flex w-full items-center justify-end border-t border-border p-2 sm:w-auto sm:border-l sm:border-t-0">
           {action}
         </div>
       ) : null}

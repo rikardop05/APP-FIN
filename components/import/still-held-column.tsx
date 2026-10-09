@@ -41,7 +41,7 @@ export function StillHeldColumn({ stillHeld, recalculating = false }: StillHeldC
             {stillHeld.months.map((month) => (
               <li key={month.competence} className="flex flex-col gap-1.5">
                 <p className="flex items-baseline justify-between gap-2 text-sm">
-                  <span className="font-medium capitalize text-foreground">{competenceLong(month.competence)}</span>
+                  <span className="font-medium text-foreground first-letter:uppercase">{competenceLong(month.competence)}</span>
                   <Money value={month.totalCents} sign="never" className="text-muted-foreground" />
                 </p>
                 <ul className="flex flex-col gap-1">

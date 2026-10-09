@@ -141,12 +141,16 @@ const BANK_LABEL: Record<string, string> = {
   nubank_card: 'Nubank',
   santander_card: 'Santander',
   mercadopago_card: 'Mercado Pago',
+  nubank: 'Nubank',
+  santander: 'Santander',
+  mercadopago: 'Mercado Pago',
 };
 
 /** Nome do emissor a partir do `bankKey` do detector; desconhecido vira texto neutro. */
 export function bankLabel(bankKey: string | null): string {
   if (bankKey === null) return 'Emissor não identificado';
-  return BANK_LABEL[bankKey] ?? bankKey.replace(/_card$/, '').replace(/_/g, ' ');
+  const fallback = bankKey.replace(/_card$/, '').replace(/_/g, ' ');
+  return BANK_LABEL[bankKey] ?? fallback.charAt(0).toUpperCase() + fallback.slice(1);
 }
 
 export type AnnounceState = {
