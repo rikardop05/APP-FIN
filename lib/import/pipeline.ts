@@ -379,9 +379,16 @@ function resolveInstallment(row: ParsedRow): {
   const detected = row.installment ?? fromDescription;
   if (detected === null) return { description, installment: null };
 
-  if (occurredOn !== null) {
+  // Evidencia direta na descricao (`PARC 03/10`, `3 de 10`) para o MESMO par:
+  // e parcela mesmo coincidindo com a data. Revisao final, ponto (a).
+  const marked =
+    fromDescription?.marked === true &&
+    fromDescription.current === detected.current &&
+    fromDescription.total === detected.total;
+
+  if (occurredOn !== null && !marked) {
     const { day, month } = dayMonth(occurredOn);
-    // `03/10` numa linha de 03/10 e a propria data, nao a parcela 3 de 10.
+    // `03/10` SOLTO numa linha de 03/10 e a propria data, nao a parcela 3 de 10.
     if (detected.current === day && detected.total === month) {
       return { description: rawDescription, installment: null };
     }

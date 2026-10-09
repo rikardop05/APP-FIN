@@ -144,3 +144,22 @@ describe('tema escuro por padrão e Lançamentos em canhotos', () => {
     expect(list).not.toContain('<table');
   });
 });
+
+describe('selos: toda etiqueta de estado tem letra na tabela única', () => {
+  it('rótulos literais de marca e Selo existem em ESTADO_LETRA', async () => {
+    const { ESTADO_LETRA } = await import('./carne');
+    const files = ['components/dashboard', 'components/cards', 'components/transactions', 'components/import', 'components/cashflow', 'components/budget']
+      .flatMap((dir) => readdirSync(join(root, dir)).filter((f) => f.endsWith('.tsx')).map((f) => `${dir}/${f}`));
+    const missing: string[] = [];
+    for (const file of files) {
+      const text = read(file);
+      for (const match of text.matchAll(/\{ label: '([^']+)', tone: '(?:neutral|ok|attention|danger)'/g)) {
+        if (!(match[1] as string in ESTADO_LETRA)) missing.push(`${file}: ${match[1]}`);
+      }
+      for (const match of text.matchAll(/<Selo[^>]*\blabel="([^"]+)"/g)) {
+        if (!(match[1] as string in ESTADO_LETRA)) missing.push(`${file}: ${match[1]}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+});

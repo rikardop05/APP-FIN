@@ -37,7 +37,7 @@ describe('fatura paga na tela de cartões', () => {
 
   it('a fatura mostra UM estado só (nunca Aberta junto de Vencida) e o total devido sem sinal', () => {
     const list = read('components/cards/statement-list.tsx');
-    expect(list).toContain('if (overdue) return <Badge');
+    expect(list).toContain('if (overdue) return { label:');
     expect(list).not.toContain('{overdue ? <Badge');
     expect(list).not.toContain('<Money value={statement.computedTotalCents} />');
     expect(list).not.toContain('<Money value={statement.reportedTotalCents} />');

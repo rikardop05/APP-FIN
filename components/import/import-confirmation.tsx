@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { Check } from 'lucide-react';
 import { z } from 'zod';
 import { formatDateBR } from '@/lib/date';
+import { dataTalao } from '@/components/ui-kit';
 import { formatBRL, parseBRL } from '@/lib/money';
 import type { Cents } from '@/lib/money';
 import type { RecalculateBody } from '@/app/api/import/recalculate/schema';
@@ -13,6 +14,7 @@ import {
   Canhoto,
   Carimbo,
   Checkbox,
+  DateField,
   Faixa,
   Input,
   Money,
@@ -239,10 +241,10 @@ function countLabel(includedRowsCount: number, plannedRowsCount: number): string
   return `${markedPart} + ${futurePart} (${includedRowsCount} no total)`;
 }
 
-/** Data do canhoto: dd/mm/aaaa, ou travessão se a data da linha ainda não é válida. */
+/** Data do talão (04 out), ou travessão se a data da linha ainda não é válida. Parcela n/N usa `Parcela`. */
 function stubDate(text: string): string {
   const parsed = isoDateSchema.safeParse(text);
-  return parsed.success ? formatDateBR(parsed.data).slice(0, 5) : '—';
+  return parsed.success ? dataTalao(parsed.data) : '—';
 }
 
 const NOTE: Partial<Record<ImportPreviewRow['state'], string>> = {
@@ -651,7 +653,8 @@ export function ImportConfirmation({
                 checked={onlyFlagged}
                 onChange={(event) => setOnlyFlagged(event.target.checked)}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground">Toque no talão para selecionar linhas e editar em lote.</p>
+              <p className="text-xs text-muted-foreground [@media(pointer:coarse)]:hidden">
                 <kbd className="num border border-border bg-card px-1">J</kbd> /{' '}
                 <kbd className="num border border-border bg-card px-1">K</kbd> pulam entre as linhas sinalizadas
               </p>
@@ -727,7 +730,23 @@ export function ImportConfirmation({
                     ariaLabel={`Linha ${rowNumber}, ${label || 'sem descrição'}`}
                     destaque={invalid ? 'danger' : flags.length > 0 ? 'attention' : undefined}
                     className={draft.include ? undefined : 'opacity-80'}
-                    stub={stubDate(draft.occurredOnText)}
+                    selecionado={selected.has(draft.index)}
+                    stub={
+                      <button
+                        type="button"
+                        aria-pressed={selected.has(draft.index)}
+                        aria-label={rowFieldLabel('Selecionar', rowNumber, label)}
+                        onClick={() => toggleSelected(draft.index, !selected.has(draft.index))}
+                        className="flex h-full min-h-11 w-full flex-col items-center justify-center gap-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                      >
+                        {selected.has(draft.index) ? <Check className="h-4 w-4 text-primary" aria-hidden="true" /> : null}
+                        {installment ? (
+                          <Parcela atual={installment.current} total={installment.total} />
+                        ) : (
+                          <span>{stubDate(draft.occurredOnText)}</span>
+                        )}
+                      </button>
+                    }
                     marcas={flags.map((flag) => FLAG_SELO[flag])}
                     valor={
                       amount === null ? (
@@ -769,11 +788,10 @@ export function ImportConfirmation({
                           <div className="grid gap-3 sm:grid-cols-4">
                             <label className="flex flex-col gap-1 text-sm font-medium text-foreground">
                               Data
-                              <Input
-                                type="date"
+                              <DateField
                                 value={draft.occurredOnText}
                                 aria-label={rowFieldLabel('Data', rowNumber, label)}
-                                onChange={(event) => updateDraft(draft.index, { occurredOnText: event.target.value })}
+                                onChange={(iso) => updateDraft(draft.index, { occurredOnText: iso })}
                               />
                             </label>
                             <div className="flex flex-col gap-1 text-sm">
@@ -898,11 +916,6 @@ export function ImportConfirmation({
                     }
                   >
                     <div className="flex min-w-0 items-center gap-1">
-                      <Checkbox
-                        checked={selected.has(draft.index)}
-                        aria-label={rowFieldLabel('Selecionar', rowNumber, label)}
-                        onChange={(event) => toggleSelected(draft.index, event.target.checked)}
-                      />
                       <button
                         id={`linha-${draft.index}-abrir`}
                         type="button"
@@ -913,7 +926,6 @@ export function ImportConfirmation({
                         className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8"
                       >
                         <span className="truncate">{label || 'Sem descrição'}</span>
-                        {installment ? <Parcela atual={installment.current} total={installment.total} className="text-xs text-muted-foreground" /> : null}
                       </button>
                       <Checkbox
                         checked={draft.include}
@@ -983,7 +995,7 @@ export function ImportConfirmation({
               type="button"
               aria-disabled={blockReason !== null}
               aria-describedby="confirmar-motivo"
-              className={blockReason !== null ? 'w-full opacity-60 sm:w-auto' : 'w-full sm:w-auto'}
+              className="w-full sm:w-auto"
               onClick={handleConfirmClick}
             >
               <Check className="h-4 w-4" aria-hidden="true" />

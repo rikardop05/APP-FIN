@@ -4,12 +4,13 @@ import { useState } from 'react';
 import { Pencil, Tags, Trash2 } from 'lucide-react';
 import { competenceShort } from '@/components/cashflow/labels';
 import { formatBRL, parseBRL } from '@/lib/money';
-import { formatDateBR } from '@/lib/date';
 import {
   Button,
   Canhoto,
   Checkbox,
+  DateField,
   DateText,
+  dataTalao,
   Input,
   Money,
   Parcela,
@@ -51,7 +52,7 @@ export type TransactionEditValues = {
 
 /**
  * Talão do canhoto: a parcela (03/10) quando a linha é parcelada com total conhecido, senão a data
- * (dd/mm). Parcela sem total cai para "parcela 03" em texto simples.
+ * sem barra (04 out). Parcela sem total cai para "parcela 03" em texto simples.
  */
 function RowStub({ row }: { row: Transaction }) {
   if (row.installmentNumber !== null) {
@@ -62,7 +63,7 @@ function RowStub({ row }: { row: Transaction }) {
       <Parcela atual={row.installmentNumber} total={label.total} />
     );
   }
-  return <span>{formatDateBR(row.occurredOn).slice(0, 5)}</span>;
+  return <span>{dataTalao(row.occurredOn)}</span>;
 }
 
 /** Descrição sem o "(03/10)" que o talão já mostra. */
@@ -126,7 +127,7 @@ function TransactionEditor({ row, options, onSave, onCancel }: EditorProps) {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-muted-foreground">Data</span>
-          <Input type="date" value={occurredOn} onChange={(event) => setOccurredOn(event.target.value)} required />
+          <DateField value={occurredOn} onChange={setOccurredOn} required />
         </label>
         <label className="flex flex-col gap-1 text-sm sm:col-span-2">
           <span className="text-xs text-muted-foreground">Descrição</span>

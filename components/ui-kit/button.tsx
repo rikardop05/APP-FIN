@@ -8,7 +8,9 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 /**
  * Botão base. Alvo de toque de 44px no celular (`h-11`), compacto a partir de `sm` (36px, ou 32px
- * no tamanho `sm`). Cantos retos e régua de 1px: o mundo do carnê não tem pílulas.
+ * no tamanho `sm`). Cantos retos e régua de 1px: o mundo do carnê não tem pílulas. Primário BLOQUEADO
+ * (`disabled` ou `aria-disabled`) vira papel apagado com texto atenuado (não verde esmaecido), para o
+ * pronto e o bloqueado diferirem nos dois temas.
  */
 export function Button({
   className,
@@ -26,7 +28,7 @@ export function Button({
           ? 'h-11 min-w-11 px-3 text-xs sm:h-8 sm:min-w-0'
           : 'h-11 px-4 text-sm sm:h-9',
         variant === 'primary' &&
-          'border-primary bg-primary text-primary-foreground hover:bg-primary/90',
+          'border-primary bg-primary text-primary-foreground hover:bg-primary/90 disabled:border-input disabled:bg-secondary disabled:text-muted-foreground disabled:opacity-100 aria-disabled:border-input aria-disabled:bg-secondary aria-disabled:text-muted-foreground aria-disabled:hover:bg-secondary',
         variant === 'secondary' &&
           'border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80',
         variant === 'outline' &&

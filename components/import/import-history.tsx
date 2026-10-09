@@ -228,16 +228,16 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
             return (
               <li key={batch.id} className="border border-border bg-card p-3 sm:p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate text-sm font-medium text-foreground">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="min-w-0 break-all text-sm font-medium text-foreground">
                         {batchTitle(batch)}
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {batchRowsText(batch.status, batch.rowsImported)}
                       </span>
                     </div>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="min-w-0 break-all text-xs text-muted-foreground">
                       {formatDateBR(batch.createdAt.slice(0, 10))}
                       {batchTitle(batch) === batch.fileName ? '' : ` · ${batch.fileName}`}
                     </span>

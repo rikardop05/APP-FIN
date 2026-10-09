@@ -86,6 +86,14 @@ export interface DetectedInstallment {
   total: number;
   /** Descricao sem o sufixo de parcela, com espacos e separadores soltos limpos. */
   cleanDescription: string;
+  /**
+   * `true` quando a palavra-chave `PARC`/`PARCELA` vem antes do numero. Ausente
+   * no par solto `N/M` e no `N de M` sem palavra-chave, que tambem podem ser
+   * data (`SEGURO VENC 3 de 10`). O desempate do preview contra a data da linha
+   * so vale sem ela: `PARC 03/10` numa linha de 03/10 e parcela, `03/10` solto e
+   * a data.
+   */
+  marked?: true;
 }
 
 /**
@@ -169,6 +177,13 @@ interface Candidate {
    * desempate. `3/10` solto nao e forte: e o par que tambem pode ser data.
    */
   strong: boolean;
+  /**
+   * So a palavra-chave `PARC`/`PARCELA`. E o que vira `marked` na saida: a
+   * unica evidencia que vence a data da propria linha no preview. `3 de 10`
+   * sem palavra-chave e forte aqui, mas `SEGURO VENC 3 de 10` tambem e
+   * vencimento em 3 de outubro (revisao do Corvo).
+   */
+  keyword: boolean;
 }
 
 /**
@@ -226,6 +241,7 @@ function collectCandidates(raw: string): Candidate[] {
       start: keyword === null ? matchStart : keyword.index,
       end: matchEnd,
       strong: keyword !== null || spelledOut,
+      keyword: keyword !== null,
     });
   }
 
@@ -286,5 +302,10 @@ export function detectInstallment(
     `${rawDescription.slice(0, start)} ${rawDescription.slice(end)}`,
   );
 
-  return { current: chosen.current, total: chosen.total, cleanDescription };
+  return {
+    current: chosen.current,
+    total: chosen.total,
+    cleanDescription,
+    ...(chosen.keyword ? { marked: true as const } : {}),
+  };
 }

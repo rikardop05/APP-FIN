@@ -20,6 +20,8 @@ type CanhotoProps = {
   preso?: boolean;
   /** Valor, alinhado à direita (use `<Money />`). */
   valor?: ReactNode;
+  /** Linha selecionada (edição em lote): contorno e talão na cor de identidade. */
+  selecionado?: boolean;
   /** Régua na cor do tom: linha que pede atenção (o selo diz o porquê). */
   destaque?: 'attention' | 'danger';
   /** Faixa abaixo do canhoto, na largura toda (ex.: o editor da linha), separada por picote. */
@@ -31,7 +33,8 @@ type CanhotoProps = {
 /**
  * Canhoto: a linha de um lançamento ou parcela. Grade [canhoto | picote | corpo | valor]; no celular
  * o valor desce para baixo do corpo e a linha mantém 44px ou mais de altura. O canhoto (`stub`) e o
- * picote levam `data-canhoto-stub`, o gancho da animação de "destacar" ao confirmar o lote.
+ * TALÃO: significa UMA coisa por linha. Parcela n/N (`<Parcela />`, com barra, 03/10) OU data sem barra
+ * (`dataTalao`, 04 out): nunca `04/10`, que se confunde com parcela. O talão e o picote levam `data-canhoto-stub`, o gancho da animação de "destacar" ao confirmar o lote.
  */
 export function Canhoto({
   as: Tag = 'div',
@@ -43,6 +46,7 @@ export function Canhoto({
   preso = false,
   valor,
   destaque,
+  selecionado = false,
   footer,
   children,
   className,
@@ -58,11 +62,15 @@ export function Canhoto({
         preso ? 'border-dashed border-input text-muted-foreground' : 'border-border',
         destaque === 'attention' && 'border-warning',
         destaque === 'danger' && 'border-destructive',
+        selecionado && 'border-primary',
         className,
       )}
     >
       <div className="grid min-h-11 grid-cols-[4.25rem_auto_minmax(0,1fr)] items-stretch sm:grid-cols-[4.25rem_auto_minmax(0,1fr)_auto]">
-        <div data-canhoto-stub="" className="num flex items-center justify-center px-2 py-2 text-sm">
+        <div
+          data-canhoto-stub=""
+          className={cn('num flex items-center justify-center px-2 py-2 text-sm', selecionado && 'bg-primary/15')}
+        >
           {stub}
         </div>
         <Picote orientation="vertical" />

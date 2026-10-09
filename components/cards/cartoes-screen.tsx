@@ -20,6 +20,8 @@ import {
 } from './schemas';
 import { CardHolders } from './card-holders';
 import { StatementList } from './statement-list';
+import { futureStubsForCard } from './card-stubs';
+import { toCompetence } from '@/lib/date';
 import { CommitmentSection } from './commitment/commitment-section';
 import type { CommitmentInput } from '@/lib/finance/commitment';
 
@@ -333,7 +335,15 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
                         <h4 className="font-medium">Faturas</h4>
                         <Badge variant="neutral">{card.statements.length} {card.statements.length === 1 ? 'fatura' : 'faturas'}</Badge>
                       </div>
-                      <StatementList statements={card.statements} cycle={{ closingDay: card.closingDay, dueDay: card.dueDay }} today={today} onStatusChanged={statusChanged} />
+                      <StatementList statements={card.statements} cycle={{ closingDay: card.closingDay, dueDay: card.dueDay }} today={today}
+                        futureStubs={futureStubsForCard({
+                          card,
+                          transactions: commitmentTransactions,
+                          statementPeriods: card.statements.map((statement) => statement.period),
+                          fromCompetence: toCompetence(today),
+                          months: commitmentMonths,
+                        })}
+                        onStatusChanged={statusChanged} />
                     </div>
                   </article>
                 ))}

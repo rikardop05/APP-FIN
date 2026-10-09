@@ -42,7 +42,7 @@ describe('datas e competências em pt-BR, pelos formatadores existentes', () => 
   it('Cartões: competência da fatura por competenceShort ("jul/2026"), nunca "2026-07"', () => {
     const list = read('components/cards/statement-list.tsx');
     expect(list).not.toContain('{statement.period}');
-    expect(list.match(/competenceShort\(statement\.period\)/g)).toHaveLength(2);
+    expect(list.match(/competenceShort\(statement\.period\)/g)).toHaveLength(1);
   });
 
   it('Orçamento: título do mês sem a classe capitalize ("Outubro De 2026")', () => {

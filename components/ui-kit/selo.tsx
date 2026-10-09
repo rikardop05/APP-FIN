@@ -1,12 +1,12 @@
 import type { HTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
-import { SELO_TONE_CLASS, seloLetter, type SeloTone } from './carne';
+import { SELO_TONE_CLASS, letraDoEstado, seloLetter, type SeloTone } from './carne';
 
 type SeloProps = Omit<HTMLAttributes<HTMLSpanElement>, 'children'> & {
   tone?: SeloTone;
   /** Texto do estado, por extenso (ex.: "Conferido"). A letra do quadradinho sai da primeira. */
   label: string;
-  /** Letra explícita, quando a inicial do texto não for a boa. */
+  /** Raro: letra explícita. O normal é NÃO passar: a letra vem da tabela única `ESTADO_LETRA` (carne.ts). */
   letter?: string;
 };
 
@@ -29,7 +29,7 @@ export function Selo({ tone = 'neutral', label, letter, className, ...props }: S
         aria-hidden="true"
         className={cn('flex w-5 items-center justify-center font-semibold', classes.box)}
       >
-        {seloLetter(letter ?? label)}
+        {letter ? seloLetter(letter) : letraDoEstado(label)}
       </span>
       <span className="px-1.5 py-0.5">{label}</span>
     </span>

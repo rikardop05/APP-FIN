@@ -36,13 +36,13 @@ export function rowFlags(row: FlagInput): RowFlag[] {
   return flags;
 }
 
-/** Selo de cada sinal: texto por extenso, letra e tom. Só `invalid` usa o vermelho de carimbo. */
-export const FLAG_SELO: Record<RowFlag, { label: string; letter: string; tone: SeloTone }> = {
-  invalid: { label: 'Incompleta', letter: 'I', tone: 'danger' },
-  low_confidence: { label: 'Baixa confiança', letter: 'B', tone: 'attention' },
-  duplicate: { label: 'Duplicada', letter: 'D', tone: 'attention' },
-  payment: { label: 'Pagamento', letter: 'P', tone: 'attention' },
-  informational: { label: 'Informativa', letter: 'N', tone: 'attention' },
+/** Selo de cada sinal: texto por extenso e tom (a letra vem da tabela única `ESTADO_LETRA`). Só `invalid` usa o vermelho de carimbo. */
+export const FLAG_SELO: Record<RowFlag, { label: string; tone: SeloTone }> = {
+  invalid: { label: 'Incompleta', tone: 'danger' },
+  low_confidence: { label: 'Baixa confiança', tone: 'attention' },
+  duplicate: { label: 'Duplicada', tone: 'attention' },
+  payment: { label: 'Pagamento', tone: 'attention' },
+  informational: { label: 'Informativa', tone: 'attention' },
 };
 
 /** `index` das linhas que precisam de atenção, na ordem da lista. */

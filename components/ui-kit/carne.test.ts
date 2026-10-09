@@ -52,3 +52,50 @@ describe('selo de estado: a letra carrega o estado além da cor', () => {
     }
   });
 });
+
+import { dataTalao } from './carne';
+
+describe('dataTalao: data do talão sem barra, para não confundir com n/N', () => {
+  it('formata dd mmm', () => {
+    expect(dataTalao('2026-10-04')).toBe('04 out');
+    expect(dataTalao('2026-12-31')).toBe('31 dez');
+    expect(dataTalao('2026-03-01')).toBe('01 mar');
+  });
+
+  it('rejeita data inválida', () => {
+    expect(() => dataTalao('2026-13-01')).toThrow(RangeError);
+    expect(() => dataTalao('04/10/2026')).toThrow(RangeError);
+  });
+});
+
+import { ESTADO_LETRA, letraDoEstado } from './carne';
+import { FLAG_SELO } from '@/components/import/review-model';
+import { batchStatusLabel } from '@/components/import/import-history-text';
+
+describe('letra única por estado no app todo', () => {
+  it('a tabela não repete letra', () => {
+    const letters = Object.values(ESTADO_LETRA);
+    expect(new Set(letters).size).toBe(letters.length);
+    for (const letter of letters) expect(letter).toMatch(/^[A-Z]$/);
+  });
+
+  it('todo estado de Importar e do histórico está na tabela', () => {
+    for (const { label } of Object.values(FLAG_SELO)) expect(ESTADO_LETRA[label], label).toBeDefined();
+    for (const status of ['pending', 'committed', 'reverted', 'failed'] as const) {
+      const label = batchStatusLabel(status);
+      expect(ESTADO_LETRA[label], label).toBeDefined();
+    }
+    expect(ESTADO_LETRA['Previsto']).toBeDefined();
+    expect(ESTADO_LETRA['Não categorizado']).toBeDefined();
+  });
+
+  it('os que colidiam agora são diferentes', () => {
+    expect(letraDoEstado('Não categorizado')).not.toBe(letraDoEstado('Não paga'));
+    expect(letraDoEstado('Informativa')).not.toBe(letraDoEstado('Não categorizado'));
+    expect(letraDoEstado('Previsto')).not.toBe(letraDoEstado('Pagamento'));
+  });
+
+  it('estado novo sem entrada cai na inicial', () => {
+    expect(letraDoEstado('Zeta novo')).toBe('Z');
+  });
+});

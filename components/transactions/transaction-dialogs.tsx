@@ -6,7 +6,7 @@ import { competenceLabel } from '@/components/budget/labels';
 import { isSimpleDelete, reimportNotice, reopensPlannedNotice, withFutureOptionLabel } from './delete-presentation';
 import { amountForInput, signedAmountCents } from './manual-sign';
 import { RECONCILE_EXPLANATION, reconcileQuestion, type ReconcileSuggestion } from './reconcile-question';
-import { Button, DateText, Input, Money, Select } from '@/components/ui-kit';
+import { Button, DateField, DateText, Input, Money, Select } from '@/components/ui-kit';
 import {
   deleteImpactSchema,
   type DeleteEffect,
@@ -168,7 +168,7 @@ export function ManualTransactionDialog({
     <DialogShell title="Novo lançamento" description="Registre uma receita, despesa ou transferência manualmente." onClose={onClose}>
       <form className="flex flex-col gap-4" onSubmit={submit}>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1 text-sm"><span className="text-xs text-muted-foreground">Data</span><Input type="date" value={occurredOn} onChange={(event) => setOccurredOn(event.target.value)} required /></label>
+          <label className="flex flex-col gap-1 text-sm"><span className="text-xs text-muted-foreground">Data</span><DateField value={occurredOn} onChange={setOccurredOn} required /></label>
           <label className="flex flex-col gap-1 text-sm"><span className="text-xs text-muted-foreground">Tipo</span><Select value={kind} onChange={(event) => setKind(readTransactionKind(event.target.value))}><option value="expense">Despesa</option><option value="income">Receita</option><option value="transfer">Transferência</option><option value="credit_card_payment">Pagamento de fatura</option><option value="investment_contribution">Aporte</option></Select></label>
           <label className="flex flex-col gap-1 text-sm sm:col-span-2"><span className="text-xs text-muted-foreground">Descrição</span><Input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ex.: Mercado" maxLength={240} required /></label>
           <label className="flex flex-col gap-1 text-sm"><span className="text-xs text-muted-foreground">Valor</span><Input value={amount} onChange={(event) => setAmount(event.target.value)} placeholder={positiveAmount ? 'R$ 0,00' : '-R$ 0,00'} inputMode="decimal" required />{positiveAmount ? null : <span className="text-xs text-muted-foreground">Use valor negativo para saída.</span>}</label>

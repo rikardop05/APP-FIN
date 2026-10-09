@@ -239,20 +239,37 @@ A forma é a do carnê: caixas de 1px, a régua de tinta de 2px no topo do placa
 ### Buttons
 Retângulos de régua, sem pílula, sem sombra.
 - **Shape:** cantos retos (0), borda de 1px sempre presente (transparente nas variantes sem contorno), para todas as variantes terem a mesma caixa.
-- **Primary:** verde-carnê com texto papel do canhoto, 500, 14px; 44px de altura no celular e 36px a partir de `sm`, 16px de padding lateral. Tamanho `sm`: 12px, 12px de padding, 32px a partir de `sm`.
+- **Primary:** verde-carnê com texto papel do canhoto, 500, 14px. **Bloqueado** (`disabled` ou `aria-disabled`): papel apagado (faixa `secondary`, borda de campo, texto atenuado), nunca o verde esmaecido, para o pronto e o bloqueado diferirem nos dois temas; 44px de altura no celular e 36px a partir de `sm`, 16px de padding lateral. Tamanho `sm`: 12px, 12px de padding, 32px a partir de `sm`.
 - **Hover / Focus:** hover clareia o fundo a 90%; foco é anel de 2px no verde-carnê com 2px de afastamento sobre a mesa. Desabilitado a 50%.
 - **Outline:** papel do canhoto com borda de campo, texto tinta; hover em faixa a 60%.
 - **Secondary:** faixa com texto tinta. **Ghost:** sem fundo, tinta atenuada, hover em faixa a 60% com texto tinta. **Destructive:** carimbo vermelho cheio, só para ação perigosa.
 
 ### Badge e Selo
 - **Badge:** etiqueta quadrada de 12px com borda no tom a 50%, fundo suave e ícone (check, alerta, X) nos estados; neutro em faixa com régua.
-- **Selo:** o estado de linha. Um quadradinho de 20px com a LETRA do estado (cheio no tom) colado ao texto por extenso, em moldura no tom. Tons: neutro (tinta), confere, atenção, perigo. Só `danger` usa vermelho.
+- **Selo:** o estado de linha. Um quadradinho de 20px com a LETRA do estado (cheio no tom) colado ao texto por extenso, em moldura no tom. Tons: neutro (tinta), confere, atenção, perigo. Só `danger` usa vermelho. **Uma letra por estado no app todo**, da tabela única `ESTADO_LETRA` (`components/ui-kit/carne.ts`); quem usa o Selo passa só o rótulo e o tom, nunca a letra. O teste exige que a tabela não repita letra e que todo rótulo em uso esteja nela.
+
+  | Letra | Estado | Letra | Estado |
+  |---|---|---|---|
+  | A | Saldo negativo | N | Não paga |
+  | B | Baixa confiança | O | Confirmado |
+  | C | Não categorizado | P | Previsto |
+  | D | Duplicada | R | Aberta |
+  | E | Divergência | S | Sem saldo negativo |
+  | F | Informativa | T | Pendente |
+  | G | Pagamento | U | Vencimento desatualizado |
+  | H | Desfeito | V | Vencida, não marcada como paga |
+  | I | Incompleta | Z | Paga |
+  | K | Falhou | M | Fechada |
 
 ### Carimbo (signature)
 Moldura dupla (borda de 2px mais contorno de 1px afastado 2px), texto de 12px em caixa alta, 600, tracking largo, girado -3°. Verde confere para PAGO/CONFERE, vermelho de carimbo para DIVERGE. Reservado a esse veredito.
 
 ### Canhoto (signature)
-A linha de lançamento ou parcela. Grade de quatro colunas: canhoto de 68px (numeral, em geral a `Parcela` 03/10 ou a data), picote vertical, corpo (descrição e selos), valor à direita em numeral. No celular o valor desce para baixo do corpo e a linha mantém 44px ou mais. Papel do canhoto com régua de 1px; régua âmbar quando pede atenção, vermelha quando há perigo. O editor da linha abre como faixa abaixo, depois de um picote horizontal. **Preso** (parcela futura): borda tracejada na cor de campo e texto atenuado.
+A linha de lançamento ou parcela. Grade de quatro colunas: canhoto de 68px (numeral; ver a regra do talão abaixo), picote vertical, corpo (descrição e selos), valor à direita em numeral. No celular o valor desce para baixo do corpo e a linha mantém 44px ou mais. Papel do canhoto com régua de 1px; régua âmbar quando pede atenção, vermelha quando há perigo. O editor da linha abre como faixa abaixo, depois de um picote horizontal. **Preso** (parcela futura): borda tracejada na cor de campo e texto atenuado.
+
+**Regra do talão.** O talão significa UMA coisa por linha. **Parcela n/N** (`Parcela`, `parcelaLabel`): `03/10`, dois dígitos, COM barra, só para parcela. **Data** (`dataTalao`): `04 out`, dia de dois dígitos, mês de três letras minúsculas em pt-BR, SEM barra, sem ponto e sem ano (o ano vem do título ou do cabeçalho). `04/10` nunca aparece num talão, porque se confunde com parcela. A fatura de cartão não é parcela: seu talão é o vencimento (`20 jul`). Os dois helpers estão em `components/ui-kit`. Linha parcelada mostra a parcela no talão; a data completa fica no corpo. O "(03/10)" que o banco imprime na descrição sai quando o talão já o mostra (`stripInstallmentSuffix`).
+
+**Seleção.** O próprio talão é o controle de seleção para edição em lote (botão com `aria-pressed`): selecionado, o canhoto ganha contorno verde-carnê e um check no talão. O checkbox da linha fica só para "Incluir", que é outra decisão.
 
 ### Placar (signature)
 Rodapé de totais (Total da fatura, Incluído, Diferença) com régua de tinta de 2px no topo, papel do canhoto, colunas divididas por régua. Bloco de título à esquerda sobre guilhochê, rótulo de 12px em caixa alta numa tarja sólida. Valores em numeral 600; a Diferença em verde confere quando zera e vermelho de carimbo quando diverge. Versão fixa acima da barra inferior no celular, no rodapé no desktop.
@@ -264,6 +281,7 @@ Aviso em bloco: régua de 1px no tom (a 60%), fundo suave, ícone de 16px no tom
 - **Style:** papel do canhoto, borda de 1px na cor de campo, cantos retos, 12px de padding lateral, 44px de altura (36px a partir de `sm`), 16px de texto no celular e 14px no desktop. Select idêntico ao input; checkbox nativo de 20px com `accent-color` verde-carnê.
 - **Focus:** anel de 2px no verde-carnê.
 - **Error / Disabled:** `aria-invalid` troca a borda para o vermelho de carimbo; desabilitado a 50% com cursor bloqueado.
+- **DateField:** data em pt-BR, digita-se `dd/mm/aaaa` (as barras entram sozinhas, teclado numérico), o valor sai em ISO; no lugar do `<input type="date">` nativo, que mostra "dd/mm/yyyy" no idioma do navegador. Data incompleta ou inexistente marca `aria-invalid`.
 - **MonthPicker:** seletor de competência em pt-BR, mês e ano lado a lado (`1fr` e 96px), construído com os mesmos campos.
 
 ### Cabeçalho de Página e Tabela

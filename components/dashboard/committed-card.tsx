@@ -71,8 +71,8 @@ export function CommittedCard({
           Comprometido nos cartões
         </h2>
         <p className="text-sm text-muted-foreground">
-          Faturas de {competenceShort(competence)} a {competenceShort(windowEnd)}: compras lançadas e parcelas. Fatura
-          marcada como paga sai da conta.
+          {hasOverdue ? 'Faturas anteriores não pagas e faturas' : 'Faturas'} de {competenceShort(competence)} a{' '}
+          {competenceShort(windowEnd)}: compras lançadas e parcelas. Fatura marcada como paga sai da conta.
         </p>
       </div>
 

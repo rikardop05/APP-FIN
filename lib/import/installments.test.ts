@@ -8,16 +8,19 @@ describe('detectInstallment — os quatro padroes do aceite', () => {
       current: 3,
       total: 10,
       cleanDescription: '',
+      marked: true,
     });
     expect(detectInstallment('PARC 03/10 SUPERMERCADO BOM PRECO')).toEqual({
       current: 3,
       total: 10,
       cleanDescription: 'SUPERMERCADO BOM PRECO',
+      marked: true,
     });
     expect(detectInstallment('MAGAZINE LUIZA PARC. 2/6')).toEqual({
       current: 2,
       total: 6,
       cleanDescription: 'MAGAZINE LUIZA',
+      marked: true,
     });
   });
 
@@ -39,11 +42,13 @@ describe('detectInstallment — os quatro padroes do aceite', () => {
       current: 3,
       total: 10,
       cleanDescription: '',
+      marked: true,
     });
     expect(detectInstallment('CASAS BAHIA PARCELA 3 DE 10')).toEqual({
       current: 3,
       total: 10,
       cleanDescription: 'CASAS BAHIA',
+      marked: true,
     });
   });
 
@@ -89,6 +94,7 @@ describe('detectInstallment — descricao limpa', () => {
       current: 2,
       total: 6,
       cleanDescription: 'Padaria Açúcar',
+      marked: true,
     });
   });
 
@@ -154,11 +160,13 @@ describe('detectInstallment — parcela x data', () => {
       current: 2,
       total: 60,
       cleanDescription: 'COMPRA',
+      marked: true,
     });
     expect(detectInstallment('MOVEIS PARC 2/60')).toEqual({
       current: 2,
       total: 60,
       cleanDescription: 'MOVEIS',
+      marked: true,
     });
     // Nem assim passa de dois digitos — limite que MAX_TOTAL nomeia e que a
     // propria expressao ja impoe.
@@ -201,6 +209,7 @@ describe('detectInstallment — parcela x data', () => {
       current: 3,
       total: 10,
       cleanDescription: 'MENSALIDADE DIA',
+      marked: true,
     });
   });
 
@@ -241,6 +250,7 @@ describe('detectInstallment — parcela x data', () => {
       current: 3,
       total: 10,
       cleanDescription: 'PIZZA 1/2',
+      marked: true,
     });
   });
 });

@@ -17,12 +17,12 @@ describe('aviso de vencimento na tela de cartões', () => {
     expect(screen).toContain('today={today} />');
   });
 
-  it('a lista calcula os avisos com a regra pura e mostra o aviso e o selo, nas duas visões', () => {
+  it('a lista calcula os avisos com a regra pura e mostra o aviso e o selo, em um canhoto só, para qualquer largura', () => {
     const list = read('components/cards/statement-list.tsx');
     expect(list).toContain('dueDateWarnings(statements, cycle, today)');
     expect(list).toContain('Vencimento diferente do ciclo atual do cartão');
     // Selo na tabela (desktop) e no cartão (celular).
-    expect(list.match(/Vencimento desatualizado/g)).toHaveLength(2);
+    expect(list.match(/Vencimento desatualizado/g)).toHaveLength(1);
   });
 
   it('é só aviso: nada na lista grava, recalcula ou altera a fatura', () => {

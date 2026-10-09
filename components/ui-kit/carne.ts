@@ -56,3 +56,51 @@ export const SELO_TONE_CLASS: Record<SeloTone, { box: string; frame: string }> =
     frame: 'border-destructive bg-destructive-soft text-destructive',
   },
 };
+
+const MES_TALAO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'] as const;
+
+/**
+ * Data do TALÃO do canhoto: `'2026-10-04'` -> `'04 out'`. O talão significa UMA coisa por linha: parcela
+ * n/N (`Parcela`, `03/10`, com barra) OU data (`04 out`, com mês por extenso abreviado e sem barra). Assim
+ * `04/10` nunca é ambíguo entre dia/mês e parcela. Ano fora do talão (a linha ou o cabeçalho o dizem).
+ */
+export function dataTalao(iso: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  const month = match ? Number(match[2]) : 0;
+  if (!match || month < 1 || month > 12) throw new RangeError(`Data inválida para o talão: ${iso}.`);
+  return `${match[3]} ${MES_TALAO[month - 1]}`;
+}
+
+/**
+ * Letra do selo por ESTADO, única no app todo (tabela espelhada no DESIGN.md). A letra aparece sozinha no
+ * quadradinho: duas letras iguais para estados diferentes (N de "Não categorizado" e "Não paga") fariam o
+ * selo mentir. O `Selo` consulta esta tabela pelo rótulo; só cai na inicial do rótulo se o estado for novo
+ * (e o teste `carne.test.ts` exige que a tabela não repita letra).
+ */
+export const ESTADO_LETRA: Record<string, string> = {
+  Incompleta: 'I',
+  'Baixa confiança': 'B',
+  Duplicada: 'D',
+  Pagamento: 'G',
+  Informativa: 'F',
+  Previsto: 'P',
+  'Não categorizado': 'C',
+  'Não paga': 'N',
+  'Vencida, não marcada como paga': 'V',
+  Divergência: 'E',
+  'Vencimento desatualizado': 'U',
+  'Saldo negativo': 'A',
+  'Sem saldo negativo': 'S',
+  Confirmado: 'O',
+  Desfeito: 'H',
+  Pendente: 'T',
+  Falhou: 'K',
+  Aberta: 'R',
+  Fechada: 'M',
+  Paga: 'Z',
+};
+
+/** Letra do estado: a da tabela central, ou (estado novo, ainda sem entrada) a inicial do rótulo. */
+export function letraDoEstado(label: string): string {
+  return ESTADO_LETRA[label] ?? seloLetter(label);
+}
