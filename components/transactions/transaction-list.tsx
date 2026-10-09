@@ -253,7 +253,7 @@ export function TransactionList({
       </div>
       {groups.map((group) => (
         <div key={group.competence} className="flex flex-col gap-1.5">
-          <h3 className="flex items-baseline justify-between gap-3 border-b-2 border-foreground pb-1 text-sm font-semibold">
+          <h3 className="flex flex-col gap-0.5 border-b-2 border-foreground pb-1 text-sm font-semibold sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
             <span className="first-letter:uppercase">{competenceLong(group.competence)}</span>
             <span className="flex items-baseline gap-2 font-normal text-muted-foreground">
               {group.rows.length} {group.rows.length === 1 ? 'lançamento' : 'lançamentos'} · receitas − despesas{' '}

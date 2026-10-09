@@ -419,7 +419,7 @@ export function LancamentosScreen({ today }: { today: string }) {
             </details>
             <Link href="/lancamentos/revisar" className="hidden min-h-9 items-center justify-center border border-border px-4 text-sm font-medium hover:bg-muted sm:inline-flex">Revisar sem categoria</Link>
             <Button variant="outline" className="hidden sm:inline-flex" onClick={() => void openApplyAll()} disabled={busy}><Wand2 className="mr-2 h-4 w-4" aria-hidden="true" />Aplicar regras aos não categorizados</Button>
-            <Button onClick={() => setDialog({ kind: 'manual' })}><Plus className="mr-2 h-4 w-4" aria-hidden="true" />Novo lançamento</Button>
+            <Button className="order-first sm:order-none" onClick={() => setDialog({ kind: 'manual' })}><Plus className="mr-2 h-4 w-4" aria-hidden="true" />Novo lançamento</Button>
           </div>
         }
       />
