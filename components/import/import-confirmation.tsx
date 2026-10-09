@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { Check } from 'lucide-react';
 import { z } from 'zod';
 import { formatDateBR } from '@/lib/date';
+import { cn } from '@/lib/utils';
 import { dataTalao } from '@/components/ui-kit';
 import { formatBRL, parseBRL } from '@/lib/money';
 import type { Cents } from '@/lib/money';
@@ -653,7 +654,10 @@ export function ImportConfirmation({
                 checked={onlyFlagged}
                 onChange={(event) => setOnlyFlagged(event.target.checked)}
               />
-              <p className="text-xs text-muted-foreground">Toque no talão para selecionar linhas e editar em lote.</p>
+              <p className="text-xs text-muted-foreground">
+                <span className="[@media(pointer:coarse)]:hidden">Clique</span>
+                <span className="hidden [@media(pointer:coarse)]:inline">Toque</span> no canhoto para selecionar linhas e editar em lote.
+              </p>
               <p className="text-xs text-muted-foreground [@media(pointer:coarse)]:hidden">
                 <kbd className="num border border-border bg-card px-1">J</kbd> /{' '}
                 <kbd className="num border border-border bg-card px-1">K</kbd> pulam entre as linhas sinalizadas
@@ -737,9 +741,20 @@ export function ImportConfirmation({
                         aria-pressed={selected.has(draft.index)}
                         aria-label={rowFieldLabel('Selecionar', rowNumber, label)}
                         onClick={() => toggleSelected(draft.index, !selected.has(draft.index))}
-                        className="flex h-full min-h-11 w-full flex-col items-center justify-center gap-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                        className={cn(
+                          'flex h-full min-h-11 w-full cursor-pointer flex-col items-center justify-center gap-1 transition-colors hover:bg-primary/10 active:bg-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                          selected.has(draft.index) && 'font-semibold text-primary',
+                        )}
                       >
-                        {selected.has(draft.index) ? <Check className="h-4 w-4 text-primary" aria-hidden="true" /> : null}
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            'flex h-4 w-4 items-center justify-center border',
+                            selected.has(draft.index) ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
+                          )}
+                        >
+                          {selected.has(draft.index) ? <Check className="h-3 w-3" /> : null}
+                        </span>
                         {installment ? (
                           <Parcela atual={installment.current} total={installment.total} />
                         ) : (
@@ -944,6 +959,7 @@ export function ImportConfirmation({
                       />
                     </div>
                     <p className="truncate text-xs text-muted-foreground">
+                      {installment ? `${stubDate(draft.occurredOnText)} · ` : ''}
                       {draft.suggestedCategoryId ? (categoryName.get(draft.suggestedCategoryId) ?? 'Categoria') : 'Sem categoria'}
                       {' · '}
                       {draft.suggestedMemberId ? (memberName.get(draft.suggestedMemberId) ?? 'Responsável') : 'Família'}

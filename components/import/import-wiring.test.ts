@@ -72,3 +72,21 @@ describe('polish da entrada', () => {
     expect(schema).not.toMatch(/bankKey: .*optional/);
   });
 });
+
+describe('polish final da seleção pelo canhoto', () => {
+  it('a dica usa a palavra do mundo e a ação do ponteiro real', () => {
+    expect(confirmation).toContain('Clique');
+    expect(confirmation).toContain('Toque');
+    expect(confirmation).toContain('no canhoto para selecionar linhas');
+    expect(confirmation).not.toMatch(/>[^<{]*talão[^<{]*</);
+  });
+
+  it('o talão do canhoto de seleção tem caixinha visível e hover', () => {
+    expect(confirmation).toContain('hover:bg-primary/10');
+    expect(confirmation).toContain('active:bg-primary/25');
+  });
+
+  it('linha parcelada mantém a data da compra no corpo', () => {
+    expect(confirmation).toContain("{installment ? `${stubDate(draft.occurredOnText)} · ` : ''}");
+  });
+});
