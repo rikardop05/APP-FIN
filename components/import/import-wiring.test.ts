@@ -55,3 +55,20 @@ describe('revisão da fatura: ligações da tela', () => {
     expect(confirmation).not.toMatch(/slice\(5\)\}\/\$\{/);
   });
 });
+
+describe('polish da entrada', () => {
+  it('a competência usa o seletor pt-BR do ui-kit, não o input month nativo', () => {
+    expect(screen).toContain('<MonthPicker');
+    expect(screen).not.toContain('type="month"');
+  });
+
+  it('não há duas réguas seguidas sob o cabeçalho', () => {
+    expect(screen).not.toContain('border-t-2 border-foreground');
+  });
+
+  it('o histórico exige banco e competência do servidor (só podem ser null)', () => {
+    const schema = read('components/import/import-history-schemas.ts');
+    expect(schema).toContain('bankKey: z.string().nullable(),');
+    expect(schema).not.toMatch(/bankKey: .*optional/);
+  });
+});

@@ -81,7 +81,7 @@ export function StatementList({ statements, cycle, today, onStatusChanged }: Sta
           </tbody>
         </table>
       </div>
-      <ul className="flex flex-col gap-2 md:hidden">
+      <ul className="flex flex-col md:hidden">
         {statements.map((statement) => (
           <StatementCard key={statement.id} statement={statement} staleDueDate={staleIds.has(statement.id)} overdue={isOverdueUnpaid(statement, today)} onChanged={changed} />
         ))}
@@ -131,6 +131,8 @@ function StatementCard({ statement, staleDueDate, overdue, onChanged }: { statem
   return (
     <Canhoto
       as="li"
+      // Dentro do card da fatura o canhoto não vira caixa (card dentro de card): só a régua de cima.
+      className="border-0 border-t border-border"
       stub={competenceShort(statement.period)}
       valor={<Money value={statement.computedTotalCents} />}
     >

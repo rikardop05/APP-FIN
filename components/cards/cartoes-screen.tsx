@@ -296,7 +296,7 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
               <div className="flex flex-col gap-4">
                 {cards.map((card) => (
                   <article key={card.id} className="border border-border bg-card p-4 sm:p-5">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-start gap-3">
                         <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                         <div className="min-w-0">
@@ -306,7 +306,7 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center self-end sm:self-start">
+                      <div className="flex shrink-0 items-center">
                         <Button variant="ghost" size="sm" aria-label={`Editar ${card.name}`} onClick={() => setDialog({ kind: 'card', record: card })}>
                           <Pencil className="h-4 w-4" aria-hidden="true" />
                         </Button>

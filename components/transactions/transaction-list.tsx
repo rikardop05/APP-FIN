@@ -53,9 +53,9 @@ function InstallmentMark({ row }: { row: Transaction }) {
   if (row.installmentNumber === null) return null;
   const label = installmentLabel(row.installmentNumber, row.installmentsCount);
   return label.total === null ? (
-    <span className="ml-2 text-xs text-muted-foreground">{label.text}</span>
+    <span className="text-xs text-muted-foreground">{label.text}</span>
   ) : (
-    <Parcela atual={row.installmentNumber} total={label.total} className="ml-2 text-xs text-muted-foreground" />
+    <Parcela atual={row.installmentNumber} total={label.total} className="text-xs text-muted-foreground" />
   );
 }
 
@@ -247,12 +247,11 @@ export function TransactionList({
       </div>
 
       <div className="flex flex-col gap-3 md:hidden">
-        <div className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2">
+        <div className="flex items-center justify-between border border-border bg-card px-3 py-1">
           <Checkbox label="Selecionar todos" checked={allSelected} onChange={onToggleAll} />
-          <span className="text-xs text-muted-foreground">{rows.length} lançamentos</span>
         </div>
         {rows.map((row) => (
-          <article key={row.id} className="rounded-lg border border-border bg-card p-4">
+          <article key={row.id} className="border border-border bg-card px-3 py-2">
             {editingId === row.id ? (
               <TransactionEditor row={row} options={options} onSave={(input) => onSaveEdit(row.id, input)} onCancel={onCancelEdit} />
             ) : (
@@ -262,18 +261,21 @@ export function TransactionList({
                     <Checkbox aria-label={`Selecionar ${row.description}`} checked={selectedIds.includes(row.id)} onChange={() => onToggle(row.id)} />
                     <div className="min-w-0">
                       <p className="truncate font-medium" title={row.description}>{row.description}</p>
-                      <p className="text-sm text-muted-foreground"><DateText value={row.occurredOn} /> · {kindLabel[row.kind]}</p><InstallmentMark row={row} />{row.status === 'planned' ? <Selo tone="neutral" label="Previsto" className="mt-1" /> : null}
+                      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                        <span><DateText value={row.occurredOn} /> · {kindLabel[row.kind]} · {competenceShort(row.competence)}</span>
+                        <InstallmentMark row={row} />
+                        {row.status === 'planned' ? <Selo tone="neutral" label="Previsto" /> : null}
+                      </p>
                     </div>
                   </div>
-                  <Money value={row.amountCents} />
+                  <Money value={row.amountCents} className="shrink-0" />
                 </div>
-                <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm">
-                  <div><dt className="text-xs text-muted-foreground">Origem</dt><dd className="truncate" title={sourceLabel(row)}>{sourceLabel(row)}</dd></div>
-                  <div><dt className="text-xs text-muted-foreground">Categoria</dt><dd>{row.categoryName ?? <Selo tone="attention" label="Não categorizado" />}</dd></div>
-                  <div><dt className="text-xs text-muted-foreground">Responsável</dt><dd>{row.memberName ?? '—'}</dd></div>
-                  <div><dt className="text-xs text-muted-foreground">Competência</dt><dd>{competenceShort(row.competence)}</dd></div>
+                <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 pl-11 text-sm">
+                  <div className="min-w-0 text-muted-foreground"><dt className="sr-only">Origem</dt><dd className="truncate" title={sourceLabel(row)}>{sourceLabel(row)}</dd></div>
+                  <div className="min-w-0"><dt className="sr-only">Categoria</dt><dd className="truncate" title={row.categoryName ?? undefined}>{row.categoryName ?? <Selo tone="attention" label="Não categorizado" />}</dd></div>
+                  {row.memberName ? <div className="min-w-0"><dt className="sr-only">Responsável</dt><dd className="truncate text-muted-foreground">{row.memberName}</dd></div> : null}
                 </dl>
-                <div className="mt-3 border-t border-border pt-3"><RowActions compact={false} description={row.description} onEdit={() => onEdit(row.id)} onRule={() => onRule(row.id)} onDelete={() => onDelete(row.id)} /></div>
+                <div className="mt-1 border-t border-border pt-1"><RowActions compact={false} description={row.description} onEdit={() => onEdit(row.id)} onRule={() => onRule(row.id)} onDelete={() => onDelete(row.id)} /></div>
               </>
             )}
           </article>

@@ -20,11 +20,12 @@ export const importBatchHistoryItemSchema = z.object({
   rowsImported: z.number().int().nonnegative(),
   createdAt: z.string(),
   /**
-   * Banco e competência do lote. OPCIONAIS enquanto `listImportBatches` (lib/db) não os devolve: a
-   * tela mostra "Nubank, outubro de 2026" quando vierem e cai no nome do arquivo quando não.
+   * Banco e competência do lote, devolvidos por `listImportBatches`. OBRIGATÓRIOS (só podem ser `null`:
+   * lote de conta, ou sem banco detectado): se o servidor parar de mandá-los, a tela falha alto em vez de
+   * cair em silêncio no nome do arquivo.
    */
-  bankKey: z.string().nullable().optional(),
-  competence: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).nullable().optional(),
+  bankKey: z.string().nullable(),
+  competence: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).nullable(),
 });
 
 export const importBatchesResponseSchema = z.object({

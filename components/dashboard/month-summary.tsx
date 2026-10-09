@@ -26,10 +26,10 @@ type MonthSummaryProps = {
 
 function Item({ label, children, note }: { label: string; children: React.ReactNode; note?: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1 p-4 sm:p-5">
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 p-4 sm:flex-col sm:items-start sm:justify-start sm:p-5">
       <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="text-xl font-semibold text-foreground">{children}</dd>
-      {note ? <dd className="text-sm text-muted-foreground">{note}</dd> : null}
+      {note ? <dd className="basis-full text-sm text-muted-foreground">{note}</dd> : null}
     </div>
   );
 }

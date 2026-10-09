@@ -17,3 +17,5 @@ export { Canhoto } from './canhoto';
 export { Placar, type PlacarItem } from './placar';
 export { parcelaLabel, placarTone, seloLetter, type PlacarTone, type SeloTone } from './carne';
 export { Faixa } from './faixa';
+export { MonthPicker } from './month-picker';
+export { MONTH_NAMES, buildMonthValue, parseMonthValue, yearOptions } from './month-picker-model';

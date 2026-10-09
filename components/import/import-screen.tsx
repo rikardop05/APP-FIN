@@ -9,7 +9,7 @@ import {
 } from 'react';
 import Link from 'next/link';
 import { detectSource, type DetectedSource } from '@/lib/import/detect';
-import { Button, Faixa, Input, PageHeader, Picote, Select } from '@/components/ui-kit';
+import { Button, Faixa, Input, MonthPicker, PageHeader, Picote, Select } from '@/components/ui-kit';
 import { DropZone } from './drop-zone';
 import { successMessage } from './review-model';
 import {
@@ -61,6 +61,7 @@ function SourceFields({
   competence,
   cards,
   accounts,
+  loading,
   onSourceKindChange,
   onSourceIdChange,
   onCompetenceChange,
@@ -70,6 +71,7 @@ function SourceFields({
   competence: string;
   cards: SourceItem[];
   accounts: SourceItem[];
+  loading: boolean;
   onSourceKindChange: (value: SourceKind) => void;
   onSourceIdChange: (value: string) => void;
   onCompetenceChange: (value: string) => void;
@@ -99,10 +101,12 @@ function SourceFields({
           aria-label={sourceLabel}
           value={sourceId}
           onChange={(event) => onSourceIdChange(event.target.value)}
-          disabled={sources.length === 0}
+          disabled={loading || sources.length === 0}
         >
           <option value="">
-            {sources.length === 0
+            {loading
+              ? 'Carregando…'
+              : sources.length === 0
               ? sourceKind === 'credit_card'
                 ? 'Nenhum cartão ativo'
                 : 'Nenhuma conta ativa'
@@ -115,15 +119,10 @@ function SourceFields({
           ))}
         </Select>
       </label>
-      <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
-        Competência padrão
-        <Input
-          aria-label="Competência padrão"
-          type="month"
-          value={competence}
-          onChange={(event) => onCompetenceChange(event.target.value)}
-        />
-      </label>
+      <div className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
+        <span>Competência padrão</span>
+        <MonthPicker label="Competência padrão" value={competence} onChange={onCompetenceChange} />
+      </div>
     </div>
   );
 }
@@ -132,11 +131,14 @@ function SourceNotice({
   sourceKind,
   cards,
   accounts,
+  loading,
 }: {
   sourceKind: SourceKind;
   cards: SourceItem[];
   accounts: SourceItem[];
+  loading: boolean;
 }) {
+  if (loading) return null;
   const count = sourceKind === 'credit_card' ? cards.length : accounts.length;
   if (count > 0) return null;
 
@@ -479,7 +481,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
 
       {!preview ? (
         <>
-          <section aria-labelledby="destino-titulo" className="flex flex-col gap-4 border-t-2 border-foreground pt-4">
+          <section aria-labelledby="destino-titulo" className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <h2 id="destino-titulo" className="text-lg font-semibold text-foreground">
                 Destino da importação
@@ -494,6 +496,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
               competence={competence}
               cards={cards}
               accounts={accounts}
+              loading={loadingSources}
               onSourceKindChange={handleSourceKindChange}
               onSourceIdChange={(value) => {
                 setSourceId(value);
@@ -501,7 +504,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
               }}
               onCompetenceChange={handleCompetenceChange}
             />
-            <SourceNotice sourceKind={sourceKind} cards={cards} accounts={accounts} />
+            <SourceNotice sourceKind={sourceKind} cards={cards} accounts={accounts} loading={loadingSources} />
           </section>
 
           <section aria-labelledby="pdf-titulo" className="flex flex-col gap-4 border-t border-border pt-4">

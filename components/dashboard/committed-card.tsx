@@ -93,17 +93,20 @@ export function CommittedCard({
                     as="li"
                     key={entry.competence}
                     preso
+                    // Dentro do card os canhotos NÃO viram caixas (card dentro de card): só a régua tracejada de cima, em `border-input` (3:1, legível nos dois temas).
+                    className="border-0 border-t border-dashed border-input"
                     stub={competenceShort(entry.competence)}
                     valor={<Money value={-entry.totalCents as Cents} />}
                   >
                     <span className="text-sm">
-                      Parcelas <Money value={-entry.installmentCents as Cents} />
                       {entry.purchaseCents !== 0 ? (
                         <>
-                          {' '}
-                          · compras <Money value={-entry.purchaseCents as Cents} />
+                          Parcelas <Money value={-entry.installmentCents as Cents} /> · compras{' '}
+                          <Money value={-entry.purchaseCents as Cents} />
                         </>
-                      ) : null}
+                      ) : (
+                        'Parcelas'
+                      )}
                     </span>
                   </Canhoto>
                 ))}

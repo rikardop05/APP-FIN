@@ -408,7 +408,7 @@ export function LancamentosScreen({ today }: { today: string }) {
         title="Lançamentos"
         description="Receitas e despesas da família, filtráveis por período, categoria, cartão ou conta, responsável e texto."
         actions={
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row [&>*]:w-full sm:[&>*]:w-auto">
             <Link href="/lancamentos/revisar" className="inline-flex min-h-11 items-center sm:min-h-9 justify-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted">Revisar sem categoria</Link>
             <Button variant="outline" onClick={() => void openApplyAll()} disabled={busy}><Wand2 className="mr-2 h-4 w-4" aria-hidden="true" />Aplicar regras aos não categorizados</Button>
             <Button onClick={() => setDialog({ kind: 'manual' })}><Plus className="mr-2 h-4 w-4" aria-hidden="true" />Novo lançamento</Button>
