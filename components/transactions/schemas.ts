@@ -36,6 +36,8 @@ export const transactionSchema = z.object({
   memberId: z.string().uuid().nullable(),
   memberName: z.string().nullable(),
   installmentNumber: z.number().int().nullable(),
+  /** Total de parcelas do plano; null se não é parcela (ou resposta antiga sem o campo). */
+  installmentsCount: z.number().int().nullable().default(null),
   note: z.string().nullable(),
 });
 

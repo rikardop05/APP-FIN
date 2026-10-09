@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Check } from 'lucide-react';
 import { z } from 'zod';
 import { formatDateBR } from '@/lib/date';
@@ -26,10 +26,12 @@ import { StillHeldColumn } from './still-held-column';
 import { esperarDestacar } from './destacar';
 import { defaultInclude, includedByDefaultCount } from './preview-state';
 import {
+  announcementFor,
   applyBulk,
   confirmBlockReason,
   firstInvalidIndex,
   FLAG_SELO,
+  type AnnounceState,
   flaggedIndexes,
   placarFigures,
   rowFieldLabel,
@@ -114,12 +116,14 @@ type ImportConfirmationProps = {
    */
   defaultCompetence: string;
   onBack: () => void;
-  onCommitted: (batchId: string, plannedReconciled: number) => void;
+  onCommitted: (batchId: string, reconciled: { plannedReconciled: number; installmentsReconciled: number }) => void;
 };
 
 const commitResponseSchema = z.object({
   batchId: z.string().uuid(),
   plannedReconciled: z.number().int().nonnegative().default(0),
+  /** Parcelas previstas de planos existentes cumpridas pela parcela real deste lote. */
+  installmentsReconciled: z.number().int().nonnegative().default(0),
 });
 
 const KEEP = '__keep';
@@ -509,7 +513,10 @@ export function ImportConfirmation({
       // Assinatura: o picote se abre e os canhotos assentam, uma vez; sem espera se o sistema pede menos movimento.
       setSettling(true);
       await esperarDestacar();
-      onCommitted(result.batchId, result.plannedReconciled);
+      onCommitted(result.batchId, {
+        plannedReconciled: result.plannedReconciled,
+        installmentsReconciled: result.installmentsReconciled,
+      });
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -532,14 +539,23 @@ export function ImportConfirmation({
     void commit();
   }
 
-  const announcement =
-    `${includedCount} ${includedCount === 1 ? 'linha incluída' : 'linhas incluídas'}. ` +
-    `Incluído ${formatBRL(figures.includedCents, { sign: 'never' })}.` +
-    (figures.differenceCents === null
-      ? ' Sem total impresso para conferir.'
-      : figures.differenceCents === 0
-        ? ' O lote confere com o total da fatura.'
-        : ` Diferença de ${formatBRL(figures.differenceCents)} para o total da fatura.`);
+  // Anúncio para leitor de tela: só quando algo relevante muda (placar, linha inválida, lote
+  // confirmado). Editar sem mudar de estado não repete nada.
+  const announceKey = JSON.stringify([invalidIncluded.length, figures.tone, settling]);
+  const [announcement, setAnnouncement] = useState('');
+  const lastAnnounced = useRef<AnnounceState | null>(null);
+  useEffect(() => {
+    const next: AnnounceState = {
+      invalidCount: invalidIncluded.length,
+      tone: figures.tone,
+      differenceCents: figures.differenceCents,
+      committed: settling,
+    };
+    const message = announcementFor(lastAnnounced.current, next);
+    lastAnnounced.current = next;
+    if (message !== null) setAnnouncement(message);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a chave resume exatamente os campos que importam
+  }, [announceKey]);
 
   return (
     <section aria-label="Revisão da fatura" className="flex flex-col gap-4">

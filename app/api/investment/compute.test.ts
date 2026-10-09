@@ -2,30 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { basisPoints, cents } from '@/lib/money';
 
-import { averageMonthlySurplus, computeScenarios, scenarioFeasibility, targetDateMonths } from './compute';
+import { computeScenarios, scenarioFeasibility, targetDateMonths } from './compute';
 
 const c = cents;
-
-describe('averageMonthlySurplus — média da sobra dos meses com histórico', () => {
-  it('sem mês com histórico: null (a tela diz "sem histórico de sobra", nunca R$ 0,00)', () => {
-    expect(averageMonthlySurplus([])).toBeNull();
-  });
-
-  it('média exata e média que arredonda (meio centavo se afasta do zero, nos dois sinais)', () => {
-    // (300.000 + 100.000 + 200.000) / 3 = 200.000.
-    expect(averageMonthlySurplus([{ surplusCents: c(300_000) }, { surplusCents: c(100_000) }, { surplusCents: c(200_000) }])).toBe(200_000);
-    // (1 + 2) / 2 = 1,5 -> 2; (-1 - 2) / 2 = -1,5 -> -2.
-    expect(averageMonthlySurplus([{ surplusCents: c(1) }, { surplusCents: c(2) }])).toBe(2);
-    expect(averageMonthlySurplus([{ surplusCents: c(-1) }, { surplusCents: c(-2) }])).toBe(-2);
-    // 10 / 3 = 3,33 -> 3.
-    expect(averageMonthlySurplus([{ surplusCents: c(10) }, { surplusCents: c(0) }, { surplusCents: c(0) }])).toBe(3);
-  });
-
-  it('déficit é média negativa, não zero', () => {
-    // (-50.000 + 20.000) / 2 = -15.000.
-    expect(averageMonthlySurplus([{ surplusCents: c(-50_000) }, { surplusCents: c(20_000) }])).toBe(-15_000);
-  });
-});
 
 describe('targetDateMonths — meses da competência de hoje até a do prazo', () => {
   it('sem prazo: null', () => {

@@ -68,7 +68,14 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('plano de investimento (
         horizonsYears: [5, 10, 15, 20],
         plan: null,
         scenarios: [],
-        surplus: { averageMonthlyCents: null, monthsWithData: 0, windowFrom: '2026-07', windowTo: '2026-09' },
+        // Household sem lançamento: os três meses fechados ficam fora (nenhum tem receita).
+        surplus: {
+          averageMonthlyCents: null,
+          monthsWithData: 0,
+          windowFrom: '2026-07',
+          windowTo: '2026-09',
+          excludedMonths: ['2026-07', '2026-08', '2026-09'],
+        },
       });
 
       const error = await m.queries.updateInvestmentPlan(householdId, GATE_PLAN, [], TODAY).catch((caught: unknown) => caught);
@@ -234,7 +241,14 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('sobra real para o RF-IN
       // o médio exige 706.581: não cabe, faltam 706.581 - 400.000 = 306.581.
       await m.queries.createInvestmentPlan(householdId, { ...GATE_PLAN, targetDate: '2046-10-01' }, TODAY);
       const response = await m.loadInvestmentResponse(householdId, TODAY);
-      expect(response.surplus).toEqual({ averageMonthlyCents: 400_000, monthsWithData: 1, windowFrom: '2026-07', windowTo: '2026-09' });
+      expect(response.surplus).toEqual({
+        averageMonthlyCents: 400_000,
+        monthsWithData: 1,
+        windowFrom: '2026-07',
+        windowTo: '2026-09',
+        // Julho (só previsão) e agosto (só aporte) não têm receita lançada: a tela diz quais.
+        excludedMonths: ['2026-07', '2026-08'],
+      });
       const moderate = response.scenarios[1];
       expect(moderate?.requiredForTargetDate).toEqual({ months: 240, contributionCents: 706_581 });
       expect(moderate?.feasibility).toMatchObject({

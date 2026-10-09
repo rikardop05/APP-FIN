@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { detectSource, type DetectedSource } from '@/lib/import/detect';
 import { Button, Faixa, Input, PageHeader, Picote, Select } from '@/components/ui-kit';
 import { DropZone } from './drop-zone';
+import { successMessage } from './review-model';
 import {
   accountsResponseSchema,
   apiErrorSchema,
@@ -423,18 +424,17 @@ export function ImportScreen({ today }: ImportScreenProps) {
     setError(null);
   }
 
-  function handleCommitted(batchId: string, plannedReconciled: number) {
+  function handleCommitted(
+    batchId: string,
+    reconciled: { plannedReconciled: number; installmentsReconciled: number },
+  ) {
     setPreview(null);
     setPastedText('');
     setFile(null);
     setFileBytes(null);
     setDetection(null);
     setPassword('');
-    const fulfilled =
-      plannedReconciled > 0
-        ? ` ${plannedReconciled === 1 ? '1 previsão cumprida' : `${plannedReconciled} previsões cumpridas`}.`
-        : '';
-    setSuccess(`Importação confirmada. Os canhotos foram destacados no lote ${batchId}.${fulfilled}`);
+    setSuccess(successMessage(reconciled));
     setHistoryRefreshKey((current) => current + 1);
   }
 

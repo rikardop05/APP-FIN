@@ -5,6 +5,7 @@ import { Pencil, Tags, Trash2 } from 'lucide-react';
 import { competenceShort } from '@/components/cashflow/labels';
 import { formatBRL, parseBRL } from '@/lib/money';
 import {
+  Parcela,
   Selo,
   Button,
   Checkbox,
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui-kit';
 import type { Transaction, TransactionOptions } from './schemas';
 import { amountForInput, signedAmountCents } from './manual-sign';
+import { installmentLabel } from './list-presentation';
 
 const kindLabel: Record<Transaction['kind'], string> = {
   expense: 'Despesa',
@@ -45,6 +47,17 @@ export type TransactionEditValues = {
   categoryId: string | null;
   memberId: string | null;
 };
+
+/** Parcela 03/10 (canhoto); sem o total do plano, cai para "parcela 03". */
+function InstallmentMark({ row }: { row: Transaction }) {
+  if (row.installmentNumber === null) return null;
+  const label = installmentLabel(row.installmentNumber, row.installmentsCount);
+  return label.total === null ? (
+    <span className="ml-2 text-xs text-muted-foreground">{label.text}</span>
+  ) : (
+    <Parcela atual={row.installmentNumber} total={label.total} className="ml-2 text-xs text-muted-foreground" />
+  );
+}
 
 function sourceLabel(row: Transaction): string {
   if (row.accountName) return `Conta · ${row.accountName}`;
@@ -219,7 +232,7 @@ export function TransactionList({
                   <>
                     <td className="px-3 py-3 align-top"><Checkbox aria-label={`Selecionar ${row.description}`} checked={selectedIds.includes(row.id)} onChange={() => onToggle(row.id)} /></td>
                     <td className="whitespace-nowrap px-3 py-3 align-top"><DateText value={row.occurredOn} /></td>
-                    <td className="max-w-[18rem] px-3 py-3 align-top"><div className="truncate font-medium" title={row.description}>{row.description}</div><span className="text-xs text-muted-foreground">{kindLabel[row.kind]}{row.installmentNumber === null ? '' : ` · parcela ${String(row.installmentNumber).padStart(2, '0')}`}</span>{row.status === 'planned' ? <Selo tone="neutral" label="Previsto" className="ml-2" /> : null}</td>
+                    <td className="max-w-[18rem] px-3 py-3 align-top"><div className="truncate font-medium" title={row.description}>{row.description}</div><span className="text-xs text-muted-foreground">{kindLabel[row.kind]}</span><InstallmentMark row={row} />{row.status === 'planned' ? <Selo tone="neutral" label="Previsto" className="ml-2" /> : null}</td>
                     <td className="whitespace-nowrap px-3 py-3 text-right align-top"><Money value={row.amountCents} /></td>
                     <td className="max-w-[10rem] truncate px-3 py-3 align-top text-muted-foreground" title={sourceLabel(row)}>{sourceLabel(row)}</td>
                     <td className="px-3 py-3 align-top">{row.categoryName ? row.categoryName : <Selo tone="attention" label="Não categorizado" />}</td>
@@ -249,7 +262,7 @@ export function TransactionList({
                     <Checkbox aria-label={`Selecionar ${row.description}`} checked={selectedIds.includes(row.id)} onChange={() => onToggle(row.id)} />
                     <div className="min-w-0">
                       <p className="truncate font-medium" title={row.description}>{row.description}</p>
-                      <p className="text-sm text-muted-foreground"><DateText value={row.occurredOn} /> · {kindLabel[row.kind]}{row.installmentNumber === null ? '' : ` · parcela ${String(row.installmentNumber).padStart(2, '0')}`}</p>{row.status === 'planned' ? <Selo tone="neutral" label="Previsto" className="mt-1" /> : null}
+                      <p className="text-sm text-muted-foreground"><DateText value={row.occurredOn} /> · {kindLabel[row.kind]}</p><InstallmentMark row={row} />{row.status === 'planned' ? <Selo tone="neutral" label="Previsto" className="mt-1" /> : null}
                     </div>
                   </div>
                   <Money value={row.amountCents} />

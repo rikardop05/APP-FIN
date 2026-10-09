@@ -1,7 +1,7 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 
 import { db } from '@/lib/db';
-import { importBatches } from '@/lib/db/schema';
+import { creditCards, importBatches, statements } from '@/lib/db/schema';
 
 /**
  * Item da listagem de histórico de importações para a tela /importar (T-111,
@@ -27,6 +27,13 @@ export type ImportBatchHistoryListItem = {
   status: 'pending' | 'committed' | 'reverted' | 'failed';
   rowsImported: number;
   createdAt: string;
+  /** Banco do arquivo (`nubank_card`…); null em texto colado ou origem nao reconhecida. */
+  bankKey: string | null;
+  /**
+   * Competencia da fatura ligada ao lote (`YYYY-MM`). Null em lote de conta (nao
+   * ha fatura) e em lote desfeito cuja fatura foi apagada junto.
+   */
+  competence: string | null;
 };
 
 export async function listImportBatches(
@@ -40,8 +47,16 @@ export async function listImportBatches(
       status: importBatches.status,
       rowsImported: importBatches.rowsImported,
       createdAt: importBatches.createdAt,
+      bankKey: importBatches.bankKey,
+      // So a fatura de um cartao do household conta (statements nao tem household_id).
+      competence: sql<string | null>`case when ${creditCards.id} is not null then ${statements.period} end`,
     })
     .from(importBatches)
+    .leftJoin(statements, eq(statements.id, importBatches.statementId))
+    .leftJoin(
+      creditCards,
+      and(eq(creditCards.id, statements.creditCardId), eq(creditCards.householdId, householdId)),
+    )
     .where(eq(importBatches.householdId, householdId))
     .orderBy(desc(importBatches.createdAt));
   return rows.map((row) => ({
@@ -51,5 +66,7 @@ export async function listImportBatches(
     status: row.status,
     rowsImported: row.rowsImported,
     createdAt: row.createdAt.toISOString(),
+    bankKey: row.bankKey,
+    competence: row.competence,
   }));
 }

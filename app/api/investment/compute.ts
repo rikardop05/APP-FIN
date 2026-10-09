@@ -8,7 +8,7 @@ import {
   requiredContribution,
   scenarioTable,
 } from '@/lib/finance/investment';
-import { cents, type BasisPoints, type Cents } from '@/lib/money';
+import type { BasisPoints, Cents } from '@/lib/money';
 
 /** Uma linha de `scenarioTable` (CONTRACTS §12), sem o `label` (está no cenário). */
 export type ScenarioResult = {
@@ -63,20 +63,6 @@ export type ScenarioView = {
 
 /** Limite do motor para `requiredContribution` (100 anos). */
 const MAX_TARGET_MONTHS = 1_200;
-
-/**
- * Média mensal da sobra (receita − despesa) dos meses com histórico. `null` sem nenhum mês.
- * Pode ser negativa (déficit). Centavo mais próximo, meio se afasta do zero (a regra de
- * estado do motor), em inteiro.
- */
-export function averageMonthlySurplus(months: readonly { surplusCents: Cents }[]): Cents | null {
-  if (months.length === 0) return null;
-  let total = 0n;
-  for (const month of months) total += BigInt(cents(month.surplusCents));
-  const count = BigInt(months.length);
-  const magnitude = ((total < 0n ? -total : total) * 2n + count) / (count * 2n);
-  return cents(Number(total < 0n ? -magnitude : magnitude));
-}
 
 /**
  * Meses do prazo: da competência de hoje até a do `targetDate`. Prazo no mês corrente dá 0

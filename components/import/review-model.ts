@@ -148,3 +148,57 @@ export function bankLabel(bankKey: string | null): string {
   if (bankKey === null) return 'Emissor não identificado';
   return BANK_LABEL[bankKey] ?? bankKey.replace(/_card$/, '').replace(/_/g, ' ');
 }
+
+export type AnnounceState = {
+  invalidCount: number;
+  /** Tom da diferença do placar. */
+  tone: PlacarTone;
+  /** Diferença em centavos, só para o texto quando diverge. */
+  differenceCents: Cents | null;
+  committed: boolean;
+};
+
+const QUIET: AnnounceState = { invalidCount: 0, tone: 'neutral', differenceCents: null, committed: false };
+
+/**
+ * O que o leitor de tela deve anunciar ao passar de `prev` para `next`. Só mudanças relevantes:
+ * o lote foi confirmado, o placar mudou de estado (confere, diverge) ou a primeira linha ficou
+ * inválida / a última deixou de ser. Editar sem mudar de estado não anuncia nada (`null`).
+ */
+export function announcementFor(prev: AnnounceState | null, next: AnnounceState): string | null {
+  const before = prev ?? QUIET;
+  if (next.committed && !before.committed) return 'Lote confirmado.';
+  if (next.committed) return null;
+  if (next.invalidCount > 0 && before.invalidCount === 0) {
+    return next.invalidCount === 1
+      ? '1 linha incluída está incompleta.'
+      : `${next.invalidCount} linhas incluídas estão incompletas.`;
+  }
+  if (next.invalidCount === 0 && before.invalidCount > 0) return 'Nenhuma linha incompleta.';
+  if (next.tone !== before.tone) {
+    if (next.tone === 'ok') return 'O lote confere com o total da fatura.';
+    if (next.tone === 'danger') return 'O lote diverge do total da fatura.';
+  }
+  return null;
+}
+
+/** Mensagem de sucesso da importação, com o que foi conciliado com previsões e planos existentes. */
+export function successMessage(
+  reconciled: { plannedReconciled: number; installmentsReconciled: number },
+): string {
+  const parts: string[] = [];
+  if (reconciled.plannedReconciled > 0) {
+    parts.push(
+      reconciled.plannedReconciled === 1 ? '1 previsão cumprida' : `${reconciled.plannedReconciled} previsões cumpridas`,
+    );
+  }
+  if (reconciled.installmentsReconciled > 0) {
+    parts.push(
+      reconciled.installmentsReconciled === 1
+        ? '1 parcela conciliada com plano existente'
+        : `${reconciled.installmentsReconciled} parcelas conciliadas com planos existentes`,
+    );
+  }
+  const tail = parts.length === 0 ? '' : ` ${parts.join(' e ')}.`;
+  return `Importação confirmada. Os canhotos foram destacados.${tail}`;
+}

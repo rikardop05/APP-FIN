@@ -77,3 +77,15 @@ describe('sortForDisplay: o mês atual primeiro, parcelas futuras no fim', () =>
     expect(sortForDisplay([row('a', '2027-02', '2027-02-10'), row('b', '2026-12', '2026-12-10')], TODAY).map((r) => r.id)).toEqual(['b', 'a']);
   });
 });
+
+describe('installmentLabel', () => {
+  it('com total vira 03/10', async () => {
+    const { installmentLabel } = await import('./list-presentation');
+    expect(installmentLabel(3, 10)).toEqual({ total: 10, text: '03/10' });
+  });
+  it('sem total ou fora do plano cai para texto simples', async () => {
+    const { installmentLabel } = await import('./list-presentation');
+    expect(installmentLabel(3, null)).toEqual({ total: null, text: 'parcela 03' });
+    expect(installmentLabel(11, 10)).toEqual({ total: null, text: 'parcela 11' });
+  });
+});

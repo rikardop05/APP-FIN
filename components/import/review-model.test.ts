@@ -136,3 +136,50 @@ describe('bankLabel', () => {
     expect(bankLabel(null)).toBe('Emissor não identificado');
   });
 });
+
+import { announcementFor, successMessage, type AnnounceState } from './review-model';
+
+describe('announcementFor: só mudanças relevantes', () => {
+  const quiet: AnnounceState = { invalidCount: 0, tone: 'neutral', differenceCents: null, committed: false };
+
+  it('editar sem mudar de estado não anuncia', () => {
+    const ok = { ...quiet, tone: 'ok' as const };
+    expect(announcementFor(ok, ok)).toBeNull();
+    expect(announcementFor({ ...quiet, invalidCount: 2 }, { ...quiet, invalidCount: 3 })).toBeNull();
+  });
+
+  it('anuncia o placar mudando de estado, uma vez', () => {
+    expect(announcementFor(quiet, { ...quiet, tone: 'ok' })).toBe('O lote confere com o total da fatura.');
+    expect(announcementFor({ ...quiet, tone: 'ok' }, { ...quiet, tone: 'danger' })).toBe('O lote diverge do total da fatura.');
+    expect(announcementFor({ ...quiet, tone: 'danger' }, { ...quiet, tone: 'neutral' })).toBeNull();
+  });
+
+  it('anuncia a primeira linha inválida e o fim das inválidas', () => {
+    expect(announcementFor(quiet, { ...quiet, invalidCount: 1 })).toBe('1 linha incluída está incompleta.');
+    expect(announcementFor(quiet, { ...quiet, invalidCount: 3 })).toBe('3 linhas incluídas estão incompletas.');
+    expect(announcementFor({ ...quiet, invalidCount: 1 }, quiet)).toBe('Nenhuma linha incompleta.');
+  });
+
+  it('anuncia o lote confirmado e depois cala', () => {
+    const done = { ...quiet, committed: true };
+    expect(announcementFor(quiet, done)).toBe('Lote confirmado.');
+    expect(announcementFor(done, { ...done, tone: 'ok' })).toBeNull();
+  });
+});
+
+describe('successMessage', () => {
+  it('sem conciliação, só confirma', () => {
+    expect(successMessage({ plannedReconciled: 0, installmentsReconciled: 0 })).toBe(
+      'Importação confirmada. Os canhotos foram destacados.',
+    );
+  });
+
+  it('diz previsões cumpridas e parcelas conciliadas com planos existentes', () => {
+    expect(successMessage({ plannedReconciled: 2, installmentsReconciled: 1 })).toContain(
+      '2 previsões cumpridas e 1 parcela conciliada com plano existente.',
+    );
+    expect(successMessage({ plannedReconciled: 0, installmentsReconciled: 3 })).toContain(
+      '3 parcelas conciliadas com planos existentes.',
+    );
+  });
+});

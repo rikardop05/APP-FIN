@@ -26,6 +26,7 @@ import {
   accounts,
   categories,
   creditCards,
+  installmentPlans,
   members,
   transactions,
 } from '@/lib/db/schema';
@@ -62,6 +63,8 @@ export type TransactionListItem = {
   memberId: string | null;
   memberName: string | null;
   installmentNumber: number | null;
+  /** Total de parcelas do plano ("Parcela 03/10"); null se nao e parcela. */
+  installmentsCount: number | null;
   note: string | null;
 };
 
@@ -309,9 +312,17 @@ export async function listTransactions(
       memberId: transactions.memberId,
       memberName: members.name,
       installmentNumber: transactions.installmentNumber,
+      installmentsCount: installmentPlans.installmentsCount,
       note: transactions.note,
     })
     .from(transactions)
+    .leftJoin(
+      installmentPlans,
+      and(
+        eq(installmentPlans.id, transactions.installmentPlanId),
+        eq(installmentPlans.householdId, householdId),
+      ),
+    )
     .leftJoin(
       categories,
       and(

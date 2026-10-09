@@ -61,3 +61,14 @@ export function sortForDisplay<T extends { competence: string; occurredOn: strin
     return a.occurredOn < b.occurredOn ? 1 : a.occurredOn > b.occurredOn ? -1 : 0;
   });
 }
+
+/**
+ * Numeração da parcela na lista. Com o total do plano vira `03/10` (componente `Parcela`); sem o total,
+ * ou com número fora do plano (dado inconsistente, que `Parcela` rejeitaria), cai para texto simples.
+ */
+export function installmentLabel(number: number, total: number | null): { total: number | null; text: string } {
+  if (total !== null && number >= 1 && number <= total) {
+    return { total, text: `${String(number).padStart(Math.max(2, String(total).length), '0')}/${String(total).padStart(Math.max(2, String(total).length), '0')}` };
+  }
+  return { total: null, text: `parcela ${String(number).padStart(2, '0')}` };
+}

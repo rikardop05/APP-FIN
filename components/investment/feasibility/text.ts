@@ -37,7 +37,10 @@ export function feasibilityLine(
     return {
       tone: 'neutral',
       answer: 'Sem histórico de sobra',
-      detail: 'Não há lançamentos nos últimos 3 meses fechados para comparar com o aporte necessário.',
+      detail:
+        (surplus.excludedMonths ?? []).length > 0
+          ? 'Nenhum dos últimos 3 meses fechados teve receita lançada, então não há sobra para comparar com o aporte necessário.'
+          : 'Não há lançamentos nos últimos 3 meses fechados para comparar com o aporte necessário.',
     };
   }
   if (feasibility === null) {
