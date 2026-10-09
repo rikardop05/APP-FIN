@@ -81,7 +81,9 @@ describe('polish final da seleção pelo canhoto', () => {
     expect(confirmation).not.toMatch(/>[^<{]*talão[^<{]*</);
   });
 
-  it('o talão do canhoto de seleção tem caixinha visível e hover', () => {
+  it('o talão do canhoto de seleção não tem caixinha: visto de carimbo só quando selecionado', () => {
+    expect(confirmation).toContain('-rotate-6 border-2 border-primary');
+    expect(confirmation).not.toContain('flex h-4 w-4 items-center justify-center border');
     expect(confirmation).toContain('hover:bg-primary/10');
     expect(confirmation).toContain('active:bg-primary/25');
   });

@@ -742,19 +742,18 @@ export function ImportConfirmation({
                         aria-label={rowFieldLabel('Selecionar', rowNumber, label)}
                         onClick={() => toggleSelected(draft.index, !selected.has(draft.index))}
                         className={cn(
-                          'flex h-full min-h-11 w-full cursor-pointer flex-col items-center justify-center gap-1 transition-colors hover:bg-primary/10 active:bg-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                          'flex h-full min-h-11 w-full cursor-pointer flex-col items-center justify-center gap-1 transition-colors hover:bg-primary/10 hover:ring-1 hover:ring-inset hover:ring-primary/40 active:bg-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                           selected.has(draft.index) && 'font-semibold text-primary',
                         )}
                       >
-                        <span
-                          aria-hidden="true"
-                          className={cn(
-                            'flex h-4 w-4 items-center justify-center border',
-                            selected.has(draft.index) ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
-                          )}
-                        >
-                          {selected.has(draft.index) ? <Check className="h-3 w-3" /> : null}
-                        </span>
+                        {selected.has(draft.index) ? (
+                          <span
+                            aria-hidden="true"
+                            className="-rotate-6 border-2 border-primary px-1 text-primary"
+                          >
+                            <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                          </span>
+                        ) : null}
                         {installment ? (
                           <Parcela atual={installment.current} total={installment.total} />
                         ) : (
