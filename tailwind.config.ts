@@ -59,7 +59,7 @@ const config: Config = {
           DEFAULT: withAlpha('--secondary'),
           foreground: withAlpha('--secondary-foreground'),
         },
-        // Carimbo: perigo, divergência e PAGO. Despesa não é vermelha.
+        // Carimbo vermelho: perigo, erro e divergência. PAGO é verde (success). Despesa não é vermelha.
         destructive: {
           DEFAULT: withAlpha('--destructive'),
           foreground: withAlpha('--destructive-foreground'),
