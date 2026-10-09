@@ -65,15 +65,11 @@ export function CommittedCard({
       : `${overdueCompetences.length}×`;
 
   return (
-    <section aria-labelledby="dashboard-committed-heading" className="flex flex-col gap-4 border border-border bg-card p-4 sm:p-5">
+    <section id="comprometido" aria-labelledby="dashboard-committed-heading" className="flex scroll-mt-4 flex-col gap-4 border border-border bg-card p-4 sm:p-5">
       <div className="flex flex-col gap-1">
         <h2 id="dashboard-committed-heading" className="text-base font-semibold text-foreground">
           Comprometido nos cartões
         </h2>
-        <p className="text-sm text-muted-foreground">
-          {hasOverdue ? 'Faturas anteriores não pagas e faturas' : 'Faturas'} de {competenceShort(competence)} a{' '}
-          {competenceShort(windowEnd)}: compras lançadas e parcelas. Fatura marcada como paga sai da conta.
-        </p>
       </div>
 
       {lastCommittedCompetence === null && !hasOverdue ? (
@@ -90,6 +86,10 @@ export function CommittedCard({
               <Money value={commitmentTotal(totalCents)} sign="never" />
             </p>
             {endLine ? <p className="text-sm text-muted-foreground">{endLine}</p> : null}
+            <p className="max-w-[65ch] text-xs text-muted-foreground">
+              {hasOverdue ? 'Faturas anteriores não pagas e faturas' : 'Faturas'} de {competenceShort(competence)} a{' '}
+              {competenceShort(windowEnd)}: compras lançadas e parcelas. Fatura marcada como paga sai da conta.
+            </p>
           </div>
 
           <ul className="flex flex-col" aria-label="Canhotos do carnê">

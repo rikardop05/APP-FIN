@@ -1,6 +1,6 @@
 import { competenceLong, competenceShort } from '@/components/cashflow/labels';
 import type { Competence } from '@/lib/date';
-import type { BasisPoints, Cents } from '@/lib/money';
+import { formatBRL, type BasisPoints, type Cents } from '@/lib/money';
 
 /**
  * Textos e escolhas de apresentação do Painel (onda 2). Nada aqui calcula dinheiro novo: os números
@@ -210,3 +210,13 @@ export const ESSENTIAL_SHARE_HINT =
 
 /** Explicação curta da taxa de poupança. */
 export const SAVINGS_RATE_HINT = 'Quanto da receita do mês sobrou depois das despesas.';
+
+/**
+ * Ressalva do veredito: a projeção do fluxo NÃO conta as faturas de meses anteriores que ninguém marcou
+ * como pagas, mas o "Comprometido nos cartões" conta. Quando há valor (> 0), o veredito diz isso e liga
+ * ao card; sem valor, não há o que ressalvar.
+ */
+export function verdictOverdueNote(overdueMagnitudeCents: Cents): string | null {
+  if (overdueMagnitudeCents <= 0) return null;
+  return `sem contar ${formatBRL(overdueMagnitudeCents)} de faturas anteriores não marcadas como pagas`;
+}

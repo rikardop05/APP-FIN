@@ -260,6 +260,8 @@ Retângulos de régua, sem pílula, sem sombra.
   | H | Desfeito | V | Vencida, não marcada como paga |
   | I | Incompleta | Z | Paga |
   | K | Falhou | M | Fechada |
+  | Y | Dentro do limite | L | Perto do limite |
+  | X | Estourou | Q | Sem limite |
 
 ### Carimbo (signature)
 Moldura dupla (borda de 2px mais contorno de 1px afastado 2px), texto de 12px em caixa alta, 600, tracking largo, girado -3°. Verde confere para PAGO/CONFERE, vermelho de carimbo para DIVERGE. Reservado a esse veredito.
@@ -271,17 +273,26 @@ A linha de lançamento ou parcela. Grade de quatro colunas: canhoto de 68px (num
 
 **Seleção.** O próprio talão é o controle de seleção para edição em lote (botão com `aria-pressed`): a seleção NÃO usa caixinha (a linha já tem o checkbox "Incluir", e dois quadrados confundem): aparece só pelo preenchimento verde do talão, pelo contorno verde-carnê do canhoto e por um visto simples e reto na cor primária, sem moldura, que surge apenas quando selecionado (a forma inclinada é só do carimbo de veredito: PAGO, CONFERE, DIVERGE); hover e pressionado a 10% e 25% de verde-carnê, com contorno discreto no hover. O texto da interface diz "canhoto" ("Clique no canhoto" com mouse, "Toque no canhoto" em toque), nunca "talão". O checkbox da linha fica só para "Incluir", que é outra decisão.
 
+**Mês no talão (Fluxo).** Uma coluna de canhotos para os 12 meses: o talão traz o mês abreviado e o ano em duas linhas (`out` / `2026`), sem barra, porque um mês não é parcela nem data; o saldo de fechamento é o valor, entradas e saídas ficam no corpo, e o mês futuro que já carrega fatura ou parcela é um canhoto PRESO (tracejado). A curva do saldo fica abaixo, em segundo plano.
+
+**Meta como carnê (Metas).** O que já foi guardado é um carimbo "Guardado" com o total (a meta não guarda aportes individuais); os aportes que faltam são canhotos presos numerados `01/12` (`Parcela`), um por mês até a data-alvo, com o valor mensal. Os primeiros quatro ficam à vista; o resto atrás de "Ver os outros".
+
+**Agrupamento por mês (Lançamentos).** A lista agrupa por competência com um cabeçalho de régua de tinta de 2px: o mês por extenso, a contagem e o total líquido do mês. J e K pulam entre as linhas.
+
 ### Placar (signature)
-Rodapé de totais (Total da fatura, Incluído, Diferença) com régua de tinta de 2px no topo, papel do canhoto, colunas divididas por régua. Bloco de título à esquerda sobre guilhochê, rótulo de 12px em caixa alta numa tarja sólida. Valores em numeral 600; a Diferença em verde confere quando zera e vermelho de carimbo quando diverge. Versão fixa acima da barra inferior no celular, no rodapé no desktop.
+Rodapé de totais (Total da fatura, Incluído, Diferença) com régua de tinta de 2px no topo, papel do canhoto, colunas divididas por régua. Bloco de título à esquerda sobre guilhochê, rótulo de 12px em caixa alta numa tarja sólida. Valores em numeral 600; a Diferença em verde confere quando zera e vermelho de carimbo quando diverge. Versão fixa acima da barra inferior no celular, no rodapé no desktop. No celular o placar **fecha numa linha** (o item principal, a Diferença, mais a ação) e abre no toque do botão de seta (`aria-expanded`), mostrando todos os totais; a partir de `sm` é sempre aberto.
 
 ### Faixa
 Aviso em bloco: régua de 1px no tom (a 60%), fundo suave, ícone de 16px no tom, texto na tinta. Tons info, ok, atenção, perigo.
+
+**Faixa de não categorizados (Orçamento).** O orçamento é por subcategoria, então despesa sem categoria não entra em nenhuma barra. Quando há, uma Faixa de atenção abre a tela: "N lançamentos sem categoria (R$ X) não entram no orçamento. Revisar", com o verbo no plural certo e o link para `/lancamentos/revisar`. O valor é a saída líquida da competência mostrada (estorno abate, piso em zero). Sem lançamento sem categoria, a faixa não aparece.
 
 ### Inputs / Fields
 - **Style:** papel do canhoto, borda de 1px na cor de campo, cantos retos, 12px de padding lateral, 44px de altura (36px a partir de `sm`), 16px de texto no celular e 14px no desktop. Select idêntico ao input; checkbox nativo de 20px com `accent-color` verde-carnê.
 - **Focus:** anel de 2px no verde-carnê.
 - **Error / Disabled:** `aria-invalid` troca a borda para o vermelho de carimbo; desabilitado a 50% com cursor bloqueado.
 - **DateField:** data em pt-BR, digita-se `dd/mm/aaaa` (as barras entram sozinhas, teclado numérico), o valor sai em ISO; no lugar do `<input type="date">` nativo, que mostra "dd/mm/yyyy" no idioma do navegador. Data incompleta ou inexistente marca `aria-invalid`.
+- **DateField em uso.** Todo campo de data das telas usa `DateField`, nunca `<input type="date">`: Recorrentes (início e fim), conta (data do saldo inicial) e filtros de Lançamentos (de e até). Campo opcional recebe `''` quando a data está incompleta e a tela grava `null`; campo obrigatório deixa o erro de validação dizer que falta data.
 - **MonthPicker:** seletor de competência em pt-BR, mês e ano lado a lado (`1fr` e 96px), construído com os mesmos campos.
 
 ### Cabeçalho de Página e Tabela

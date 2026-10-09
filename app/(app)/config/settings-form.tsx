@@ -129,7 +129,7 @@ export function SettingsForm({ initial, busy = false, onSubmit }: SettingsFormPr
           label="Comprometimento futuro (meses)"
           htmlFor="settings-commitment"
           error={errors.commitmentMonths}
-          hint="Horizonte das parcelas futuras na tela de cartões."
+          hint="Quantos meses de parcelas futuras entram no comprometido. Vale para o Painel e para Cartões."
         >
           <Input
             id="settings-commitment"

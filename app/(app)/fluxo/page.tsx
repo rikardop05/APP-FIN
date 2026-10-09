@@ -5,6 +5,7 @@ import { todayInSaoPaulo } from '@/app/_lib/today';
 import { FluxoScreen } from '@/components/cashflow/fluxo-screen';
 import { EmptyState, PageHeader } from '@/components/ui-kit';
 import { requireSession } from '@/lib/auth/session';
+import { cents } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +38,8 @@ export default async function FluxoPage() {
           projection={projection}
           composition={base.composition}
           warnings={base.warnings}
+          overdueUnpaidCents={cents(Math.abs(base.overdueUnpaidStatements.totalCents))}
+          overdueUnpaidCompetences={base.overdueUnpaidStatements.competences}
         />
       ) : (
         <EmptyState

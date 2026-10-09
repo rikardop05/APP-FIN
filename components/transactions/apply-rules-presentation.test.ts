@@ -61,3 +61,19 @@ describe('previewLimitNotice', () => {
     );
   });
 });
+
+import { groupByRule } from './apply-rules-presentation';
+
+describe('groupByRule: quantas linhas cada regra pega', () => {
+  it('conta por regra, mais linhas primeiro', () => {
+    const groups = groupByRule([
+      { ruleId: 'a', rulePattern: 'PADARIA', categoryName: 'Mercado' },
+      { ruleId: 'b', rulePattern: 'UBER', categoryName: 'Transporte' },
+      { ruleId: 'a', rulePattern: 'PADARIA', categoryName: 'Mercado' },
+    ]);
+    expect(groups).toEqual([
+      { ruleId: 'a', rulePattern: 'PADARIA', categoryName: 'Mercado', count: 2 },
+      { ruleId: 'b', rulePattern: 'UBER', categoryName: 'Transporte', count: 1 },
+    ]);
+  });
+});

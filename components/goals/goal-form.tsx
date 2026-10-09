@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent, type ReactNode } from 'react';
 
-import { Button } from '@/components/ui-kit';
+import { Button, DateField } from '@/components/ui-kit';
 
 import {
   goalFormToBody,
@@ -87,7 +87,7 @@ export function GoalForm({ initial, emergencyDraft = false, accounts, emergencyM
       )}
 
       <Field label="Data-alvo (opcional)" htmlFor="goal-date" error={errors.targetDate} hint="Com data, mostramos o aporte mensal necessário. Sem data, ele não é calculado.">
-        <input id="goal-date" type="date" className={inputClass} value={values.targetDate} onChange={(event) => update('targetDate', event.target.value)} />
+        <DateField id="goal-date" value={values.targetDate} onChange={(iso) => update('targetDate', iso)} />
       </Field>
 
       <Field label="Conta vinculada (opcional)" htmlFor="goal-account" hint="Vinculada, o valor atual é o saldo da conta.">

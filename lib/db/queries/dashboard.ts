@@ -12,6 +12,7 @@ import {
   transactions,
 } from '@/lib/db/schema';
 import { cents, type Cents } from '@/lib/money';
+import { futureCommitment } from '@/lib/finance/commitment';
 
 /**
  * Agregação paralela para o dashboard (T-115). Cada item devolvido aqui entra
@@ -446,6 +447,30 @@ export async function listCommitmentTransactions(
       statementPaid: row.statementPaid === true,
       statementOverdue: row.statementOverdue === true,
     }));
+}
+
+/** Faturas de competências ANTERIORES, existentes e não marcadas como pagas. */
+export type OverdueUnpaidStatements = {
+  /** Soma com sinal (negativo = a pagar), igual a `breakdown.overdueUnpaidCents` do Comprometido. */
+  totalCents: Cents;
+  /** Competências que entraram, em ordem. */
+  competences: Competence[];
+};
+
+/**
+ * Faturas vencidas e não pagas de competências anteriores a `fromCompetence`, com a MESMA
+ * regra do "Comprometido nos cartões" por construção: o mesmo feed
+ * (`listCommitmentTransactions`) com janela vazia — sobra só o passado de fatura existente e
+ * não paga — e o mesmo motor (`futureCommitment`). Serve ao aviso do Fluxo (decisão do
+ * Ricardo, 2026-10-09): a projeção NÃO desconta esse valor, só avisa.
+ */
+export async function getOverdueUnpaidStatements(
+  householdId: string,
+  fromCompetence: Competence,
+): Promise<OverdueUnpaidStatements> {
+  const transactionsBefore = await listCommitmentTransactions(householdId, fromCompetence, 0);
+  const result = futureCommitment({ fromCompetence, months: 0, cards: [], transactions: transactionsBefore });
+  return { totalCents: result.breakdown.overdueUnpaidCents, competences: result.overdueCompetences };
 }
 
 /**

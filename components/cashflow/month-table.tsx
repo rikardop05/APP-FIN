@@ -1,143 +1,76 @@
-import { Money } from '@/components/ui-kit';
+import { Canhoto, Money, Selo } from '@/components/ui-kit';
 import type { MonthComposition } from '@/app/_lib/to-cashflow-input';
 import type { Competence } from '@/lib/date';
 import type { CashflowMonth } from '@/lib/finance/cashflow';
 import { cents, type Cents } from '@/lib/money';
-import { cn } from '@/lib/utils';
 
-import { competenceShort } from './labels';
+import { competenceLong, competenceMonth } from './labels';
 
 type MonthTableProps = {
   months: readonly CashflowMonth[];
   composition: Readonly<Record<Competence, MonthComposition>>;
-  /** Soma dos ajustes do "e se" por mês; `null` = sem simulação (coluna some). */
+  /** Soma dos ajustes do "e se" por mês; `null` = sem simulação (linha some). */
   adjustments: Readonly<Record<Competence, Cents>> | null;
 };
 
+/** Talão do mês: o mês abreviado e o ano em duas linhas, sem barra (não é parcela nem data). */
+function MonthStub({ competence }: { competence: Competence }) {
+  return (
+    <span className="flex flex-col items-center leading-tight">
+      <span>{competenceMonth(competence)}</span>
+      <span className="text-xs font-normal text-muted-foreground">{competence.slice(0, 4)}</span>
+    </span>
+  );
+}
+
 /**
- * Tabela mês a mês. Cada número vem pronto do motor; aqui só se escolhe a cor.
+ * Os 12 meses como um carnê: uma coluna de canhotos. O MÊS vai no talão, o saldo de FECHAMENTO é o valor
+ * (a decisão da linha), e entradas e saídas ficam no corpo. Meses futuros que já têm compromisso
+ * (fatura ou parcela) são canhotos PRESOS, tracejados: o futuro comprometido. Cada número vem pronto do
+ * motor; aqui só se escolhe o que mostrar.
  *
- *  - FECHAMENTO é a única coluna que fica vermelha, e pelo `negative` do motor
- *    (`closingCents < 0`). A linha inteira ganha o selo "Saldo negativo", porque
- *    cor sozinha não basta.
- *  - RESULTADO DO MÊS (`netCents`) é neutro de propósito: sai mais do que entra
- *    sem que o saldo tenha acabado. Pintá-lo de vermelho faria a família achar que
- *    quebrou. O `Money` pinta todo valor < 0 de vermelho; o `text-foreground`
- *    passado em `className` o anula.
- *  - "Faturas" é a fatura que VENCE no mês (RC-05), com a parte de parcelas
- *    detalhada por baixo. A parcela está DENTRO da fatura, não ao lado dela.
+ *  - Saldo negativo no FIM do mês (`negative` do motor) ganha o Selo com letra, não só cor.
+ *  - "Resultado do mês" é neutro de propósito: sai mais do que entra sem que o saldo tenha acabado.
+ *  - "Faturas" é a fatura que VENCE no mês, com a parte de parcelas dentro dela (não ao lado).
  */
 export function MonthTable({ months, composition, adjustments }: MonthTableProps) {
   const zero = cents(0);
   return (
     <>
-      {/* Desktop */}
-      <div className="hidden md:block">
-        <table className="w-full border-collapse text-sm">
-          <caption className="sr-only">Projeção de caixa mês a mês</caption>
-          <thead>
-            <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-              <th scope="col" className="px-2 py-2 text-left font-medium">Mês</th>
-              <th scope="col" className="px-2 py-2 text-right font-medium">Abertura</th>
-              <th scope="col" className="px-2 py-2 text-right font-medium">Receitas</th>
-              <th scope="col" className="px-2 py-2 text-right font-medium">Despesas</th>
-              <th scope="col" className="px-2 py-2 text-right font-medium">Parcelas</th>
-              <th scope="col" className="px-2 py-2 text-right font-medium">Faturas</th>
-              <th scope="col" className="px-2 py-2 text-right font-medium">Aportes</th>
-              {adjustments ? (
-                <th scope="col" className="px-2 py-2 text-right font-medium">Ajuste</th>
-              ) : null}
-              <th
-                scope="col"
-                className="px-2 py-2 text-right font-medium"
-                title="Receitas menos todas as saídas do mês. Negativo aqui não quer dizer saldo negativo."
-              >
-                Resultado do mês
-              </th>
-              <th scope="col" className="px-2 py-2 text-right font-medium">Fechamento</th>
-            </tr>
-          </thead>
-          <tbody>
-            {months.map((month) => {
-              const part = composition[month.competence];
-              return (
-                <tr
-                  key={month.competence}
-                  className={cn('border-b border-border last:border-0', month.negative && 'bg-destructive-soft')}
-                >
-                  <th scope="row" className="whitespace-nowrap px-2 py-2 text-left font-medium">
-                    {competenceShort(month.competence)}
-                    {month.negative ? (
-                      <span className="ml-2 inline-flex items-center border border-destructive/50 bg-destructive-soft px-2 py-0.5 text-xs font-medium text-destructive">
-                        Saldo negativo
-                      </span>
-                    ) : null}
-                  </th>
-                  <td className="px-2 py-2 text-right"><Money value={month.openingCents} /></td>
-                  <td className="px-2 py-2 text-right"><Money value={month.incomeCents} /></td>
-                  <td className="px-2 py-2 text-right"><Money value={month.expenseCents} className="text-foreground" /></td>
-                  <td className="px-2 py-2 text-right"><Money value={month.installmentsCents} className="text-foreground" /></td>
-                  <td className="px-2 py-2 text-right">
-                    <Money value={month.statementsCents} className="text-foreground" />
-                    {part && part.statementInstallmentsCents > 0 ? (
-                      <span className="block text-xs text-muted-foreground">
-                        parcelas: <Money value={part.statementInstallmentsCents} className="text-muted-foreground" />
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="px-2 py-2 text-right"><Money value={month.contributionsCents} className="text-foreground" /></td>
-                  {adjustments ? (
-                    <td className="px-2 py-2 text-right">
-                      <Money value={adjustments[month.competence] ?? zero} sign="always" className="text-foreground" />
-                    </td>
-                  ) : null}
-                  <td className="px-2 py-2 text-right">
-                    <Money value={month.netCents} sign="always" className="text-foreground" />
-                  </td>
-                  <td className="px-2 py-2 text-right font-semibold">
-                    <Money value={month.closingCents} />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Celular (390px): um cartão por mês; o detalhe fica atrás do <details>. */}
-      <ul className="flex flex-col gap-2 md:hidden">
-        {months.map((month) => {
+      <ol className="flex flex-col gap-1.5" aria-label="Projeção de caixa mês a mês">
+        {months.map((month, position) => {
           const part = composition[month.competence];
+          const outflows = (month.expenseCents + month.installmentsCents + month.statementsCents + month.contributionsCents) as Cents;
+          // Preso = mês futuro que já carrega compromisso de cartão; o mês corrente é o canhoto atual.
+          const preso = position > 0 && (month.statementsCents !== 0 || month.installmentsCents !== 0);
           return (
-            <li
+            <Canhoto
+              as="li"
               key={month.competence}
-              className={cn('border border-border p-3', month.negative && 'border-destructive/50 bg-destructive-soft')}
+              ariaLabel={`${competenceLong(month.competence)}: fechamento`}
+              stub={<MonthStub competence={month.competence} />}
+              preso={preso}
+              destaque={month.negative ? 'danger' : undefined}
+              marcas={month.negative ? [{ label: 'Saldo negativo', tone: 'danger' }] : undefined}
+              valor={<Money value={month.closingCents} className="font-semibold" />}
             >
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="font-medium">
-                  {competenceShort(month.competence)}
-                  {month.negative ? (
-                    <span className="ml-2 inline-flex items-center border border-destructive/50 bg-destructive-soft px-2 py-0.5 text-xs font-medium text-destructive">
-                      Saldo negativo
-                    </span>
-                  ) : null}
+              <p className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 text-sm">
+                <span>
+                  <span className="text-muted-foreground">Entradas </span>
+                  <Money value={month.incomeCents} className="text-foreground" />
                 </span>
-                <span className="text-xs text-muted-foreground">fechamento</span>
-              </div>
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-xs text-muted-foreground">
-                  resultado do mês{' '}
-                  <Money value={month.netCents} sign="always" className="text-foreground" />
+                <span>
+                  <span className="text-muted-foreground">Saídas </span>
+                  <Money value={outflows} className="text-foreground" />
                 </span>
-                <span className="text-base font-semibold"><Money value={month.closingCents} /></span>
-              </div>
-              <details className="mt-2 text-sm">
-                <summary className="cursor-pointer text-xs text-muted-foreground">Detalhe do mês</summary>
-                <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1">
+              </p>
+              <details className="text-sm">
+                <summary className="inline-flex min-h-11 cursor-pointer items-center text-xs text-muted-foreground sm:min-h-0">
+                  Detalhe do mês
+                </summary>
+                <dl className="mt-1 grid max-w-sm grid-cols-[1fr_auto] gap-x-3 gap-y-1">
                   <dt className="text-muted-foreground">Abertura</dt>
                   <dd className="text-right"><Money value={month.openingCents} /></dd>
-                  <dt className="text-muted-foreground">Receitas</dt>
-                  <dd className="text-right"><Money value={month.incomeCents} /></dd>
                   <dt className="text-muted-foreground">Despesas</dt>
                   <dd className="text-right"><Money value={month.expenseCents} className="text-foreground" /></dd>
                   <dt className="text-muted-foreground">Parcelas</dt>
@@ -158,19 +91,32 @@ export function MonthTable({ months, composition, adjustments }: MonthTableProps
                       <dd className="text-right"><Money value={adjustments[month.competence] ?? zero} sign="always" className="text-foreground" /></dd>
                     </>
                   ) : null}
+                  <dt className="text-muted-foreground" title="Receitas menos todas as saídas do mês. Negativo aqui não quer dizer saldo negativo.">
+                    Resultado do mês
+                  </dt>
+                  <dd className="text-right"><Money value={month.netCents} sign="always" className="text-foreground" /></dd>
                 </dl>
               </details>
-            </li>
+            </Canhoto>
           );
         })}
-      </ul>
+      </ol>
 
-      <p className="mt-3 max-w-prose text-xs text-muted-foreground">
-        Vermelho = saldo no <strong className="font-medium">fim do mês</strong> abaixo de zero.
-        &ldquo;Resultado do mês&rdquo; negativo só diz que saiu mais do que entrou naquele mês; o
-        saldo pode continuar positivo. A fatura entra no mês em que vence, e as parcelas de cartão
-        estão dentro dela.
-      </p>
+      <div className="mt-3 flex max-w-prose flex-col gap-1.5 text-xs text-muted-foreground">
+        <p className="flex flex-wrap items-center gap-2">
+          <Selo tone="danger" label="Saldo negativo" />
+          <span>saldo no <strong className="font-medium">fim do mês</strong> abaixo de zero.</span>
+        </p>
+        <p className="flex flex-wrap items-center gap-2">
+          <span className="inline-block h-4 w-8 border border-dashed border-input" aria-hidden="true" />
+          <span>canhoto tracejado: mês futuro que já carrega fatura ou parcela de cartão.</span>
+        </p>
+        <p>
+          &ldquo;Entradas&rdquo; e &ldquo;Saídas&rdquo; mostram o mês; saída maior que entrada não
+          quer dizer saldo negativo. A fatura entra no mês em que vence, e as parcelas de cartão
+          estão dentro dela.
+        </p>
+      </div>
     </>
   );
 }

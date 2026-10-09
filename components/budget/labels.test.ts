@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { basisPoints, cents } from '@/lib/money';
 
-import { LIGHT_VIEW, competenceLabel, competenceTitle, EXPECTED_LABEL, expectedUsageText, remainingText } from './labels';
+import { LIGHT_VIEW, formatPercent, competenceLabel, competenceTitle, EXPECTED_LABEL, expectedUsageText, remainingText } from './labels';
 
 /** `formatBRL` usa espaço inseparável depois de `R$`; normaliza para comparar. */
 const plain = (text: string) => text.replace(/ /g, ' ');
@@ -13,7 +13,7 @@ describe('rótulos do que a cor mede (decisão 10b: realizado + previsto)', () =
   });
 
   it('uso: o percentual do orçamento que o mês deve consumir', () => {
-    expect(expectedUsageText(basisPoints(9500))).toBe('Realizado + previsto: 95,00% do orçamento');
+    expect(expectedUsageText(basisPoints(9500))).toBe('Realizado + previsto: 95% do orçamento');
     expect(expectedUsageText(null)).toBe('Realizado + previsto: sem valor orçado');
   });
 
@@ -41,5 +41,20 @@ describe('semáforo do Orçamento usa os tokens plenos de estado', () => {
     expect(LIGHT_VIEW.green.bar).toBe('bg-success');
     expect(LIGHT_VIEW.yellow.bar).toBe('bg-warning');
     expect(LIGHT_VIEW.red.bar).toBe('bg-destructive');
+  });
+});
+
+describe('formatPercent: percentual sem casas decimais', () => {
+  it('arredonda ao inteiro', () => {
+    expect(formatPercent(basisPoints(9500))).toBe('95%');
+    expect(formatPercent(basisPoints(9549))).toBe('95%');
+    expect(formatPercent(basisPoints(9550))).toBe('96%');
+    expect(formatPercent(basisPoints(0))).toBe('0%');
+    expect(formatPercent(basisPoints(12345))).toBe('123%');
+  });
+  it('o semáforo traz o tom do selo', () => {
+    expect(LIGHT_VIEW.green.tone).toBe('ok');
+    expect(LIGHT_VIEW.yellow.tone).toBe('attention');
+    expect(LIGHT_VIEW.red.tone).toBe('danger');
   });
 });

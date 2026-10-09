@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState, type FormEvent, type ReactNode } from 'react';
 
 import { BAR_X_CLASS, barScaleStyle } from '@/components/dashboard/bar-scale';
-import { Badge, Button, Money, PageHeader } from '@/components/ui-kit';
+import { Badge, Button, DateField, Money, PageHeader } from '@/components/ui-kit';
 import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 import { formatDateBR } from '@/lib/date';
 import { basisPoints } from '@/lib/money';
@@ -255,7 +255,7 @@ export function PositionsScreen({ initial, today }: { initial: PositionsData; to
         <form className="mt-4 flex flex-col gap-4" onSubmit={(submitEvent) => void submit(submitEvent)} noValidate>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Data" htmlFor="position-date" error={errors.asOf} hint="Se já existe registro nesta data, ele é substituído.">
-              <input id="position-date" type="date" max={today} className={inputClass} value={values.asOf} onChange={(e) => edit('asOf', e.target.value)} />
+              <DateField id="position-date" value={values.asOf} onChange={(iso) => edit('asOf', iso)} />
             </Field>
             <Field label="Total investido" htmlFor="position-amount" error={errors.amount}>
               <input id="position-amount" className={inputClass} value={values.amount} onChange={(e) => edit('amount', e.target.value)} inputMode="decimal" placeholder="R$ 0,00" />

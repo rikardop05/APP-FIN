@@ -1,6 +1,9 @@
+import Link from 'next/link';
 import { AlertTriangle, ShieldCheck } from 'lucide-react';
 
 import { Money } from '@/components/ui-kit';
+import { cents, type Cents } from '@/lib/money';
+import type { Competence } from '@/lib/date';
 import type { CashflowProjection } from '@/lib/finance/cashflow';
 import { cn } from '@/lib/utils';
 
@@ -10,6 +13,9 @@ type VerdictProps = {
   projection: CashflowProjection;
   /** Projeção sem os ajustes do "e se"; só presente quando há simulação ativa. */
   baseProjection: CashflowProjection | null;
+  /** Faturas anteriores de competências anteriores e não marcadas como pagas; a projeção não as conta. */
+  overdueUnpaidCents?: Cents;
+  overdueUnpaidCompetences?: readonly Competence[];
 };
 
 /**
@@ -23,7 +29,7 @@ type VerdictProps = {
  * Um app que diz "você está bem" tendo olhado metade da despesa é pior que um
  * que não diz nada.
  */
-export function Verdict({ projection, baseProjection }: VerdictProps) {
+export function Verdict({ projection, baseProjection, overdueUnpaidCents = cents(0), overdueUnpaidCompetences = [] }: VerdictProps) {
   const first = projection.firstNegativeCompetence;
   const firstMonth =
     first === null ? undefined : projection.months.find((month) => month.competence === first);
@@ -75,6 +81,15 @@ export function Verdict({ projection, baseProjection }: VerdictProps) {
               {competenceShort(worst.competence)}.
             </p>
           ) : null}
+          {overdueUnpaidCents > 0 ? (
+            <p className="text-sm text-foreground">
+              Sem contar <Money value={overdueUnpaidCents} sign="never" /> de faturas anteriores não marcadas como pagas
+              {overdueUnpaidCompetences.length > 0 ? ` (${overdueUnpaidCompetences.map((c) => competenceShort(c)).join(', ')})` : ''}.{' '}
+              <Link href="/cartoes" className="font-medium underline underline-offset-2">
+                Ver em Cartões
+              </Link>
+            </p>
+          ) : null}
           {baseProjection ? (
             <p className="text-sm text-muted-foreground">
               Sem a simulação:{' '}
@@ -86,7 +101,7 @@ export function Verdict({ projection, baseProjection }: VerdictProps) {
         </div>
       </div>
 
-      <p className="border-t border-border pt-3 text-sm text-muted-foreground">
+      <p className="max-w-prose border-t border-border pt-3 text-sm text-muted-foreground">
         <strong className="font-medium text-foreground">Esta projeção é otimista por construção.</strong>{' '}
         Ela só enxerga o que já está cadastrado: receitas, despesas fixas, parcelas e faturas.
         Gastos variáveis dos meses futuros — mercado, lazer, combustível — não entram. Então

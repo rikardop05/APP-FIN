@@ -61,6 +61,8 @@ export function FeasibilityLine({
   scenario: InvestmentScenario;
   surplus: InvestmentSurplus;
 }) {
+  // Sem média de sobra, o resumo do topo já disse "Sem histórico": repetir em cada cenário é ruído.
+  if (surplus.averageMonthlyCents === null) return null;
   const view = feasibilityLine(scenario.feasibility, surplus);
   return (
     <div className="flex flex-col gap-0.5 border border-border px-3 py-2 text-sm">

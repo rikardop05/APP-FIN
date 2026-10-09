@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { Pencil, Tags, Trash2 } from 'lucide-react';
-import { competenceShort } from '@/components/cashflow/labels';
-import { formatBRL, parseBRL } from '@/lib/money';
+import { useEffect, useState } from 'react';
+import { Check, Pencil, Tags, Trash2 } from 'lucide-react';
+import { competenceLong } from '@/components/cashflow/labels';
+import { cn } from '@/lib/utils';
+import { cents, formatBRL, parseBRL } from '@/lib/money';
 import {
   Button,
   Canhoto,
@@ -18,7 +19,7 @@ import {
 } from '@/components/ui-kit';
 import type { Transaction, TransactionOptions } from './schemas';
 import { amountForInput, signedAmountCents } from './manual-sign';
-import { installmentLabel, stripInstallmentSuffix } from './list-presentation';
+import { groupByCompetence, installmentLabel, stripInstallmentSuffix } from './list-presentation';
 
 const kindLabel: Record<Transaction['kind'], string> = {
   expense: 'Despesa',
@@ -207,65 +208,125 @@ export function TransactionList({
   onSaveEdit,
   onCancelEdit,
 }: TransactionListProps) {
+  // J e K: próximo e anterior lançamento, fora de campo de texto e sem modificadores (mesmo gesto de Importar).
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key !== 'j' && key !== 'k') return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName))
+      ) {
+        return;
+      }
+      const ids = rows.map((row) => `lanc-${row.id}-abrir`);
+      const current = target instanceof HTMLElement ? ids.indexOf(target.id) : -1;
+      const next = key === 'j' ? (current < 0 ? 0 : current + 1) : current < 0 ? ids.length - 1 : current - 1;
+      const element = ids[next] === undefined ? null : document.getElementById(ids[next] as string);
+      if (element === null) return;
+      event.preventDefault();
+      element.focus();
+      element.scrollIntoView({ block: 'center' });
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [rows]);
+
   if (rows.length === 0) return null;
   const allSelected = rows.every((row) => selectedIds.includes(row.id));
+  const groups = groupByCompetence(rows);
 
   return (
-    <section aria-label="Lançamentos, do mês atual para os anteriores e depois os futuros" className="flex flex-col gap-2">
-      <div className="flex items-center justify-between border border-border bg-card px-3 py-1">
+    <section aria-label="Lançamentos, do mês atual para os anteriores e depois os futuros" className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 border border-border bg-card px-3 py-1">
         <Checkbox label="Selecionar todos" checked={allSelected} onChange={onToggleAll} />
+        <p className="text-xs text-muted-foreground">
+          <span className="[@media(pointer:coarse)]:hidden">Clique</span>
+          <span className="hidden [@media(pointer:coarse)]:inline">Toque</span> no canhoto para selecionar.{' '}
+          <span className="[@media(pointer:coarse)]:hidden">
+            <kbd className="num border border-border bg-card px-1">J</kbd> /{' '}
+            <kbd className="num border border-border bg-card px-1">K</kbd> pulam entre as linhas.
+          </span>
+        </p>
       </div>
-      <ul className="flex flex-col gap-1.5">
-        {rows.map((row) => {
-          const title = rowTitle(row);
-          const editing = editingId === row.id;
-          const marcas = [
-            ...(row.status === 'planned' ? [{ label: 'Previsto', tone: 'neutral' as const }] : []),
-            ...(row.categoryName === null ? [{ label: 'Não categorizado', tone: 'attention' as const }] : []),
-          ];
-          return (
-            <li key={row.id}>
-              <Canhoto
-                as="article"
-                ariaLabel={`Lançamento: ${title}`}
-                stub={<RowStub row={row} />}
-                marcas={marcas}
-                valor={<Money value={row.amountCents} />}
-                footer={
-                  editing ? (
-                    <div className="flex flex-col gap-2">
-                      <TransactionEditor row={row} options={options} onSave={(input) => onSaveEdit(row.id, input)} onCancel={onCancelEdit} />
-                      <div className="flex justify-start border-t border-border pt-2">
-                        <RowActions description={title} onRule={() => onRule(row.id)} onDelete={() => onDelete(row.id)} />
-                      </div>
-                    </div>
-                  ) : null
-                }
-              >
-                <div className="flex min-w-0 items-center gap-1">
-                  <Checkbox aria-label={`Selecionar ${title}`} checked={selectedIds.includes(row.id)} onChange={() => onToggle(row.id)} />
-                  <button
-                    type="button"
-                    aria-expanded={editing}
-                    aria-label={`${editing ? 'Fechar' : 'Abrir'} ${title}`}
-                    onClick={() => (editing ? onCancelEdit() : onEdit(row.id))}
-                    className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8"
+      {groups.map((group) => (
+        <div key={group.competence} className="flex flex-col gap-1.5">
+          <h3 className="flex items-baseline justify-between gap-3 border-b-2 border-foreground pb-1 text-sm font-semibold">
+            <span className="first-letter:uppercase">{competenceLong(group.competence)}</span>
+            <span className="flex items-baseline gap-2 font-normal text-muted-foreground">
+              {group.rows.length} {group.rows.length === 1 ? 'lançamento' : 'lançamentos'} · receitas − despesas{' '}
+              <Money value={cents(group.totalCents)} className="font-semibold text-foreground" />
+            </span>
+          </h3>
+          <ul className="flex flex-col gap-1.5">
+            {group.rows.map((row) => {
+              const title = rowTitle(row);
+              const editing = editingId === row.id;
+              const selected = selectedIds.includes(row.id);
+              const marcas = [
+                ...(row.status === 'planned' ? [{ label: 'Previsto', tone: 'neutral' as const }] : []),
+                ...(row.categoryName === null ? [{ label: 'Não categorizado', tone: 'attention' as const }] : []),
+              ];
+              return (
+                <li key={row.id}>
+                  <Canhoto
+                    as="article"
+                    ariaLabel={`Lançamento: ${title}`}
+                    selecionado={selected}
+                    stub={
+                      <button
+                        type="button"
+                        aria-pressed={selected}
+                        aria-label={`Selecionar ${title}`}
+                        onClick={() => onToggle(row.id)}
+                        className={cn(
+                          'flex h-full min-h-11 w-full cursor-pointer flex-col items-center justify-center gap-1 transition-colors hover:bg-primary/10 hover:ring-1 hover:ring-inset hover:ring-primary/40 active:bg-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                          selected && 'font-semibold text-primary',
+                        )}
+                      >
+                        {selected ? <Check className="h-4 w-4 text-primary" strokeWidth={3} aria-hidden="true" /> : null}
+                        <RowStub row={row} />
+                      </button>
+                    }
+                    marcas={marcas}
+                    valor={<Money value={row.amountCents} />}
+                    footer={
+                      editing ? (
+                        <div className="flex flex-col gap-2">
+                          <TransactionEditor row={row} options={options} onSave={(input) => onSaveEdit(row.id, input)} onCancel={onCancelEdit} />
+                          <div className="flex justify-start border-t border-border pt-2">
+                            <RowActions description={title} onRule={() => onRule(row.id)} onDelete={() => onDelete(row.id)} />
+                          </div>
+                        </div>
+                      ) : null
+                    }
                   >
-                    <span className="truncate" title={title}>{title}</span>
-                    <Pencil className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                  </button>
-                </div>
-                <p className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                  <span><DateText value={row.occurredOn} /> · {kindLabel[row.kind]} · {competenceShort(row.competence)}</span>
-                  <span className="truncate" title={sourceLabel(row)}>{sourceLabel(row)}</span>
-                  {row.categoryName ? <span className="truncate text-foreground" title={row.categoryName}>{row.categoryName}</span> : null}
-                  {row.memberName ? <span className="truncate">{row.memberName}</span> : null}
-                </p>
-              </Canhoto>
-            </li>
-          );
-        })}
-      </ul>
+                    <button
+                      id={`lanc-${row.id}-abrir`}
+                      type="button"
+                      aria-expanded={editing}
+                      aria-label={`${editing ? 'Fechar' : 'Abrir'} ${title}`}
+                      onClick={() => (editing ? onCancelEdit() : onEdit(row.id))}
+                      className="flex min-h-11 min-w-0 items-center gap-2 text-left text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8"
+                    >
+                      <span className="truncate" title={title}>{title}</span>
+                      <Pencil className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    </button>
+                    <p className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                      <span><DateText value={row.occurredOn} /> · {kindLabel[row.kind]}</span>
+                      <span className="truncate" title={sourceLabel(row)}>{sourceLabel(row)}</span>
+                      {row.categoryName ? <span className="truncate text-foreground" title={row.categoryName}>{row.categoryName}</span> : null}
+                      {row.memberName ? <span className="truncate">{row.memberName}</span> : null}
+                    </p>
+                  </Canhoto>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
     </section>
   );
 }

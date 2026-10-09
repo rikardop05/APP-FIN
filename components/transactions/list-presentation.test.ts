@@ -107,3 +107,27 @@ describe('stripInstallmentSuffix: a parcela não aparece duas vezes', () => {
     expect(stripInstallmentSuffix('MERCADO 12/2026', 3, 10)).toBe('MERCADO 12/2026');
   });
 });
+
+import { groupByCompetence } from './list-presentation';
+
+describe('groupByCompetence: agrupamento por mês com total', () => {
+  it('mantém a ordem e soma cada mês só com receita e despesa (a regra da Sobra)', () => {
+    const rows = [
+      { competence: '2026-10', amountCents: -1000, kind: 'expense' },
+      { competence: '2026-10', amountCents: 5000, kind: 'income' },
+      { competence: '2026-10', amountCents: -9999, kind: 'credit_card_payment' },
+      { competence: '2026-09', amountCents: -200, kind: 'expense' },
+      { competence: '2026-11', amountCents: -300, kind: 'expense' },
+    ];
+    const groups = groupByCompetence(rows);
+    expect(groups.map((g) => [g.competence, g.rows.length, g.totalCents])).toEqual([
+      ['2026-10', 3, 4000],
+      ['2026-09', 1, -200],
+      ['2026-11', 1, -300],
+    ]);
+  });
+
+  it('lista vazia, nenhum grupo', () => {
+    expect(groupByCompetence([])).toEqual([]);
+  });
+});

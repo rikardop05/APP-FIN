@@ -89,3 +89,29 @@ export function stripInstallmentSuffix(description: string, number: number, tota
   const stripped = description.replace(suffix, '').trimEnd();
   return stripped === '' ? description : stripped;
 }
+
+/** Só receita e despesa entram no total do mês (a regra da Sobra); o resto é movimento entre contas. */
+function countsInSurplus(kind: string): boolean {
+  return kind === 'income' || kind === 'expense';
+}
+
+/**
+ * Agrupa as linhas (já na ordem de exibição) por competência, mantendo a ordem dos grupos e das linhas, e
+ * soma o mês. O total é "receitas − despesas" em centavos (despesa negativa, receita positiva), pela MESMA
+ * regra da Sobra do Painel (`monthlyKpis`): transferência, pagamento de fatura e aporte ficam FORA da soma.
+ */
+export function groupByCompetence<T extends { competence: string; amountCents: number; kind: string }>(
+  rows: readonly T[],
+): { competence: string; rows: T[]; totalCents: number }[] {
+  const groups: { competence: string; rows: T[]; totalCents: number }[] = [];
+  for (const row of rows) {
+    const last = groups[groups.length - 1];
+    if (last && last.competence === row.competence) {
+      last.rows.push(row);
+      last.totalCents += countsInSurplus(row.kind) ? row.amountCents : 0;
+    } else {
+      groups.push({ competence: row.competence, rows: [row], totalCents: countsInSurplus(row.kind) ? row.amountCents : 0 });
+    }
+  }
+  return groups;
+}

@@ -13,3 +13,17 @@ export const matchTypeLabel: Record<MatchType, string> = {
   regex: 'Expressão regular',
   exact: 'Igual a',
 };
+
+/** "1 subcategoria" / "3 subcategorias": o número manda no plural, nunca "(s)". */
+export function subcategoriesText(count: number): string {
+  return `${String(count)} ${count === 1 ? 'subcategoria' : 'subcategorias'}`;
+}
+
+/** As seções da tela, na ordem, com a âncora de cada uma (o menu do topo e os `id` usam esta lista). */
+export const CONFIG_SECTIONS = [
+  { id: 'categorias', label: 'Categorias' },
+  { id: 'regras', label: 'Regras' },
+  { id: 'membros', label: 'Membros' },
+  { id: 'premissas', label: 'Premissas' },
+  { id: 'backup', label: 'Backup' },
+] as const;

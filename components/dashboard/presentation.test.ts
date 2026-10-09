@@ -13,6 +13,7 @@ import {
   surplusLabel,
   variationView,
   verdictLine,
+  verdictOverdueNote,
 } from './presentation';
 
 const c = (n: number) => n as Cents;
@@ -131,5 +132,12 @@ describe('variationView', () => {
       text: '−50,00%',
       tone: 'ok',
     });
+  });
+});
+
+describe('ressalva do veredito', () => {
+  it('só aparece com faturas anteriores não pagas', () => {
+    expect(verdictOverdueNote(c(0))).toBeNull();
+    expect(verdictOverdueNote(c(541832))).toBe('sem contar R$ 5.418,32 de faturas anteriores não marcadas como pagas');
   });
 });

@@ -163,3 +163,57 @@ describe('selos: toda etiqueta de estado tem letra na tabela única', () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe('rodada pós-crítica: Fluxo, Metas, Lançamentos, Importar', () => {
+  it('Fluxo é uma coluna de canhotos, com presos, Faixa com link e a nota do veredito limitada', () => {
+    const month = read('components/cashflow/month-table.tsx');
+    expect(month).toContain('<Canhoto');
+    expect(month).toContain('preso={preso}');
+    expect(month).not.toContain('<table');
+    expect(read('components/cashflow/fluxo-screen.tsx')).toContain('<Faixa');
+    expect(read('components/cashflow/fluxo-screen.tsx')).toContain('/orcamento/recorrentes');
+    const verdict = read('components/cashflow/verdict.tsx');
+    expect(verdict).toContain('max-w-prose');
+    expect(verdict).toContain('faturas anteriores não marcadas como pagas');
+    expect(verdict).toContain('/cartoes');
+  });
+
+  it('Metas mostra os aportes que faltam como canhotos presos', () => {
+    const goals = read('components/goals/goals-screen.tsx');
+    expect(goals).toContain('preso');
+    expect(goals).toContain('goalInstallments');
+    expect(goals).toContain('Base: só as despesas categorizadas como essenciais');
+  });
+
+  it('nenhum input date nativo em investimentos, metas e lançamentos', () => {
+    for (const file of [
+      'components/investment/investment-screen.tsx',
+      'components/investment/positions/positions-screen.tsx',
+      'components/goals/goal-form.tsx',
+      'components/transactions/transaction-filters.tsx',
+      'components/transactions/transaction-list.tsx',
+      'components/transactions/transaction-dialogs.tsx',
+    ]) {
+      expect(read(file), file).not.toContain('type="date"');
+    }
+  });
+
+  it('o painel Mais é um diálogo modal com focus trap', () => {
+    const bottom = read('components/nav/bottom-nav.tsx');
+    expect(bottom).toContain('aria-modal="true"');
+    expect(bottom).toContain("event.key !== 'Tab'");
+  });
+
+  it('Lançamentos: agrupa por mês, seleciona pelo canhoto e tem J/K', () => {
+    const list = read('components/transactions/transaction-list.tsx');
+    expect(list).toContain('groupByCompetence');
+    expect(list).toContain('aria-pressed={selected}');
+    expect(list).toContain("key !== 'j' && key !== 'k'");
+    expect(read('components/transactions/apply-rules-dialog.tsx')).toContain('groupByRule');
+  });
+
+  it('Importar: o placar fecha numa linha no celular e abre no toque', () => {
+    expect(read('components/ui-kit/placar.tsx')).toContain('aria-expanded={expanded}');
+    expect(read('components/import/import-confirmation.tsx')).toMatch(/<Placar\s+position="sticky"\s+collapsible/);
+  });
+});

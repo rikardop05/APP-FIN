@@ -1,4 +1,6 @@
+import { toCompetence } from '@/lib/date';
 import { getCashflowData } from '@/lib/db/queries/cashflow';
+import { getOverdueUnpaidStatements, type OverdueUnpaidStatements } from '@/lib/db/queries/dashboard';
 import { topUpPlanned } from '@/lib/db/queries/recurring-planned-write';
 import { projectCashflow, type CashflowProjection } from '@/lib/finance/cashflow';
 
@@ -16,6 +18,12 @@ export type LoadedCashflow = CashflowBase & {
    * vazio em vez disso, e decidem pelo MESMO critério, que mora aqui.
    */
   hasProjectableData: boolean;
+  /**
+   * Faturas de competências anteriores, existentes e não marcadas como pagas (mesma regra do
+   * "Comprometido nos cartões"). A projeção NÃO as desconta (decisão do Ricardo, 2026-10-09):
+   * o campo existe para a tela avisar quanto fica de fora. `totalCents` negativo = a pagar.
+   */
+  overdueUnpaidStatements: OverdueUnpaidStatements;
 };
 
 /**
@@ -43,7 +51,10 @@ export async function loadProjectedCashflow(
   months: number = CASHFLOW_WINDOW_MONTHS,
 ): Promise<LoadedCashflow> {
   await topUpPlanned(householdId, today);
-  const data = await getCashflowData(householdId, today, months);
+  const [data, overdueUnpaidStatements] = await Promise.all([
+    getCashflowData(householdId, today, months),
+    getOverdueUnpaidStatements(householdId, toCompetence(today)),
+  ]);
   const base = toCashflowInput(data);
   const { input } = base;
   const hasProjectableData =
@@ -54,5 +65,5 @@ export async function loadProjectedCashflow(
       input.statementsDue.length +
       input.plannedContributions.length >
       0;
-  return { ...base, projection: projectCashflow(input), hasProjectableData };
+  return { ...base, projection: projectCashflow(input), hasProjectableData, overdueUnpaidStatements };
 }

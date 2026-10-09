@@ -86,7 +86,7 @@ export function BackupSection() {
   const refusal = pending === null ? null : refusalText(pending.check.targetHasData);
 
   return (
-    <section aria-labelledby="backup-heading" className="flex flex-col gap-3">
+    <section id="backup" aria-labelledby="backup-heading" className="flex scroll-mt-4 flex-col gap-3">
       <div>
         <h2 id="backup-heading" className="text-lg font-semibold tracking-tight">
           Backup

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { TrendingUp } from 'lucide-react';
 
-import { Badge, Button, Money, PageHeader } from '@/components/ui-kit';
+import { Badge, Button, DateField, Money, PageHeader } from '@/components/ui-kit';
 
 import { AccumulationChart } from './accumulation-chart';
 import { FeasibilityLine, SurplusSummary } from './feasibility/feasibility';
@@ -97,7 +97,7 @@ function PlanFields({ values, errors, onChange }: PlanFieldsProps) {
           <input id="plan-contribution" className={inputClass} value={values.contribution} onChange={set('contribution')} inputMode="decimal" placeholder="R$ 0,00" />
         </Field>
         <Field label="Prazo desejado (opcional)" htmlFor="plan-date" error={errors.targetDate}>
-          <input id="plan-date" type="date" className={inputClass} value={values.targetDate} onChange={set('targetDate')} />
+          <DateField id="plan-date" value={values.targetDate} onChange={(iso) => onChange({ ...values, targetDate: iso })} />
         </Field>
       </div>
       <details className="text-sm">
@@ -213,10 +213,12 @@ function ScenarioCard({ scenario, surplus, maxYears, values, errors, onChange }:
     <article className="flex min-w-0 flex-col gap-4 border border-border bg-card p-4 sm:p-5" aria-labelledby={`scenario-${label}`}>
       <div className="flex items-center justify-between gap-2">
         <h3 id={`scenario-${label}`} className="text-base font-semibold">{scenarioName(label)}</h3>
-        <Badge variant={scenario.result.feasible ? 'success' : 'warning'}>{scenario.result.feasible ? 'Viável' : 'Fora do prazo'}</Badge>
+        <Badge variant={scenario.result.feasible ? 'success' : 'warning'}>
+          {scenario.result.feasible ? 'Viável' : values.targetDate !== '' ? 'Fora do prazo' : `Passa de ${maxYears} anos`}
+        </Badge>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 bg-secondary/40 p-3">
+      <div className="grid grid-cols-2 items-end gap-3 bg-secondary/40 p-3">
         <Field label="Retorno real ao ano (%)" htmlFor={`ret-${label}`} error={errors[`${label}.return`]}>
           <input id={`ret-${label}`} className={inputClass} value={row.returnPct} onChange={setPremise('returnPct')} inputMode="decimal" />
         </Field>

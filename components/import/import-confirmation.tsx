@@ -972,6 +972,7 @@ export function ImportConfirmation({
 
       <Placar
         position="sticky"
+        collapsible
         title="Lote"
         items={[
           {
@@ -986,6 +987,7 @@ export function ImportConfirmation({
           { label: 'Incluído', value: <Money value={figures.includedCents} sign="never" /> },
           {
             label: 'Diferença',
+            primary: true,
             tone: figures.tone,
             value:
               figures.differenceCents === null ? (
@@ -999,23 +1001,33 @@ export function ImportConfirmation({
               ),
           },
         ]}
-        action={
-          <div className="flex w-full flex-col items-stretch gap-1 sm:max-w-xs sm:items-end">
+        action={(expanded) => (
+          <div className={cn('flex flex-col gap-1 sm:items-end', expanded ? 'w-full items-stretch' : 'items-end')}>
             <Button
               type="button"
               aria-disabled={blockReason !== null}
               aria-describedby="confirmar-motivo"
-              className="w-full sm:w-auto"
+              aria-label="Confirmar importação"
+              className={expanded ? 'w-full sm:w-auto' : 'sm:w-auto'}
               onClick={handleConfirmClick}
             >
               <Check className="h-4 w-4" aria-hidden="true" />
-              {busy ? 'Gravando…' : 'Confirmar importação'}
+              {busy ? 'Gravando…' : (
+                <>
+                  <span className="sm:hidden">{expanded ? 'Confirmar importação' : 'Confirmar'}</span>
+                  <span className="hidden sm:inline">Confirmar importação</span>
+                </>
+              )}
             </Button>
-            <p id="confirmar-motivo" className="text-right text-xs text-muted-foreground">
+            {/* Fechado no celular o motivo fica só para leitor de tela; aberto e no desktop é visível. */}
+            <p
+              id="confirmar-motivo"
+              className={cn('text-xs text-muted-foreground sm:text-right lg:whitespace-nowrap', expanded ? 'text-right' : 'max-sm:sr-only')}
+            >
               {blockReason ?? countLabel(calculation.includedRowsCount, calculation.plannedRowsCount)}
             </p>
           </div>
-        }
+        )}
       />
     </section>
   );

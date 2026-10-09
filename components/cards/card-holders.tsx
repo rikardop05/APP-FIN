@@ -124,8 +124,8 @@ export function CardHolders({ card, members, onUpdated }: CardHoldersProps) {
                 <span className="font-medium tabular-nums">{row.display}</span>
                 <span className="text-muted-foreground"> · {row.memberName ?? '—'}</span>
               </span>
-              <Button variant="ghost" size="sm" aria-label={`Remover o final ${row.last4}`} disabled={busy} onClick={() => void remove(row)}>
-                <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
+              <Button variant="ghost" size="sm" className="hover:text-destructive focus-visible:text-destructive" aria-label={`Remover o final ${row.last4}`} disabled={busy} onClick={() => void remove(row)}>
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
               </Button>
             </li>
           ))}

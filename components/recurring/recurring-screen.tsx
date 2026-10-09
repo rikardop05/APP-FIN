@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 
-import { Button, Input, Money, Select } from '@/components/ui-kit';
+import { Button, DateField, Input, Money, Select } from '@/components/ui-kit';
 import { type Frequency, type IncomeKind } from '@/lib/db';
 import { formatDateBR, toCompetence } from '@/lib/date';
 import { expandRecurrence, type PlannedOccurrence } from '@/lib/finance/recurrence';
@@ -456,23 +456,14 @@ function ExpenseDialog({
         ) : null}
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-muted-foreground">Data inicial</span>
-          <Input
-            type="date"
-            value={values.startsOn}
-            onChange={(event) => update('startsOn', event.target.value)}
-            required
-          />
+          <DateField value={values.startsOn} onChange={(iso) => update('startsOn', iso)} required />
           <span className="text-xs text-muted-foreground">
             {expenseText.startsOnHint}
           </span>
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-muted-foreground">Data final (opcional)</span>
-          <Input
-            type="date"
-            value={values.endsOn ?? ''}
-            onChange={(event) => update('endsOn', event.target.value || null)}
-          />
+          <DateField value={values.endsOn ?? ''} onChange={(iso) => update('endsOn', iso || null)} />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-muted-foreground">{expenseText.adjustmentLabel}</span>
@@ -707,22 +698,14 @@ function IncomeDialog({
           <span className="text-xs text-muted-foreground">
             {incomeText.startsOnLabel(values.frequency)}
           </span>
-          <Input
-            type="date"
-            value={values.startsOn ?? ''}
-            onChange={(event) => update('startsOn', event.target.value || null)}
-          />
+          <DateField value={values.startsOn ?? ''} onChange={(iso) => update('startsOn', iso || null)} />
           <span className="text-xs text-muted-foreground">
             {incomeText.startsOnHint}
           </span>
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-muted-foreground">{incomeText.endsOnLabel}</span>
-          <Input
-            type="date"
-            value={values.endsOn ?? ''}
-            onChange={(event) => update('endsOn', event.target.value || null)}
-          />
+          <DateField value={values.endsOn ?? ''} onChange={(iso) => update('endsOn', iso || null)} />
         </label>
         {values.frequency === 'one_off' ? (
           <label className="flex flex-col gap-1 text-sm">

@@ -98,6 +98,10 @@ export const ESTADO_LETRA: Record<string, string> = {
   Aberta: 'R',
   Fechada: 'M',
   Paga: 'Z',
+  'Dentro do limite': 'Y',
+  'Perto do limite': 'L',
+  Estourou: 'X',
+  'Sem limite': 'Q',
 };
 
 /** Letra do estado: a da tabela central, ou (estado novo, ainda sem entrada) a inicial do rótulo. */

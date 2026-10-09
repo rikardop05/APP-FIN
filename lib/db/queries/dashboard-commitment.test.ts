@@ -246,3 +246,37 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('faturas vencidas nao pa
     }
   });
 });
+
+describe.skipIf(process.env.DATABASE_URL === undefined)('getOverdueUnpaidStatements: aviso do Fluxo (2026-10-09)', () => {
+  it('soma so as faturas anteriores existentes e nao pagas, com a regra do Comprometido', async () => {
+    const f = await createFixture('aviso-fluxo');
+    try {
+      const { getOverdueUnpaidStatements } = await import('./dashboard');
+      const julho = await f.statement('2026-07', 'closed'); // vencida, nao paga
+      const agosto = await f.statement('2026-08', 'paid');
+      await f.tx('2026-07', -146901, { statementId: julho });
+      await f.tx('2026-07', 500, { statementId: julho }); // estorno abate
+      await f.tx('2026-08', -9999, { statementId: agosto }); // paga: fora
+      await f.tx('2026-09', -5000); // sem fatura cadastrada: fora
+      await f.tx('2026-10', -76609); // mes corrente: nao e "anterior"
+
+      // -146901 + 500 = -146401.
+      expect(await getOverdueUnpaidStatements(f.householdId, '2026-10')).toEqual({
+        totalCents: -146401,
+        competences: ['2026-07'],
+      });
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it('nada vencido: zero e lista vazia', async () => {
+    const f = await createFixture('aviso-fluxo-vazio');
+    try {
+      const { getOverdueUnpaidStatements } = await import('./dashboard');
+      expect(await getOverdueUnpaidStatements(f.householdId, '2026-10')).toEqual({ totalCents: 0, competences: [] });
+    } finally {
+      await f.cleanup();
+    }
+  });
+});

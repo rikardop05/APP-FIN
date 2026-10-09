@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button, Checkbox, DateText, Money } from '@/components/ui-kit';
-import { confirmedItems, previewLimitNotice } from './apply-rules-presentation';
+import { confirmedItems, groupByRule, previewLimitNotice } from './apply-rules-presentation';
 import { DialogShell } from './transaction-dialogs';
 import type { RuleApplicationProposal } from './schemas';
 
@@ -54,6 +54,16 @@ export function ApplyRulesDialog({
       ) : (
         <form className="flex flex-col gap-4" onSubmit={(event) => { event.preventDefault(); void onConfirm(items); }}>
           {limitNotice ? <p className="text-sm text-muted-foreground">{limitNotice}</p> : null}
+          <ul aria-label="Quantas linhas cada regra pega" className="flex flex-col gap-1 border border-border bg-secondary/40 p-3 text-sm">
+            {groupByRule(proposals).map((group) => (
+              <li key={group.ruleId} className="flex flex-wrap items-baseline justify-between gap-2">
+                <span>
+                  regra &ldquo;{group.rulePattern}&rdquo; → {group.categoryName}
+                </span>
+                <strong className="font-semibold">{group.count} {group.count === 1 ? 'linha' : 'linhas'}</strong>
+              </li>
+            ))}
+          </ul>
           <ul className="flex flex-col divide-y divide-border border border-border">
             {proposals.map((proposal) => (
               <li key={proposal.transactionId} className="flex items-start gap-3 px-3 py-2 text-sm">

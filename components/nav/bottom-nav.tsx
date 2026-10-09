@@ -33,6 +33,7 @@ export function BottomNav({ theme }: { theme: Theme }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const firstOverflowLinkRef = useRef<HTMLAnchorElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
 
   const primary = NAV_ITEMS.filter((item) => item.mobile === 'primary');
   const overflow = NAV_ITEMS.filter((item) => item.mobile === 'more');
@@ -46,6 +47,24 @@ export function BottomNav({ theme }: { theme: Theme }) {
       if (event.key === 'Escape') {
         setOpen(false);
         triggerRef.current?.focus();
+        return;
+      }
+      // Focus trap: com o painel aberto (aria-modal), o Tab circula só dentro dele.
+      if (event.key !== 'Tab' || panelRef.current === null) return;
+      const focusables = panelRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled])');
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (first === undefined || last === undefined) return;
+      const active = document.activeElement;
+      if (!panelRef.current.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
       }
     }
     document.addEventListener('keydown', handleKeyDown);
@@ -60,16 +79,18 @@ export function BottomNav({ theme }: { theme: Theme }) {
   return (
     <>
       {open ? (
-        <div className="fixed inset-0 z-40 md:hidden">
+        <div role="dialog" aria-modal="true" aria-label="Mais opções de navegação" className="fixed inset-0 z-40 md:hidden">
           <button
             type="button"
             aria-label="Fechar menu"
+            tabIndex={-1}
             onClick={closeAndReturnFocus}
             className="absolute inset-0 bg-foreground/30"
           />
           <nav
             id={OVERFLOW_PANEL_ID}
-            aria-label="Mais opções de navegação"
+            ref={panelRef}
+            aria-label="Mais opções"
             className="absolute inset-x-0 bottom-[var(--bottom-nav-h)] max-h-[calc(100dvh-var(--bottom-nav-h))] overflow-y-auto border-t-2 border-foreground bg-background p-3 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))]"
           >
             <div className="mb-2 flex items-center justify-between px-1">

@@ -43,3 +43,16 @@ export function previewLimitNotice(shown: number, total: number): string | null 
   if (total <= shown) return null;
   return `Mostrando ${String(shown)} de ${String(total)} lançamentos. Aplique estes e abra a prévia de novo para ver o restante.`;
 }
+
+/** Quantas linhas cada regra pega na prévia: "Padaria" → Mercado: 3 linhas. Ordem: mais linhas primeiro. */
+export function groupByRule<T extends { ruleId: string; rulePattern: string; categoryName: string }>(
+  proposals: readonly T[],
+): { ruleId: string; rulePattern: string; categoryName: string; count: number }[] {
+  const byRule = new Map<string, { ruleId: string; rulePattern: string; categoryName: string; count: number }>();
+  for (const proposal of proposals) {
+    const current = byRule.get(proposal.ruleId);
+    if (current) current.count += 1;
+    else byRule.set(proposal.ruleId, { ruleId: proposal.ruleId, rulePattern: proposal.rulePattern, categoryName: proposal.categoryName, count: 1 });
+  }
+  return [...byRule.values()].sort((x, y) => y.count - x.count || x.rulePattern.localeCompare(y.rulePattern, 'pt-BR'));
+}

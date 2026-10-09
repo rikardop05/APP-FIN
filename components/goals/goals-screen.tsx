@@ -4,11 +4,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { PiggyBank, Pencil, Plus, Target, Trash2 } from 'lucide-react';
 
 import { BAR_X_CLASS, barScaleStyle } from '@/components/dashboard/bar-scale';
-import { Badge, Button, DateText, EmptyState, Money, PageHeader } from '@/components/ui-kit';
+import { Badge, Button, Canhoto, Carimbo, DateText, EmptyState, Money, PageHeader, Parcela } from '@/components/ui-kit';
+import { competenceShort } from '@/components/cashflow/labels';
 import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 import { basisPoints } from '@/lib/money';
 
 import { deadlineSummary } from './describe';
+import { goalInstallments, splitInstallments, type GoalInstallment } from './goal-carne';
 import { GoalForm } from './goal-form';
 import type { GoalRequestBody } from './form-body';
 import { goalsResponseSchema, type GoalsResponse, type GoalView } from './schemas';
@@ -86,6 +88,51 @@ function DeadlineLine({ goal }: { goal: GoalView }) {
   }
 }
 
+/** Os aportes que faltam, como canhotos presos (tracejados): o carnê da meta. */
+function GoalCarne({ goal }: { goal: GoalView }) {
+  const summary = deadlineSummary(goal);
+  if (summary.kind !== 'monthly' || goal.targetDate === null) return null;
+  const list = goalInstallments({
+    targetDate: goal.targetDate,
+    months: summary.months,
+    requiredMonthlyCents: summary.requiredMonthlyCents,
+  });
+  const { visible, hidden } = splitInstallments(list);
+  const row = (item: GoalInstallment) => (
+    <Canhoto
+      as="li"
+      key={item.number}
+      preso
+      stub={<Parcela atual={item.number} total={item.total} />}
+      valor={<Money value={item.amountCents} sign="never" className="text-sm" />}
+    >
+      <span className="text-sm text-foreground">Aporte de {competenceShort(item.competence)}</span>
+    </Canhoto>
+  );
+  return (
+    <div className="mt-4 flex flex-col gap-2">
+      <p className="flex flex-wrap items-center gap-2 text-sm">
+        <Carimbo tone="ok">Guardado</Carimbo>
+        <Money value={goal.currentCents} sign="never" className="font-semibold" />
+        <span className="text-muted-foreground">
+          · faltam {list.length} {list.length === 1 ? 'aporte' : 'aportes'}, ainda presos:
+        </span>
+      </p>
+      <ol className="flex flex-col gap-1" aria-label={`Aportes que faltam para ${goal.name}`}>
+        {visible.map(row)}
+      </ol>
+      {hidden.length > 0 ? (
+        <details>
+          <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm text-muted-foreground underline underline-offset-2 sm:min-h-0">
+            Ver os outros {hidden.length} aportes
+          </summary>
+          <ol className="mt-1 flex flex-col gap-1">{hidden.map(row)}</ol>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 function GoalCard({ goal, onEdit, onDelete }: { goal: GoalView; onEdit: () => void; onDelete: () => void }) {
   const progress = goal.progress;
   return (
@@ -124,6 +171,7 @@ function GoalCard({ goal, onEdit, onDelete }: { goal: GoalView; onEdit: () => vo
       <div className="mt-3">
         <DeadlineLine goal={goal} />
       </div>
+      <GoalCarne goal={goal} />
     </article>
   );
 }
@@ -144,6 +192,10 @@ function EmergencySuggestion({ data, onCreate }: { data: GoalsResponse['emergenc
               Sugestão: <strong className="text-foreground"><Money value={data.targetCents} sign="never" /></strong>, ou seja,{' '}
               {data.months} × <Money value={data.averageCents} sign="never" /> de despesa essencial por mês (média de{' '}
               {data.monthsWithData} {data.monthsWithData === 1 ? 'mês fechado' : 'meses fechados'}).
+              <span className="mt-1 block">
+                Base: só as despesas categorizadas como essenciais, nos meses fechados de {competenceShort(data.windowFrom)} a{' '}
+                {competenceShort(data.windowTo)}. Receitas, aportes e despesas não essenciais ficam fora.
+              </span>
             </p>
           ) : (
             <p className="mt-1 text-sm text-muted-foreground">

@@ -2,7 +2,7 @@
 
 import { useId } from 'react';
 
-import { Button, Checkbox, Input, Select } from '@/components/ui-kit';
+import { Button, Checkbox, DateField, Input, Select } from '@/components/ui-kit';
 
 import {
   activeFilterCount,
@@ -72,11 +72,11 @@ export function TransactionFilters({ value, options, open, onOpenChange, onChang
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-xs text-muted-foreground">Data inicial</span>
-              <Input type="date" value={value.from} onChange={(event) => onChange({ from: event.target.value })} />
+              <DateField value={value.from} onChange={(iso) => onChange({ from: iso })} />
             </label>
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-xs text-muted-foreground">Data final</span>
-              <Input type="date" value={value.to} onChange={(event) => onChange({ to: event.target.value })} />
+              <DateField value={value.to} onChange={(iso) => onChange({ to: iso })} />
             </label>
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-xs text-muted-foreground">Categoria</span>

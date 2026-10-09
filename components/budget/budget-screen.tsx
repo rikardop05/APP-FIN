@@ -1,25 +1,33 @@
 'use client';
 
+import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { addCompetence, toCompetence } from '@/lib/date';
-import { cents, parseBRL } from '@/lib/money';
+import { cents, formatBRL, parseBRL } from '@/lib/money';
 
 import {
-  Badge,
   Button,
+  Canhoto,
   EmptyState,
+  Faixa,
   Input,
   Money,
   PageHeader,
 } from '@/components/ui-kit';
-import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 
 import { changedCount, monthTotals, saveHint, totalLine } from './totals';
 import { buildSaveBody, type BudgetFieldValues } from './save-body';
 import { BAR_X_CLASS, barScaleStyle } from '@/components/dashboard/bar-scale';
-import { competenceLabel, competenceTitle, EXPECTED_LABEL, expectedUsageText, LIGHT_VIEW, remainingText, toFieldText } from './labels';
+import { competenceLabel, competenceTitle, EXPECTED_LABEL, expectedUsageText, formatPercent, LIGHT_VIEW, remainingText, toFieldText } from './labels';
+import {
+  summarizeUncategorized,
+  uncategorizedResponseSchema,
+  uncategorizedTitle,
+  uncategorizedVerb,
+  type UncategorizedSummary,
+} from './uncategorized';
 import {
   apiErrorSchema,
   budgetMonthResponseSchema,
@@ -95,6 +103,21 @@ export function BudgetScreen({ today }: { today: string }) {
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
+    return () => controller.abort();
+  }, [period, reloadKey]);
+
+  // Despesas sem categoria da competência: ficam fora de TODAS as barras, então a tela diz quanto é.
+  const [uncategorized, setUncategorized] = useState<UncategorizedSummary | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    setUncategorized(null);
+    void fetch('/api/transactions?uncategorized=true', { signal: controller.signal, cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const parsed = uncategorizedResponseSchema.safeParse(await response.json().catch(() => null));
+        if (parsed.success) setUncategorized(summarizeUncategorized(parsed.data.transactions, period));
+      })
+      .catch(() => undefined);
     return () => controller.abort();
   }, [period, reloadKey]);
 
@@ -269,6 +292,18 @@ export function BudgetScreen({ today }: { today: string }) {
 
         {data !== null && data.categories.length > 0 ? (
           <>
+            {uncategorized !== null && uncategorized.count > 0 ? (
+              <Faixa tone="attention" role="status">
+                <p>
+                  {uncategorizedTitle(uncategorized.count)} (<Money value={uncategorized.totalCents} sign="never" />){' '}
+                  {uncategorizedVerb(uncategorized.count)}.{' '}
+                  <Link href="/lancamentos/revisar" className="font-medium text-primary underline underline-offset-2">
+                    Revisar
+                  </Link>
+                </p>
+              </Faixa>
+            ) : null}
+
             {totals !== null ? (
               <section aria-labelledby="budget-total-heading" className="flex flex-col gap-2 border border-border bg-card p-4">
                 <h2 id="budget-total-heading" className="text-sm font-medium text-muted-foreground">
@@ -281,7 +316,7 @@ export function BudgetScreen({ today }: { today: string }) {
                     <p className="flex flex-wrap items-baseline gap-x-2 text-lg font-semibold">
                       {totalLine(totals)}
                       <span className="text-sm font-normal text-muted-foreground">
-                        {LIGHT_VIEW[totals.light].label}{totals.usageBp === null ? '' : ` · ${formatBasisPoints(totals.usageBp)}`}
+                        {LIGHT_VIEW[totals.light].label}{totals.usageBp === null ? '' : ` · ${formatPercent(totals.usageBp)}`}
                       </span>
                     </p>
                     <div
@@ -341,7 +376,7 @@ export function BudgetScreen({ today }: { today: string }) {
                     ? 'border border-destructive/50 bg-destructive-soft px-3 py-2 text-sm text-foreground'
                     : message.kind === 'success'
                       ? 'border border-success/50 bg-success-soft px-3 py-2 text-sm text-foreground'
-                      : ' border border-border bg-muted px-3 py-2 text-sm text-foreground'
+                      : 'border border-border bg-muted px-3 py-2 text-sm text-foreground'
                 }
               >
                 {message.text}
@@ -354,13 +389,13 @@ export function BudgetScreen({ today }: { today: string }) {
               </p>
             ) : null}
 
-            <p className="text-xs text-muted-foreground">
+            <p className="max-w-[65ch] text-xs text-muted-foreground">
               A cor mede o <strong className="font-medium text-foreground">{EXPECTED_LABEL.toLowerCase()}</strong>{' '}
               do mês: o que já foi lançado (<strong className="font-medium text-foreground">realizado</strong>)
               mais as despesas esperadas que ainda não foram lançadas (
               <strong className="font-medium text-foreground">previsto a realizar</strong>). Ela responde
               &ldquo;ainda posso gastar nesta categoria?&rdquo;. A cor muda para amarelo a partir de{' '}
-              {formatBasisPoints(data.warnBp)} e para vermelho acima de 100,00%.
+              {formatPercent(data.warnBp)} e para vermelho acima de 100%.
             </p>
 
             <BudgetGroups
@@ -445,94 +480,79 @@ function CategoryRow({
   const stale = row !== undefined && typed !== row.plannedCents;
   const view = row === undefined || stale ? null : LIGHT_VIEW[row.light];
   const inputId = `orcamento-${category.id}`;
+  // O talão é UM número: o uso do orçamento, sem casas. Sem orçamento salvo, traço.
+  const usage = row !== undefined && !stale && row.usageBp !== null ? formatPercent(row.usageBp) : '—';
 
   return (
-    <div className="flex flex-col gap-3 border border-border bg-card p-3 sm:grid sm:grid-cols-[minmax(0,1fr)_11rem_minmax(0,1.6fr)] sm:items-start sm:gap-4">
-      <div className="flex items-start justify-between gap-2 sm:flex-col sm:justify-start">
-        <label htmlFor={inputId} className="text-sm font-medium text-foreground">
-          {category.name}
-        </label>
-        {view !== null && row !== undefined ? (
-          <Badge variant={view.badge}>
-            {row.light === 'red' && row.usageBp === null ? 'Estourou (orçamento zero)' : view.label}
-          </Badge>
-        ) : null}
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <div className="relative">
-          <span
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
-            aria-hidden="true"
-          >
-            R$
-          </span>
-          <Input
-            id={inputId}
-            value={text}
-            inputMode="decimal"
-            placeholder="Sem orçamento"
-            aria-label={`Orçamento de ${category.name}`}
-            aria-invalid={invalid}
-            disabled={disabled}
-            className={`pl-9 text-right num ${invalid ? 'border-destructive' : ''}`}
-            onChange={(event) => onChange(event.target.value)}
-          />
-        </div>
-        {invalid ? (
-          <span className="text-xs text-destructive" role="alert">
-            Valor inválido.
-          </span>
-        ) : null}
-      </div>
-
-      <div className="text-sm">
-        {row === undefined ? (
-          <p className="text-muted-foreground">
-            {typed === null ? 'Sem orçamento definido.' : 'Salve para ver o realizado desta categoria.'}
-          </p>
-        ) : stale ? (
-          <p className="text-muted-foreground">
-            Valor alterado: salve para atualizar o realizado e a cor.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <p className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
-              <span>Realizado</span>
-              <Money value={row.spentCents} sign="never" className="text-foreground" />
-              <span aria-hidden="true">·</span>
-              <span>Previsto a realizar</span>
-              <Money value={row.upcomingCents} sign="never" className="text-foreground" />
-            </p>
-            <p className="flex flex-wrap items-baseline gap-x-2">
-              <span className="text-muted-foreground">{EXPECTED_LABEL}</span>
-              <Money value={row.expectedCents} sign="never" className="font-medium text-foreground" />
-              <span className="text-muted-foreground">de</span>
-              <Money value={row.plannedCents} sign="never" />
-              {row.usageBp !== null ? (
-                <span className="num font-medium text-foreground">
-                  · {formatBasisPoints(row.usageBp)}
-                </span>
-              ) : null}
-            </p>
-            {row.usageBp !== null ? (
-              <div
-                className="h-1.5 overflow-hidden bg-secondary"
-                role="img"
-                aria-label={expectedUsageText(row.usageBp)}
-              >
-                <div
-                  className={`${BAR_X_CLASS} ${LIGHT_VIEW[row.light].bar}`}
-                  style={barScaleStyle(row.usageBp / 100, 'x')}
-                />
-              </div>
-            ) : null}
-            <p className={`text-xs ${row.remainingCents < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
-              {remainingText(row.remainingCents)}
-            </p>
+    <Canhoto
+      as="div"
+      stub={usage}
+      marca={view === null ? undefined : { label: view.label, tone: view.tone }}
+      valor={
+        <div className="flex w-full flex-col gap-1 sm:w-44">
+          <div className="relative">
+            <span
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
+              aria-hidden="true"
+            >
+              R$
+            </span>
+            <Input
+              id={inputId}
+              value={text}
+              inputMode="decimal"
+              placeholder="Sem orçamento"
+              aria-label={`Orçamento de ${category.name}`}
+              aria-invalid={invalid}
+              disabled={disabled}
+              className={`pl-9 text-right num ${invalid ? 'border-destructive' : ''}`}
+              onChange={(event) => onChange(event.target.value)}
+            />
           </div>
-        )}
-      </div>
-    </div>
+          {invalid ? (
+            <span className="text-xs text-destructive" role="alert">
+              Valor inválido.
+            </span>
+          ) : null}
+        </div>
+      }
+    >
+      <label htmlFor={inputId} className="text-sm font-medium text-foreground">
+        {category.name}
+      </label>
+      {row === undefined ? (
+        <p className="text-sm text-muted-foreground">
+          {typed === null ? 'Sem orçamento definido.' : 'Salve para ver o realizado desta categoria.'}
+        </p>
+      ) : stale ? (
+        <p className="text-sm text-muted-foreground">Valor alterado: salve para atualizar o realizado e a cor.</p>
+      ) : (
+        <div className="flex flex-col gap-1 text-sm">
+          {/* Um número por conceito: gasto esperado aqui, orçado no campo, restante abaixo. A divisão em
+              realizado e previsto fica na dica e para leitor de tela, não como terceira versão do número. */}
+          <p className="flex flex-wrap items-baseline gap-x-2" title={`Realizado ${formatBRL(row.spentCents, { sign: 'never' })} + previsto ${formatBRL(row.upcomingCents, { sign: 'never' })}`}>
+            <span className="text-muted-foreground">Gasto esperado</span>
+            <Money value={row.expectedCents} sign="never" className="font-medium text-foreground" />
+            <span className="sr-only">
+              , realizado {formatBRL(row.spentCents, { sign: 'never' })} mais previsto{' '}
+              {formatBRL(row.upcomingCents, { sign: 'never' })}
+            </span>
+          </p>
+          {row.usageBp !== null ? (
+            <div className="h-1.5 overflow-hidden bg-secondary" role="img" aria-label={expectedUsageText(row.usageBp)}>
+              <div
+                className={`${BAR_X_CLASS} ${LIGHT_VIEW[row.light].bar}`}
+                style={barScaleStyle(row.usageBp / 100, 'x')}
+              />
+            </div>
+          ) : (
+            <p className="text-muted-foreground">Orçamento zero.</p>
+          )}
+          <p className={`text-xs ${row.remainingCents < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+            {remainingText(row.remainingCents)}
+          </p>
+        </div>
+      )}
+    </Canhoto>
   );
 }

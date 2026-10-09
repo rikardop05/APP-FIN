@@ -409,8 +409,16 @@ export function LancamentosScreen({ today }: { today: string }) {
         description="Receitas e despesas da família, filtráveis por período, categoria, cartão ou conta, responsável e texto."
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row [&>*]:w-full sm:[&>*]:w-auto">
-            <Link href="/lancamentos/revisar" className="inline-flex min-h-11 items-center sm:min-h-9 justify-center border border-border px-4 text-sm font-medium hover:bg-muted">Revisar sem categoria</Link>
-            <Button variant="outline" onClick={() => void openApplyAll()} disabled={busy}><Wand2 className="mr-2 h-4 w-4" aria-hidden="true" />Aplicar regras aos não categorizados</Button>
+            {/* Celular: um primário e o resto num menu. Desktop: as três ações à vista. */}
+            <details className="relative sm:hidden">
+              <summary className="inline-flex min-h-11 cursor-pointer list-none items-center justify-center border border-border px-4 text-sm font-medium hover:bg-muted">Mais ações</summary>
+              <div className="mt-1 flex flex-col gap-1 border border-border bg-card p-1">
+                <Link href="/lancamentos/revisar" className="inline-flex min-h-11 items-center px-3 text-sm font-medium hover:bg-muted">Revisar sem categoria</Link>
+                <button type="button" onClick={() => void openApplyAll()} disabled={busy} className="inline-flex min-h-11 items-center px-3 text-left text-sm font-medium hover:bg-muted disabled:opacity-50">Aplicar regras aos não categorizados</button>
+              </div>
+            </details>
+            <Link href="/lancamentos/revisar" className="hidden min-h-9 items-center justify-center border border-border px-4 text-sm font-medium hover:bg-muted sm:inline-flex">Revisar sem categoria</Link>
+            <Button variant="outline" className="hidden sm:inline-flex" onClick={() => void openApplyAll()} disabled={busy}><Wand2 className="mr-2 h-4 w-4" aria-hidden="true" />Aplicar regras aos não categorizados</Button>
             <Button onClick={() => setDialog({ kind: 'manual' })}><Plus className="mr-2 h-4 w-4" aria-hidden="true" />Novo lançamento</Button>
           </div>
         }

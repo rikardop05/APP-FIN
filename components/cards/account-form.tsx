@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { Button, Input, Select } from '@/components/ui-kit';
+import { Button, DateField, Input, Select } from '@/components/ui-kit';
 import type { AccountRecord, AccountFormData, AccountFormValues } from './schemas';
 import { cents, formatBRL, parseBRL } from '@/lib/money';
 import { accountFormSchema } from './schemas';
@@ -103,12 +103,7 @@ export function AccountForm({
           </Select>
         </Field>
         <Field label="Data do saldo inicial" htmlFor="account-opening-date" error={errors.openingDate}>
-          <Input
-            id="account-opening-date"
-            type="date"
-            value={values.openingDate}
-            onChange={(event) => update('openingDate', event.target.value)}
-          />
+          <DateField id="account-opening-date" value={values.openingDate} onChange={(iso) => update('openingDate', iso)} />
         </Field>
       </div>
       <Field label="Saldo inicial" htmlFor="account-opening-balance" error={errors.openingBalance}>

@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import type { Competence } from '@/lib/date';
 import type { BasisPoints, Cents } from '@/lib/money';
 import { PageHeader } from '@/components/ui-kit';
@@ -105,7 +107,18 @@ export function DashboardScreen({
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Painel" description={`Como estamos em ${monthName(competence)} e para onde vamos.`} />
+      <PageHeader
+        title="Painel"
+        description={`Como estamos em ${monthName(competence)} e para onde vamos.`}
+        actions={
+          <Link
+            href="/importar"
+            className="inline-flex min-h-11 items-center justify-center bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 sm:min-h-9"
+          >
+            Importar fatura
+          </Link>
+        }
+      />
 
       <Headline
         competence={competence}
@@ -116,6 +129,7 @@ export function DashboardScreen({
         plannedContributionCents={kpis.plannedContributionCents}
         projected={projected}
         pending={pending}
+        overdueUnpaidCents={-commitment.breakdown.overdueUnpaidCents as Cents}
         pendingUnavailable={pendencias.overBudget === null}
       />
 

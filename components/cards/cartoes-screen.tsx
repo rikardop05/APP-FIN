@@ -259,8 +259,8 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
                         <Button variant="ghost" size="sm" aria-label={`Editar ${account.name}`} onClick={() => setDialog({ kind: 'account', record: account })}>
                           <Pencil className="h-4 w-4" aria-hidden="true" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="ml-4 border-l border-border" aria-label={`Desativar ${account.name}`} onClick={() => void archive('account', account.id, account.name)}>
-                          <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
+                        <Button variant="ghost" size="sm" className="ml-4 border-l border-border hover:text-destructive focus-visible:text-destructive" aria-label={`Desativar ${account.name}`} onClick={() => void archive('account', account.id, account.name)}>
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </div>
                     </div>
@@ -312,8 +312,8 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
                         <Button variant="ghost" size="sm" aria-label={`Editar ${card.name}`} onClick={() => setDialog({ kind: 'card', record: card })}>
                           <Pencil className="h-4 w-4" aria-hidden="true" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="ml-4 border-l border-border" aria-label={`Desativar ${card.name}`} onClick={() => void archive('card', card.id, card.name)}>
-                          <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
+                        <Button variant="ghost" size="sm" className="ml-4 border-l border-border hover:text-destructive focus-visible:text-destructive" aria-label={`Desativar ${card.name}`} onClick={() => void archive('card', card.id, card.name)}>
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </div>
                     </div>

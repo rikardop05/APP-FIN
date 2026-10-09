@@ -7,6 +7,7 @@ import type { Cents } from '@/lib/money';
 import {
   contributionsTitle,
   pendingTitle,
+  verdictOverdueNote,
   surplusBaseLine,
   surplusLabel,
   verdictLine,
@@ -25,6 +26,8 @@ type HeadlineProps = {
   plannedContributionCents: Cents | null;
   projected: ProjectedState;
   pending: PendingSummary;
+  /** Magnitude das faturas anteriores não pagas (0 = nenhuma): o veredito avisa que não as conta. */
+  overdueUnpaidCents: Cents;
   /** A consulta de orçamento falhou: a faixa avisa que não deu para conferir. */
   pendingUnavailable: boolean;
 };
@@ -46,7 +49,9 @@ export function Headline({
   projected,
   pending,
   pendingUnavailable,
+  overdueUnpaidCents,
 }: HeadlineProps) {
+  const overdueNote = verdictOverdueNote(overdueUnpaidCents);
   const verdict =
     projected.kind === 'ok'
       ? verdictLine({
@@ -69,6 +74,14 @@ export function Headline({
           <h2 id="dashboard-verdict-heading" className="max-w-3xl text-2xl font-semibold text-foreground">
             {verdict.text}
           </h2>
+          {overdueNote ? (
+            <p className="max-w-3xl text-sm text-muted-foreground">
+              {overdueNote}.{' '}
+              <a href="#comprometido" className="text-primary underline underline-offset-2">
+                Ver no comprometido
+              </a>
+            </p>
+          ) : null}
           <Link href="/fluxo" className="min-h-11 text-sm text-primary underline underline-offset-2 sm:min-h-0">
             Ver o fluxo e simular
           </Link>

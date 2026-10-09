@@ -17,7 +17,7 @@ import { BackupSection } from './backup-section';
 import { CategoryForm } from './category-form';
 import { RuleForm, type CategoryOption } from './rule-form';
 import { SettingsForm } from './settings-form';
-import { natureLabel, matchTypeLabel } from './labels';
+import { CONFIG_SECTIONS, natureLabel, matchTypeLabel, subcategoriesText } from './labels';
 import {
   categoriesResponseSchema,
   rulesOnlyResponseSchema,
@@ -338,8 +338,23 @@ export function ConfigScreen() {
         </div>
       ) : (
         <div className="mt-6 flex flex-col gap-10">
+          <nav aria-label="Seções da configuração">
+            <ul className="flex flex-wrap gap-x-1 gap-y-1">
+              {CONFIG_SECTIONS.map((section) => (
+                <li key={section.id}>
+                  <a
+                    href={`#${section.id}`}
+                    className="inline-flex min-h-11 items-center border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
+                  >
+                    {section.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
           {/* Categorias */}
-          <section aria-labelledby="categories-heading" className="flex flex-col gap-3">
+          <section id="categorias" aria-labelledby="categories-heading" className="flex scroll-mt-4 flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 id="categories-heading" className="text-lg font-semibold tracking-tight">
@@ -375,7 +390,7 @@ export function ConfigScreen() {
                         <p className="mt-1 text-xs text-muted-foreground">
                           {root.children.length === 0
                             ? 'Sem subcategorias — recebe lançamentos direto.'
-                            : `${String(root.children.length)} subcategoria(s)`}
+                            : subcategoriesText(root.children.length)}
                         </p>
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-1">
@@ -398,10 +413,11 @@ export function ConfigScreen() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          className="hover:text-destructive focus-visible:text-destructive"
                           aria-label={`Excluir ${root.name}`}
                           onClick={() => void removeCategory(root)}
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </div>
                     </div>
@@ -431,10 +447,11 @@ export function ConfigScreen() {
                               <Button
                                 variant="ghost"
                                 size="sm"
+                                className="hover:text-destructive focus-visible:text-destructive"
                                 aria-label={`Excluir ${child.name}`}
                                 onClick={() => void removeCategory(child)}
                               >
-                                <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
                               </Button>
                             </span>
                           </li>
@@ -448,7 +465,7 @@ export function ConfigScreen() {
           </section>
 
           {/* Regras */}
-          <section aria-labelledby="rules-heading" className="flex flex-col gap-3">
+          <section id="regras" aria-labelledby="rules-heading" className="flex scroll-mt-4 flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 id="rules-heading" className="text-lg font-semibold tracking-tight">
@@ -544,10 +561,11 @@ export function ConfigScreen() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          className="hover:text-destructive focus-visible:text-destructive"
                           aria-label={`Excluir regra ${rule.pattern}`}
                           onClick={() => void removeRule(rule)}
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </div>
                     </div>
@@ -558,7 +576,7 @@ export function ConfigScreen() {
           </section>
 
           {/* Membros */}
-          <section aria-labelledby="members-heading" className="flex flex-col gap-3">
+          <section id="membros" aria-labelledby="members-heading" className="flex scroll-mt-4 flex-col gap-3">
             <div>
               <h2 id="members-heading" className="text-lg font-semibold tracking-tight">
                 Membros
@@ -587,7 +605,7 @@ export function ConfigScreen() {
           </section>
 
           {/* Premissas globais */}
-          <section aria-labelledby="settings-heading" className="flex flex-col gap-3">
+          <section id="premissas" aria-labelledby="settings-heading" className="flex scroll-mt-4 flex-col gap-3">
             <div>
               <h2 id="settings-heading" className="text-lg font-semibold tracking-tight">
                 Premissas globais
