@@ -47,9 +47,9 @@ export type LightView = {
 
 /** Apresentação do semáforo. QUEM decide a cor é o motor; aqui só se escolhe o texto. */
 export const LIGHT_VIEW: Record<'green' | 'yellow' | 'red', LightView> = {
-  green: { label: 'Dentro do limite', badge: 'success', bar: 'bg-emerald-500' },
-  yellow: { label: 'Perto do limite', badge: 'warning', bar: 'bg-amber-500' },
-  red: { label: 'Estourou', badge: 'danger', bar: 'bg-red-500' },
+  green: { label: 'Dentro do limite', badge: 'success', bar: 'bg-success' },
+  yellow: { label: 'Perto do limite', badge: 'warning', bar: 'bg-warning' },
+  red: { label: 'Estourou', badge: 'danger', bar: 'bg-destructive' },
 };
 
 /**

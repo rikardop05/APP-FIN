@@ -29,7 +29,7 @@ export function DialogShell({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/20 p-0 sm:items-center sm:p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <div className="max-h-[90vh] w-full overflow-y-auto rounded-t-lg border border-border bg-background p-4 shadow-lg sm:max-w-2xl sm:rounded-lg sm:p-6" role="dialog" aria-modal="true" aria-labelledby="transaction-dialog-title">
+      <div className="max-h-[90vh] w-full overflow-y-auto border border-border bg-background p-4 shadow-lg sm:max-w-2xl sm:p-6" role="dialog" aria-modal="true" aria-labelledby="transaction-dialog-title">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h2 id="transaction-dialog-title" className="text-lg font-semibold">{title}</h2>
@@ -406,7 +406,7 @@ export function DeleteTransactionDialog({
     >
       <div className="flex flex-col gap-4 text-sm">
         {loadError !== null ? (
-          <p role="alert" className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-900">
+          <p role="alert" className="border border-destructive/50 bg-destructive-soft px-3 py-2 text-foreground">
             {loadError} Por segurança, a exclusão fica bloqueada: não dá para dizer o que ela apagaria.
           </p>
         ) : null}
@@ -461,7 +461,7 @@ export function DeleteTransactionDialog({
         <p className="font-semibold">Isto não pode ser desfeito.</p>
 
         {error !== null ? (
-          <p role="alert" className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-900">
+          <p role="alert" className="border border-destructive/50 bg-destructive-soft px-3 py-2 text-foreground">
             {error}
           </p>
         ) : null}

@@ -115,7 +115,7 @@ export function BackupSection() {
           className={
             message.tone === 'error'
               ? 'border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive'
-              : 'border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900'
+              : 'border border-success/50 bg-success-soft px-3 py-2 text-sm text-success'
           }
           role={message.tone === 'error' ? 'alert' : 'status'}
         >
@@ -143,7 +143,7 @@ export function BackupSection() {
               </ul>
             ) : null}
             {refusal ? (
-              <p className="mt-3 border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="alert">
+              <p className="mt-3 border border-warning/50 bg-warning-soft px-3 py-2 text-sm text-warning" role="alert">
                 {refusal}
               </p>
             ) : null}

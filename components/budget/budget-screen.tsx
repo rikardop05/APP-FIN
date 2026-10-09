@@ -241,7 +241,7 @@ export function BudgetScreen({ today }: { today: string }) {
         {loadError !== null ? (
           <div
             role="alert"
-            className="flex flex-col gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900"
+            className="flex flex-col gap-2 border border-destructive/50 bg-destructive-soft px-3 py-3 text-sm text-foreground"
           >
             <span>{loadError}</span>
             <div>
@@ -270,7 +270,7 @@ export function BudgetScreen({ today }: { today: string }) {
         {data !== null && data.categories.length > 0 ? (
           <>
             {totals !== null ? (
-              <section aria-labelledby="budget-total-heading" className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
+              <section aria-labelledby="budget-total-heading" className="flex flex-col gap-2 border border-border bg-card p-4">
                 <h2 id="budget-total-heading" className="text-sm font-medium text-muted-foreground">
                   Total de {competenceLabel(period)}
                 </h2>
@@ -285,7 +285,7 @@ export function BudgetScreen({ today }: { today: string }) {
                       </span>
                     </p>
                     <div
-                      className="h-2 overflow-hidden rounded-full bg-secondary"
+                      className="h-2 overflow-hidden bg-secondary"
                       role="img"
                       aria-label={expectedUsageText(totals.usageBp)}
                     >
@@ -302,7 +302,7 @@ export function BudgetScreen({ today }: { today: string }) {
               </section>
             ) : null}
 
-            <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" disabled={busy} onClick={() => void suggest('previous')}>
                   Repetir mês anterior
@@ -338,10 +338,10 @@ export function BudgetScreen({ today }: { today: string }) {
                 role={message.kind === 'error' ? 'alert' : 'status'}
                 className={
                   message.kind === 'error'
-                    ? 'rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900'
+                    ? 'border border-destructive/50 bg-destructive-soft px-3 py-2 text-sm text-foreground'
                     : message.kind === 'success'
-                      ? 'rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900'
-                      : 'rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground'
+                      ? 'border border-success/50 bg-success-soft px-3 py-2 text-sm text-foreground'
+                      : ' border border-border bg-muted px-3 py-2 text-sm text-foreground'
                 }
               >
                 {message.text}
@@ -447,7 +447,7 @@ function CategoryRow({
   const inputId = `orcamento-${category.id}`;
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 sm:grid sm:grid-cols-[minmax(0,1fr)_11rem_minmax(0,1.6fr)] sm:items-start sm:gap-4">
+    <div className="flex flex-col gap-3 border border-border bg-card p-3 sm:grid sm:grid-cols-[minmax(0,1fr)_11rem_minmax(0,1.6fr)] sm:items-start sm:gap-4">
       <div className="flex items-start justify-between gap-2 sm:flex-col sm:justify-start">
         <label htmlFor={inputId} className="text-sm font-medium text-foreground">
           {category.name}
@@ -517,7 +517,7 @@ function CategoryRow({
             </p>
             {row.usageBp !== null ? (
               <div
-                className="h-1.5 overflow-hidden rounded-full bg-secondary"
+                className="h-1.5 overflow-hidden bg-secondary"
                 role="img"
                 aria-label={expectedUsageText(row.usageBp)}
               >

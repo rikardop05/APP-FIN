@@ -20,7 +20,7 @@ function Bar({ bp, label }: { bp: number; label: string }) {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(percent)}
-      className="h-2 w-full overflow-hidden rounded-full bg-secondary"
+      className="h-2 w-full overflow-hidden bg-secondary"
     >
       <div className={`${BAR_X_CLASS} bg-primary`} style={barScaleStyle(percent, 'x')} />
     </div>

@@ -90,7 +90,7 @@ export function RuleOfferDialog({
         <p className="text-sm" role="status">
           {checking ? 'Recalculando o efeito…' : current !== null ? ruleOfferDescription(current) : null}
         </p>
-        {problem !== null && !checking ? <p role="alert" className="text-sm text-red-700">{problem}</p> : null}
+        {problem !== null && !checking ? <p role="alert" className="text-sm text-destructive">{problem}</p> : null}
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Agora não</Button>
           <Button type="submit" disabled={busy || current === null}>{busy ? 'Criando…' : 'Criar regra'}</Button>

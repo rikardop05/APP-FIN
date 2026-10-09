@@ -63,7 +63,7 @@ export function WhatIfPanel({ window, items, onChange }: WhatIfPanelProps) {
   return (
     <section
       aria-labelledby="fluxo-whatif-heading"
-      className="flex flex-col gap-4 border border-border bg-card p-4 shadow-sm sm:p-5"
+      className="flex flex-col gap-4 border border-border bg-card p-4 sm:p-5"
     >
       <div className="flex flex-col gap-1">
         <h2 id="fluxo-whatif-heading" className="flex items-center gap-2 text-base font-semibold">
@@ -119,7 +119,7 @@ export function WhatIfPanel({ window, items, onChange }: WhatIfPanelProps) {
           <Button type="submit">Adicionar à simulação</Button>
         </div>
         {error !== null ? (
-          <p id="fluxo-whatif-error" role="alert" className="text-sm text-red-700 sm:col-span-2 lg:col-span-4">
+          <p id="fluxo-whatif-error" role="alert" className="text-sm text-destructive sm:col-span-2 lg:col-span-4">
             {error}
           </p>
         ) : null}

@@ -409,7 +409,7 @@ export function LancamentosScreen({ today }: { today: string }) {
         description="Receitas e despesas da família, filtráveis por período, categoria, cartão ou conta, responsável e texto."
         actions={
           <div className="flex flex-col gap-2 sm:flex-row [&>*]:w-full sm:[&>*]:w-auto">
-            <Link href="/lancamentos/revisar" className="inline-flex min-h-11 items-center sm:min-h-9 justify-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted">Revisar sem categoria</Link>
+            <Link href="/lancamentos/revisar" className="inline-flex min-h-11 items-center sm:min-h-9 justify-center border border-border px-4 text-sm font-medium hover:bg-muted">Revisar sem categoria</Link>
             <Button variant="outline" onClick={() => void openApplyAll()} disabled={busy}><Wand2 className="mr-2 h-4 w-4" aria-hidden="true" />Aplicar regras aos não categorizados</Button>
             <Button onClick={() => setDialog({ kind: 'manual' })}><Plus className="mr-2 h-4 w-4" aria-hidden="true" />Novo lançamento</Button>
           </div>
@@ -423,13 +423,13 @@ export function LancamentosScreen({ today }: { today: string }) {
       <TransactionFilters value={filters} options={options} open={filtersOpen} onOpenChange={setFiltersOpen} onChange={(value) => setFilters((previous) => ({ ...previous, ...value }))} onClear={clearFilters} />
 
       {selectedIds.length > 0 ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border border-primary/30 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm font-medium">{selectedIds.length} selecionado{selectedIds.length === 1 ? '' : 's'}</p>
           <Button size="sm" onClick={() => setDialog({ kind: 'batch' })}><Tags className="mr-2 h-4 w-4" aria-hidden="true" />Categorizar selecionados</Button>
         </div>
       ) : null}
 
-      {contentState === 'loading' ? <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">Carregando lançamentos…</div> : contentState === 'empty' ? (
+      {contentState === 'loading' ? <div className=" border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">Carregando lançamentos…</div> : contentState === 'empty' ? (
         <EmptyState
           title={hasFilters(appliedFilters) ? 'Nenhum lançamento encontrado' : 'Nenhum lançamento ainda'}
           description={hasFilters(appliedFilters) ? 'Ajuste os filtros ou limpe a busca para ver outros lançamentos.' : 'Registre um lançamento manual ou importe uma fatura ou extrato para começar.'}

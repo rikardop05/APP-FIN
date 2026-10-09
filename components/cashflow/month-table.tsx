@@ -63,7 +63,7 @@ export function MonthTable({ months, composition, adjustments }: MonthTableProps
               return (
                 <tr
                   key={month.competence}
-                  className={cn('border-b border-border last:border-0', month.negative && 'bg-red-50')}
+                  className={cn('border-b border-border last:border-0', month.negative && 'bg-destructive-soft')}
                 >
                   <th scope="row" className="whitespace-nowrap px-2 py-2 text-left font-medium">
                     {competenceShort(month.competence)}
@@ -111,7 +111,7 @@ export function MonthTable({ months, composition, adjustments }: MonthTableProps
           return (
             <li
               key={month.competence}
-              className={cn('border border-border p-3', month.negative && 'border-red-300 bg-red-50')}
+              className={cn('border border-border p-3', month.negative && 'border-destructive/50 bg-destructive-soft')}
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="font-medium">

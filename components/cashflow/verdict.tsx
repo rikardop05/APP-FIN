@@ -36,30 +36,30 @@ export function Verdict({ projection, baseProjection }: VerdictProps) {
     <section
       aria-labelledby="fluxo-verdict-heading"
       className={cn(
-        'flex flex-col gap-3 border p-4 shadow-sm sm:p-5',
-        first === null ? 'border-border bg-card' : 'border-red-300 bg-red-50',
+        'flex flex-col gap-3 border p-4 sm:p-5',
+        first === null ? 'border-border bg-card' : 'border-destructive/50 bg-destructive-soft',
       )}
     >
       <div className="flex items-start gap-3">
         {first === null ? (
-          <ShieldCheck className="mt-0.5 h-6 w-6 shrink-0 text-emerald-700" aria-hidden="true" />
+          <ShieldCheck className="mt-0.5 h-6 w-6 shrink-0 text-success" aria-hidden="true" />
         ) : (
-          <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-red-700" aria-hidden="true" />
+          <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-destructive" aria-hidden="true" />
         )}
         <div className="flex flex-col gap-1">
           <h2
             id="fluxo-verdict-heading"
-            className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+            className="text-lg font-semibold text-foreground"
           >
             Quando o saldo fica negativo?
           </h2>
           {first === null ? (
-            <p className="text-lg font-semibold text-foreground sm:text-xl">
+            <p className="text-base font-medium text-foreground">
               Com os compromissos cadastrados, o saldo não fica negativo nos próximos{' '}
               {projection.months.length} meses.
             </p>
           ) : (
-            <p className="text-lg font-semibold text-red-900 sm:text-xl">
+            <p className="text-base font-medium text-destructive">
               O saldo fica negativo em {competenceLong(first)}
               {firstMonth ? (
                 <>

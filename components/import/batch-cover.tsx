@@ -31,9 +31,6 @@ export function BatchCover({ bankKey, sourceName, competence, documentDate, file
   return (
     <section aria-label="Capa do lote" className="border border-border">
       <Guilhoche className="flex flex-col gap-1 border-b border-border px-4 py-4">
-        <p className="w-fit bg-card px-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Fatura em revisão
-        </p>
         <h2 className="w-fit bg-card px-1.5 text-2xl font-semibold tracking-tight text-foreground">
           {bankLabel(bankKey)} · {sourceName}
         </h2>

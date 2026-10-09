@@ -117,7 +117,7 @@ export function CardHolders({ card, members, onUpdated }: CardHoldersProps) {
       {rows.length === 0 ? (
         <p className="mt-3 text-sm text-muted-foreground">Nenhum final cadastrado neste cartão.</p>
       ) : (
-        <ul className="mt-3 flex flex-col divide-y divide-border rounded-md border border-border">
+        <ul className="mt-3 flex flex-col divide-y divide-border border border-border">
           {rows.map((row) => (
             <li key={row.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
               <span>
@@ -165,9 +165,9 @@ export function CardHolders({ card, members, onUpdated }: CardHoldersProps) {
             </Select>
           </Field>
         </div>
-        {hint ? <p className="text-xs text-amber-800">{hint}</p> : null}
-        {failure ? <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{failure}</p> : null}
-        {event ? <p className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900" role="status">{holderConfirmation(event)}</p> : null}
+        {hint ? <p className="text-xs text-warning">{hint}</p> : null}
+        {failure ? <p className="border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{failure}</p> : null}
+        {event ? <p className="border border-success/50 bg-success-soft px-3 py-2 text-sm font-medium text-foreground" role="status">{holderConfirmation(event)}</p> : null}
         <div className="flex justify-end">
           <Button type="submit" size="sm" disabled={busy}>{busy ? 'Salvando…' : hint ? 'Trocar responsável' : 'Adicionar final'}</Button>
         </div>

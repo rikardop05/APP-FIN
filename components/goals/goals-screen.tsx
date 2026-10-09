@@ -60,7 +60,7 @@ function DeadlineLine({ goal }: { goal: GoalView }) {
     case 'zero-target':
       return <p className="text-sm text-muted-foreground">O alvo calculado é R$ 0,00: não há despesa essencial categorizada nos meses fechados.</p>;
     case 'done':
-      return <p className="text-sm font-medium text-emerald-700">Meta atingida.</p>;
+      return <p className="text-sm font-medium text-success">Meta atingida.</p>;
     case 'no-deadline':
       return <p className="text-sm text-muted-foreground">Sem data-alvo: o aporte mensal não é calculado.</p>;
     case 'monthly':

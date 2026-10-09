@@ -98,7 +98,7 @@ export function CategoryForm({ mode, initial, busy = false, onCancel, onSubmit }
             id="category-color"
             value={values.color}
             onChange={(event) => update('color', event.target.value)}
-            placeholder="#3b82f6"
+            placeholder="#2e8c7a"
             autoComplete="off"
           />
         </Field>

@@ -71,3 +71,44 @@ describe('estrutura do ui-kit e do shell', () => {
     expect(NAV_ITEMS).toHaveLength(9);
   });
 });
+
+describe('Token, Not Palette', () => {
+  const dirs = ['components/import', 'components/cashflow', 'components/goals', 'components/investment', 'app/(app)', 'components/ui-kit', 'components/nav'];
+  function walk(dir: string): string[] {
+    return readdirSync(join(root, dir), { withFileTypes: true }).flatMap((entry) => {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) return walk(path);
+      return /\.(ts|tsx)$/.test(entry.name) && !/\.test\.ts$/.test(entry.name) ? [path] : [];
+    });
+  }
+
+  it('as telas da onda 2 não usam red/amber/emerald/sky crus', () => {
+    for (const file of dirs.flatMap(walk)) {
+      expect(read(file), file).not.toMatch(/\b(?:bg|text|border|ring|fill|stroke|divide)-(?:red|amber|emerald|sky)-\d+/);
+    }
+  });
+
+  it('nenhum token malformado (bg-success-soft0, text-warning5...)', () => {
+    for (const file of dirs.flatMap(walk)) {
+      expect(read(file), file).not.toMatch(/-(?:success|warning|destructive)(?:-soft)?d/);
+    }
+  });
+
+  it('o guilhochê lê o token (máscara), sem cor fixa no CSS', () => {
+    const css = read('app/globals.css');
+    expect(css).not.toMatch(/2E8C7A|5FD0BA/i);
+    expect(css).toContain('hsl(var(--primary) / 0.22)');
+    expect(css).toContain('mask-image');
+  });
+
+  it('sem kicker em caixa-alta espaçada acima de título na capa do lote e no veredito', () => {
+    for (const file of ['components/import/batch-cover.tsx', 'components/cashflow/verdict.tsx']) {
+      expect(read(file), file).not.toMatch(/uppercase tracking-(?:wide|widest)/);
+    }
+  });
+
+  it('PAGO é verde: o CSS não diz que o vermelho é para PAGO', () => {
+    expect(read('app/globals.css')).not.toMatch(/divergência e PAGO/);
+    expect(read('tailwind.config.ts')).not.toMatch(/divergência e PAGO/);
+  });
+});

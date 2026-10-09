@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { basisPoints, cents } from '@/lib/money';
 
-import { competenceLabel, competenceTitle, EXPECTED_LABEL, expectedUsageText, remainingText } from './labels';
+import { LIGHT_VIEW, competenceLabel, competenceTitle, EXPECTED_LABEL, expectedUsageText, remainingText } from './labels';
 
 /** `formatBRL` usa espaço inseparável depois de `R$`; normaliza para comparar. */
 const plain = (text: string) => text.replace(/ /g, ' ');
@@ -33,5 +33,13 @@ describe('título do mês no Orçamento (competência por extenso, "de" em minú
 
   it('o rótulo corrido continua em minúscula (usado no meio de frase)', () => {
     expect(competenceLabel('2026-10')).toBe('outubro de 2026');
+  });
+});
+
+describe('semáforo do Orçamento usa os tokens plenos de estado', () => {
+  it('cada cor da barra é um token que existe (verde, âmbar, carimbo), sem sobra de dígito', () => {
+    expect(LIGHT_VIEW.green.bar).toBe('bg-success');
+    expect(LIGHT_VIEW.yellow.bar).toBe('bg-warning');
+    expect(LIGHT_VIEW.red.bar).toBe('bg-destructive');
   });
 });

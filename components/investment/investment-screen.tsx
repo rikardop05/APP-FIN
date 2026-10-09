@@ -232,7 +232,7 @@ function ScenarioCard({ scenario, surplus, maxYears, values, errors, onChange }:
         </div>
         <div>
           <dt className="text-muted-foreground">Tempo para chegar lá com o aporte planejado</dt>
-          <dd className={months.kind === 'unreachable' || months.kind === 'too-long' ? 'font-medium text-amber-800' : 'font-medium'}>{months.text}</dd>
+          <dd className={months.kind === 'unreachable' || months.kind === 'too-long' ? 'font-medium text-warning' : 'font-medium'}>{months.text}</dd>
         </div>
         <div>
           <dt className="text-muted-foreground">Renda mensal projetada em {maxYears} anos, mantendo o aporte planejado</dt>
@@ -328,7 +328,7 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
       ) : (
         <form className="mt-6 flex flex-col gap-6" onSubmit={(event) => void save(event)} noValidate>
           {confirmation ? (
-            <p className="border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900" role="status">
+            <p className="border border-success/50 bg-success-soft px-3 py-2 text-sm font-medium text-success" role="status">
               {confirmation}
             </p>
           ) : null}
@@ -346,7 +346,7 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
               </p>
             </div>
             {dirty ? (
-              <p className="border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+              <p className="border border-warning/50 bg-warning-soft px-3 py-2 text-sm text-warning" role="status">
                 Você alterou o plano. Os resultados abaixo ainda são os da versão salva: salve para recalcular.
               </p>
             ) : null}

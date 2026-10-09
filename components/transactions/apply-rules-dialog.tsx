@@ -54,7 +54,7 @@ export function ApplyRulesDialog({
       ) : (
         <form className="flex flex-col gap-4" onSubmit={(event) => { event.preventDefault(); void onConfirm(items); }}>
           {limitNotice ? <p className="text-sm text-muted-foreground">{limitNotice}</p> : null}
-          <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
+          <ul className="flex flex-col divide-y divide-border border border-border">
             {proposals.map((proposal) => (
               <li key={proposal.transactionId} className="flex items-start gap-3 px-3 py-2 text-sm">
                 <Checkbox

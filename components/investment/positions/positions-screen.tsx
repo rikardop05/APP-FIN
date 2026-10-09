@@ -65,8 +65,8 @@ async function readData(response: Response): Promise<PositionsData> {
 const percent = (bp: number) => formatBasisPoints(basisPoints(bp));
 
 const TONE_CLASS = {
-  ahead: 'text-emerald-800',
-  behind: 'text-amber-800',
+  ahead: 'text-success',
+  behind: 'text-warning',
   even: 'text-foreground',
   none: 'text-muted-foreground',
 } as const;
@@ -182,7 +182,7 @@ export function PositionsScreen({ initial, today }: { initial: PositionsData; to
       </div>
 
       {event ? (
-        <p className="mt-4 border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900" role="status">
+        <p className="mt-4 border border-success/50 bg-success-soft px-3 py-2 text-sm font-medium text-success" role="status">
           {confirmationText(event)}
         </p>
       ) : null}
@@ -228,7 +228,7 @@ export function PositionsScreen({ initial, today }: { initial: PositionsData; to
                     <span className="text-muted-foreground"> de <Money value={row.plannedCents} sign="never" /></span>
                   ) : null}
                   {row.adherenceBp !== null ? (
-                    <strong className={row.belowPlan && !row.inProgress ? 'ml-2 text-amber-800' : 'ml-2'}>{percent(row.adherenceBp)}</strong>
+                    <strong className={row.belowPlan && !row.inProgress ? 'ml-2 text-warning' : 'ml-2'}>{percent(row.adherenceBp)}</strong>
                   ) : null}
                 </span>
               </div>
@@ -241,7 +241,7 @@ export function PositionsScreen({ initial, today }: { initial: PositionsData; to
                   aria-valuenow={Math.round(row.barBp / 100)}
                   className="h-2 w-full overflow-hidden bg-secondary"
                 >
-                  <div className={`${BAR_X_CLASS} ${row.belowPlan && !row.inProgress ? 'bg-amber-500' : 'bg-primary'}`} style={barScaleStyle(row.barBp / 100, 'x')} />
+                  <div className={`${BAR_X_CLASS} ${row.belowPlan && !row.inProgress ? 'bg-warning' : 'bg-primary'}`} style={barScaleStyle(row.barBp / 100, 'x')} />
                 </div>
               ) : null}
             </li>

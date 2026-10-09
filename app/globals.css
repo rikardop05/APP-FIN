@@ -6,7 +6,7 @@
  * Mundo CARNÊ DE PRESTAÇÕES (Fase C, onda 1 do redesenho).
  *
  * Papel de carnê em verde-água claro, tinta verde-escura quase preta, verde-carnê como cor de
- * identidade. O vermelho é CARIMBO: só perigo, divergência e PAGO. Despesa NÃO é vermelha.
+ * identidade. O vermelho é CARIMBO: só perigo, erro e divergência. PAGO é carimbo VERDE (ok). Despesa NÃO é vermelha.
  * Réguas de 1px, cantos retos, picote tracejado entre canhotos, numerais condensados tabulares.
  *
  * Ficam FORA de `@layer base` de propósito. Dentro da layer, o Tailwind descarta a regra de tema
@@ -39,7 +39,7 @@
   --accent: 156 18% 87%;
   --accent-foreground: 180 47% 11%;
 
-  /* Carimbo: perigo, divergência e PAGO. Nunca despesa. */
+  /* Carimbo vermelho: perigo, erro e divergência. Nunca despesa, nunca PAGO (esse é verde). */
   --destructive: 4 65% 46%;
   --destructive-foreground: 156 30% 98%;
   --destructive-soft: 4 60% 94%;
@@ -223,27 +223,44 @@
   }
 
   /*
-   * FUNDO DE SEGURANÇA (guilhochê leve): ondas sobrepostas, 56x28 px, traço de 0,8 px com 22% de
-   * opacidade. SÓ para áreas de IDENTIDADE (capa do lote, placar, marca da lombada), nunca atrás
-   * de números nem de texto corrido. Componente React: `Guilhoche`.
+   * FUNDO DE SEGURANÇA (guilhochê leve): ondas sobrepostas, 56x28 px, traço de 0,8 px. O traço é uma
+   * MÁSCARA pintada com o token (`--primary` no papel, `--sidebar-foreground` na tinta), então segue
+   * o tema sem cor fixa. SÓ para áreas de IDENTIDADE (capa do lote, placar, marca da lombada), nunca
+   * atrás de números nem de texto corrido. Componente React: `Guilhoche`.
    */
+  .guilhoche,
+  .guilhoche-ink {
+    position: relative;
+    isolation: isolate;
+  }
+
   .guilhoche {
     background-color: hsl(var(--secondary));
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='28' viewBox='0 0 56 28'%3E%3Cg fill='none' stroke='%232E8C7A' stroke-opacity='.22' stroke-width='.8'%3E%3Cpath d='M0 14C7 0 21 0 28 14S49 28 56 14'/%3E%3Cpath d='M0 14C7 28 21 28 28 14S49 0 56 14'/%3E%3Cpath d='M0 7C7-7 21-7 28 7S49 21 56 7'/%3E%3Cpath d='M0 21C7 7 21 7 28 21S49 35 56 21'/%3E%3C/g%3E%3C/svg%3E");
-    background-size: 56px 28px;
   }
 
-  /* Sobre a tinta (lombada): traço claro e mais discreto. */
   .guilhoche-ink {
     background-color: hsl(var(--sidebar));
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='28' viewBox='0 0 56 28'%3E%3Cg fill='none' stroke='%23F1F6F4' stroke-opacity='.10' stroke-width='.8'%3E%3Cpath d='M0 14C7 0 21 0 28 14S49 28 56 14'/%3E%3Cpath d='M0 14C7 28 21 28 28 14S49 0 56 14'/%3E%3Cpath d='M0 7C7-7 21-7 28 7S49 21 56 7'/%3E%3Cpath d='M0 21C7 7 21 7 28 21S49 35 56 21'/%3E%3C/g%3E%3C/svg%3E");
-    background-size: 56px 28px;
   }
-}
 
-@media (prefers-color-scheme: dark) {
-  .guilhoche {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='28' viewBox='0 0 56 28'%3E%3Cg fill='none' stroke='%235FD0BA' stroke-opacity='.12' stroke-width='.8'%3E%3Cpath d='M0 14C7 0 21 0 28 14S49 28 56 14'/%3E%3Cpath d='M0 14C7 28 21 28 28 14S49 0 56 14'/%3E%3Cpath d='M0 7C7-7 21-7 28 7S49 21 56 7'/%3E%3Cpath d='M0 21C7 7 21 7 28 21S49 35 56 21'/%3E%3C/g%3E%3C/svg%3E");
+  .guilhoche::before,
+  .guilhoche-ink::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='28' viewBox='0 0 56 28'%3E%3Cg fill='none' stroke='black' stroke-width='.8'%3E%3Cpath d='M0 14C7 0 21 0 28 14S49 28 56 14'/%3E%3Cpath d='M0 14C7 28 21 28 28 14S49 0 56 14'/%3E%3Cpath d='M0 7C7-7 21-7 28 7S49 21 56 7'/%3E%3Cpath d='M0 21C7 7 21 7 28 21S49 35 56 21'/%3E%3C/g%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='28' viewBox='0 0 56 28'%3E%3Cg fill='none' stroke='black' stroke-width='.8'%3E%3Cpath d='M0 14C7 0 21 0 28 14S49 28 56 14'/%3E%3Cpath d='M0 14C7 28 21 28 28 14S49 0 56 14'/%3E%3Cpath d='M0 7C7-7 21-7 28 7S49 21 56 7'/%3E%3Cpath d='M0 21C7 7 21 7 28 21S49 35 56 21'/%3E%3C/g%3E%3C/svg%3E");
+    -webkit-mask-size: 56px 28px;
+    mask-size: 56px 28px;
+  }
+
+  .guilhoche::before {
+    background-color: hsl(var(--primary) / 0.22);
+  }
+
+  .guilhoche-ink::before {
+    background-color: hsl(var(--sidebar-foreground) / 0.1);
   }
 }
 

@@ -109,7 +109,7 @@ function TransactionEditor({ row, options, onSave, onCancel }: EditorProps) {
   }
 
   return (
-    <form className="flex flex-col gap-3 rounded-md bg-secondary/40 p-3" onSubmit={submit}>
+    <form className="flex flex-col gap-3 bg-secondary/40 p-3" onSubmit={submit}>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-muted-foreground">Data</span>

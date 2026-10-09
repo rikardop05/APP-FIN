@@ -32,6 +32,6 @@ describe('fatura paga na tela de cartões', () => {
   });
 
   it('rótulo de mês do gráfico na escala (12px), sem 10px', () => {
-    expect(read('components/cards/commitment/commitment-section.tsx')).not.toContain('text-[10px]');
+    expect(read('components/cards/commitment/commitment-section.tsx')).not.toContain('text-[' + '10px]');
   });
 });

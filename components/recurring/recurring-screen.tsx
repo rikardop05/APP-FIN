@@ -161,7 +161,7 @@ function OccurrencesPreview({
   );
 
   return (
-    <div className="mt-3 rounded-md border border-warning/50 bg-warning-soft p-3">
+    <div className="mt-3 border border-warning/50 bg-warning-soft p-3">
       <p className="text-xs font-medium text-warning">
         {previewText.title(previewMonths)}
       </p>
@@ -222,7 +222,7 @@ function DialogShell({
       }}
     >
       <div
-        className="max-h-[90vh] w-full overflow-y-auto rounded-t-lg border border-border bg-background p-4 shadow-lg sm:max-w-2xl sm:rounded-lg sm:p-6"
+        className="max-h-[90vh] w-full overflow-y-auto border border-border bg-background p-4 shadow-lg sm:max-w-2xl sm:p-6"
         role="dialog"
         aria-modal="true"
       >
@@ -450,7 +450,7 @@ function ExpenseDialog({
           </span>
         </label>
         {options.accounts.length === 0 && options.cards.length === 0 ? (
-          <p className="rounded-md border border-border bg-muted px-3 py-2 text-sm sm:col-span-2">
+          <p className=" border border-border bg-muted px-3 py-2 text-sm sm:col-span-2">
             Não há conta nem cartão ativo. Cadastre uma conta antes de criar uma despesa fixa.
           </p>
         ) : null}
@@ -668,7 +668,7 @@ function IncomeDialog({
           </Select>
         </label>
         {options.accounts.length === 0 ? (
-          <p className="rounded-md border border-border bg-muted px-3 py-2 text-sm sm:col-span-2">
+          <p className=" border border-border bg-muted px-3 py-2 text-sm sm:col-span-2">
             Não há conta ativa. Cadastre uma conta antes de criar uma receita: ela precisa cair
             em algum lugar para entrar no saldo e no fluxo de caixa.
           </p>
@@ -787,7 +787,7 @@ function ItemCard({
   busy: boolean;
 }) {
   return (
-    <article className="rounded-lg border border-border bg-background p-4">
+    <article className=" border border-border bg-background p-4">
       {children}
       <div className="mt-3 flex flex-wrap gap-2">
         <Button
@@ -1033,7 +1033,7 @@ export function RecurringScreen({
           </Button>
         </div>
         {expenseList.length === 0 ? (
-          <p className="rounded-md border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+          <p className=" border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
             Nenhuma despesa fixa cadastrada.
           </p>
         ) : (
@@ -1053,7 +1053,7 @@ export function RecurringScreen({
                       <span className="text-sm font-medium text-foreground">
                         {expense.description}{' '}
                         {!expense.active ? (
-                          <span className="ml-1 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+                          <span className="ml-1 bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
                             Inativa
                           </span>
                         ) : null}
@@ -1116,7 +1116,7 @@ export function RecurringScreen({
           </Button>
         </div>
         {incomeList.length === 0 ? (
-          <p className="rounded-md border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+          <p className=" border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
             Nenhuma receita cadastrada.
           </p>
         ) : (
@@ -1136,7 +1136,7 @@ export function RecurringScreen({
                       <span className="text-sm font-medium text-foreground">
                         {income.description}{' '}
                         {!income.active ? (
-                          <span className="ml-1 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+                          <span className="ml-1 bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
                             Inativa
                           </span>
                         ) : null}

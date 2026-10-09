@@ -35,15 +35,15 @@ const LABEL_GAP = 15;
  * a API já calculou (`accumulationCurve`).
  */
 const STYLE: Record<ScenarioLabel, { stroke: string; dash: string | undefined; width: number }> = {
-  conservative: { stroke: 'stroke-sky-700', dash: '2 4', width: 2.5 },
+  conservative: { stroke: 'stroke-muted-foreground', dash: '2 4', width: 2.5 },
   moderate: { stroke: 'stroke-foreground', dash: undefined, width: 2.5 },
-  optimistic: { stroke: 'stroke-emerald-700', dash: '9 4', width: 2.5 },
+  optimistic: { stroke: 'stroke-primary', dash: '9 4', width: 2.5 },
 };
 
 const TEXT_FILL: Record<ScenarioLabel, string> = {
-  conservative: 'fill-sky-800',
+  conservative: 'fill-muted-foreground',
   moderate: 'fill-foreground',
-  optimistic: 'fill-emerald-800',
+  optimistic: 'fill-primary',
 };
 
 export function AccumulationChart({ scenarios, compact = false, reference = null }: AccumulationChartProps) {
@@ -152,8 +152,8 @@ export function AccumulationChart({ scenarios, compact = false, reference = null
 
         {reference ? (
           <g>
-            <line x1={PAD.left} x2={width - PAD.right} y1={y(reference.valueCents)} y2={y(reference.valueCents)} className="stroke-amber-600" strokeWidth={1.5} strokeDasharray="1 5" strokeLinecap="round" />
-            <text x={PAD.left + 4} y={y(reference.valueCents) - 5} fontSize={12} fontWeight={600} className="fill-amber-800">
+            <line x1={PAD.left} x2={width - PAD.right} y1={y(reference.valueCents)} y2={y(reference.valueCents)} className="stroke-warning" strokeWidth={1.5} strokeDasharray="1 5" strokeLinecap="round" />
+            <text x={PAD.left + 4} y={y(reference.valueCents) - 5} fontSize={12} fontWeight={600} className="fill-warning">
               {`${reference.label}: ${formatCompactBRL(reference.valueCents)}`}
             </text>
           </g>

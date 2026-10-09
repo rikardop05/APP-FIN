@@ -323,7 +323,7 @@ export function ConfigScreen() {
       {error ? (
         <div
           role="alert"
-          className="mt-4 flex flex-col gap-3 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 sm:flex-row sm:items-center sm:justify-between"
+          className="mt-4 flex flex-col gap-3 border border-destructive/50 bg-destructive-soft px-4 py-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"
         >
           <span>{error}</span>
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>

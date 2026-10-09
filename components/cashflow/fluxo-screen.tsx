@@ -48,7 +48,7 @@ export function FluxoScreen({ input, projection, composition, warnings }: FluxoS
       {warnings.length > 0 ? (
         <section
           aria-label="Avisos sobre os dados"
-          className="flex flex-col gap-1 border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+          className="flex flex-col gap-1 border border-warning/50 bg-warning-soft p-4 text-sm text-warning"
         >
           {warnings.map((warning) => (
             <p key={warning} className="flex items-start gap-2">
@@ -63,7 +63,7 @@ export function FluxoScreen({ input, projection, composition, warnings }: FluxoS
 
       <section
         aria-labelledby="fluxo-chart-heading"
-        className="flex flex-col gap-2 border border-border bg-card p-4 shadow-sm sm:p-5"
+        className="flex flex-col gap-2 border border-border bg-card p-4 sm:p-5"
       >
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="fluxo-chart-heading" className="text-base font-semibold">
@@ -82,7 +82,7 @@ export function FluxoScreen({ input, projection, composition, warnings }: FluxoS
 
       <section
         aria-labelledby="fluxo-table-heading"
-        className="flex flex-col gap-3 border border-border bg-card p-4 shadow-sm sm:p-5"
+        className="flex flex-col gap-3 border border-border bg-card p-4 sm:p-5"
       >
         <h2 id="fluxo-table-heading" className="text-base font-semibold">
           Mês a mês{simulation ? ' (com a simulação)' : ''}

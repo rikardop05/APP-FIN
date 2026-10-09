@@ -102,7 +102,7 @@ export function BalanceChart({ months, baseMonths }: BalanceChartProps) {
             y={zeroY}
             width={plotW}
             height={Math.max(0, PAD.top + plotH - zeroY)}
-            className="fill-red-600/10"
+            className="fill-destructive/10"
           />
         ) : null}
 
@@ -122,7 +122,7 @@ export function BalanceChart({ months, baseMonths }: BalanceChartProps) {
           <path d={path(months)} fill="none" className="stroke-foreground" strokeWidth={2.5} strokeLinejoin="round" />
         </g>
         <g clipPath={`url(#${clipId}-below)`}>
-          <path d={path(months)} fill="none" className="stroke-red-600" strokeWidth={2.5} strokeLinejoin="round" />
+          <path d={path(months)} fill="none" className="stroke-destructive" strokeWidth={2.5} strokeLinejoin="round" />
         </g>
 
         {/* Pontos */}
@@ -132,7 +132,7 @@ export function BalanceChart({ months, baseMonths }: BalanceChartProps) {
             cx={x(index)}
             cy={y(month.closingCents)}
             r={month.negative ? 5 : 3.5}
-            className={month.negative ? 'fill-red-600 stroke-background' : 'fill-foreground stroke-background'}
+            className={month.negative ? 'fill-destructive stroke-background' : 'fill-foreground stroke-background'}
             strokeWidth={1.5}
           >
             <title>{`${competenceShort(month.competence)}: ${formatBRL(month.closingCents)}${month.negative ? ' (negativo)' : ''}`}</title>
@@ -148,7 +148,7 @@ export function BalanceChart({ months, baseMonths }: BalanceChartProps) {
               y={HEIGHT - 12}
               textAnchor="middle"
               fontSize={12}
-              className={month.negative ? 'fill-red-700' : 'fill-muted-foreground'}
+              className={month.negative ? 'fill-destructive' : 'fill-muted-foreground'}
             >
               {competenceShort(month.competence)}
             </text>
@@ -160,7 +160,7 @@ export function BalanceChart({ months, baseMonths }: BalanceChartProps) {
           {formatBRL(cents(hi))}
         </text>
         {lo < 0 ? (
-          <text x={PAD.left} y={PAD.top + plotH + 12} className="fill-red-700" fontSize={12}>
+          <text x={PAD.left} y={PAD.top + plotH + 12} className="fill-destructive" fontSize={12}>
             {formatBRL(cents(lo))}
           </text>
         ) : null}

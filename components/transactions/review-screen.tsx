@@ -104,11 +104,11 @@ export function ReviewScreen() {
         actions={<Link href="/lancamentos" className="text-sm font-medium text-primary underline-offset-4 hover:underline">Voltar aos lançamentos</Link>}
       />
 
-      {error ? <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">{error}</div> : null}
-      {notice ? <div role="status" className="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><span>{notice}</span><Button variant="ghost" size="sm" onClick={() => setNotice(null)}>Fechar</Button></div> : null}
+      {error ? <div role="alert" className="border border-destructive/50 bg-destructive-soft px-4 py-3 text-sm text-foreground">{error}</div> : null}
+      {notice ? <div role="status" className="flex items-center justify-between gap-3 border border-success/50 bg-success-soft px-4 py-3 text-sm text-foreground"><span>{notice}</span><Button variant="ghost" size="sm" onClick={() => setNotice(null)}>Fechar</Button></div> : null}
 
       {groups === null ? (
-        error ? null : <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">Carregando…</div>
+        error ? null : <div className="border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">Carregando…</div>
       ) : pending.length === 0 ? (
         <EmptyState
           title="Nada a revisar"
@@ -127,7 +127,7 @@ export function ReviewScreen() {
               const busy = busyKey === group.key;
               const fieldId = `review-${group.key}`;
               return (
-                <li key={group.key} className="flex flex-col gap-3 rounded-lg border border-border p-4">
+                <li key={group.key} className="flex flex-col gap-3 border border-border p-4">
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <p className="truncate font-medium" title={group.sampleDescriptions.join(' · ')}>{group.sampleDescriptions.join(' · ')}</p>

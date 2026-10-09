@@ -68,7 +68,7 @@ export function TransactionFilters({ value, options, open, onOpenChange, onChang
       </div>
 
       {open ? (
-        <div id={panelId} className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+        <div id={panelId} className="flex flex-col gap-4 border border-border bg-card p-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-xs text-muted-foreground">Data inicial</span>

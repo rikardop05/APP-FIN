@@ -148,7 +148,7 @@ function LimitUsage({
           const width = hasLimit ? Math.min(100, Math.max(0, usageBp / 100)) : 0;
 
           return (
-            <article key={item.cardId} className="rounded-lg border border-border bg-card p-4">
+            <article key={item.cardId} className=" border border-border bg-card p-4">
               <div className="flex items-start gap-3">
                 <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <div className="min-w-0 flex-1">

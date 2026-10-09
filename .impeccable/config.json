@@ -5,5 +5,17 @@
       "maxFindings": 5,
       "maxChars": 8000
     }
+  },
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "#0d1717",
+        "createdAt": "2026-10-09T12:29:36.397Z",
+        "reason": "Agent: themeColor do viewport exige hex literal; e o valor escuro do token paper"
+      }
+    ]
   }
 }
