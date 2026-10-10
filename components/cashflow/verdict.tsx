@@ -74,9 +74,20 @@ export function Verdict({ projection, baseProjection, overdueUnpaidCents = cents
             id="fluxo-verdict-heading"
             className="text-lg font-semibold text-foreground"
           >
-            Quando o saldo fica negativo?
+            {divergence ? `${verdictDivergenceText(divergence)}.` : 'Quando o saldo fica negativo?'}
           </h2>
-          {first === null ? (
+          {divergence ? (
+            <>
+              <Link href="/cartoes" className="text-sm font-medium text-foreground underline underline-offset-2">
+                {DIVERGENCE_LINK_LABEL}
+              </Link>
+              <p className="text-sm text-muted-foreground">
+                Sem contar <Money value={overdueUnpaidCents} sign="never" /> de faturas anteriores não marcadas como pagas
+                {overdueUnpaidCompetences.length > 0 ? ` (${overdueUnpaidCompetences.map((c) => competenceShort(c)).join(', ')})` : ''},
+                o saldo não fica negativo nos próximos {projection.months.length} meses com os compromissos cadastrados.
+              </p>
+            </>
+          ) : first === null ? (
             <p className="text-base font-medium text-foreground">
               Com os compromissos cadastrados, o saldo não fica negativo nos próximos{' '}
               {projection.months.length} meses.
@@ -98,23 +109,13 @@ export function Verdict({ projection, baseProjection, overdueUnpaidCents = cents
               {competenceShort(worst.competence)}.
             </p>
           ) : null}
-          {divergence ? (
-            <p className="text-base font-medium text-foreground">
-              {verdictDivergenceText(divergence)}.{' '}
-              <Link href="/cartoes" className="font-medium underline underline-offset-2">
-                {DIVERGENCE_LINK_LABEL}
-              </Link>
-            </p>
-          ) : null}
-          {overdueUnpaidCents > 0 ? (
+          {overdueUnpaidCents > 0 && !divergence ? (
             <p className="text-sm text-foreground">
               Sem contar <Money value={overdueUnpaidCents} sign="never" /> de faturas anteriores não marcadas como pagas
               {overdueUnpaidCompetences.length > 0 ? ` (${overdueUnpaidCompetences.map((c) => competenceShort(c)).join(', ')})` : ''}.{' '}
-              {divergence ? null : (
-                <Link href="/cartoes" className="font-medium underline underline-offset-2">
-                  Ver em Cartões
-                </Link>
-              )}
+              <Link href="/cartoes" className="font-medium underline underline-offset-2">
+                Ver em Cartões
+              </Link>
             </p>
           ) : null}
           {baseProjection ? (
