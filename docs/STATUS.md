@@ -3,7 +3,37 @@
 Mantido pelo orquestrador. Estados: `todo | doing | review | done | blocked`.
 Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATION.md` §9, equipe em `TEAM.md`.
 
-**Última atualização:** 2026-10-01 · 891 testes verdes · HEAD `3d96f02`, sincronizado · **Fases 1 e 2 completas e aceitas. Fase 3 não começou.**
+**Última atualização:** 2026-10-09 · 1884 testes verdes · HEAD `93b2188`, enviado ao remoto · **Redesenho visual "Carnê de Prestações" entregue (impeccable). Fases 1 e 2 completas; Fase 3 não começou.**
+
+## Retomar aqui — redesenho impeccable (2026-10-08 a 2026-10-09)
+
+**O que foi feito.** O plugin `impeccable` (skill `impeccable:impeccable`, instalado no escopo do usuário) conduziu: `init` (→ `PRODUCT.md`), crítica 22/40, `shape` com escolha de mundo visual pelo Ricardo (**Carnê de Prestações**), construção em ondas pelas agentes do canvas, `polish`, `DESIGN.md` gerado do código e três rodadas de revisão final até *ship*. Críticas: 22 → 27 → 26 (a última por avaliador mais rigoroso; especificidade virou "altamente específico").
+
+**Onde está a verdade do design.**
+- `PRODUCT.md` (raiz): usuários, propósito, princípios.
+- `DESIGN.md` (raiz) + `.impeccable/design.json`: tokens, tipografia (IBM Plex + condensada para numerais), componentes do ui-kit (Canhoto, Picote, Guilhoche, Selo com `ESTADO_LETRA`, Carimbo, Parcela, Placar, Faixa, MonthPicker, DateField) e regras (talão com significado único, selo só na exceção, vermelho só perigo/divergência, tracejado = "ainda não").
+- `.impeccable/surfaces/app-app-importar.md`: contrato da direção (seed `92bdf52f`).
+- `.impeccable/critique/`: as três críticas arquivadas. `.impeccable/clarify/`: definição dos números.
+- Capturas de revisão em `.impeccable/review/` (fora do git).
+
+**Decisões do Ricardo nesta rodada (não reabrir sem motivo).**
+- Tema **escuro é o padrão** para todos; claro só por escolha (cookie `theme`, seletor na lombada e no painel Mais).
+- Nomes dos números: "Sobra de <mês>", "Sobra média mensal" (meses sem receita ficam fora e são nomeados), card único "Comprometido nos cartões" (soma exata), "Aportes de <mês>: R$ X de R$ Y planejados" (só lançado).
+- Fatura anterior não paga **continua no comprometido** até ser marcada paga (rota `POST /api/statements/[id]/status`).
+- Fluxo **só avisa** sobre as faturas não pagas; Painel e Fluxo mostram o veredito com e sem elas e abrem pela divergência quando uma das leituras fica negativa.
+- Em DIVERGE, Confirmar continua possível, mas com atrito ("Confirmar com diferença de R$ X").
+
+**Defeito grave corrigido no caminho.** Importar a fatura seguinte de um parcelamento já projetado violava o índice único de `dedupe_hash` e contava parcelas em dobro; agora liga ao plano existente e concilia a planned (CONTRACTS §16.2).
+
+**Em aberto (próximos passos sugeridos).**
+1. Itens restantes da 3ª crítica que o Ricardo adiou: menu agrupado (Mês / Adiante / Config), linhas mais baixas (DESIGN pede 44–52px), "sem categoria" contar como atenção no Importar, entrada no menu para Receitas e despesas fixas (`/orcamento/recorrentes`). Rodar `/impeccable critique` de novo depois.
+2. Decisão pendente: valor colado **sem sinal** num cartão entra como receita; a Peneira sugere inverter quando a origem é cartão.
+3. Verificar: o Esquadro relatou que o carregamento do Fluxo **grava linhas de previsão** no banco; confirmar se é intencional.
+4. Não verificado por imagem: animação "destacar" (só roda ao confirmar uma importação real) e os presos numerados de metas com prazo (nenhuma meta tem prazo).
+5. Dados de produção: meta "Teste"; Config mostra um só membro; faturas de jul e set/2026 (R$ 5.418,32) ainda não marcadas como pagas, e por isso o Painel diz "Fica negativo em dez/2026 se…".
+6. `.impeccable/config.json` tem uma exceção morta do detector (`#0d1717`); pode sair.
+
+**Como a equipe trabalhou.** Prisma e Trena (telas, sem role, ambas em `E:\APPFIN`; reiniciar com `--resume <id>`, nunca `--continue`), Esquadro (motor), Peneira (importação), Estaca (banco), Funil (rota de fatura paga), Corvo (revisão). PDFs sintéticos para capturar o placar sem gravar nada: `.private/fixtures/nubank-sintetico-{confere,diverge}.pdf`. Um único `npm run dev` por vez: dois servidores na mesma pasta corrompem o `.next`.
 
 ## Tarefas
 
