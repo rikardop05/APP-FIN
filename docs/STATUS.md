@@ -7,6 +7,14 @@ Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATI
 
 **2026-10-14:** texto colado em cartão agora inverte o sinal como os PDFs (compra sem sinal = despesa). Carregar o Fluxo grava as previstas das recorrências **de propósito** (RF-ORC-02), de forma idempotente. As regras de categorização mostram "0 usos" porque não retroagem sobre importações antigas: use "Aplicar regras aos não categorizados". **Resolvido em 2026-10-14:** 264 households de teste órfãos apagados (`scripts/cleanup-test-households.ts`); o banco tem só a "Casa". O vazamento nos testes de banco foi fechado (seed autocontido).
 
+## Pronto para produção (2026-10-14, HEAD e2973bc)
+
+- **Build de produção passa** (`npm run build` numa cópia separada em `E:/APPFIN-build`; nunca rode build na pasta principal com o dev ligado). 1908 testes verdes, detector do impeccable sem achados.
+- **Deploy:** siga `docs/DEPLOY.md` (Vercel, região gru1, Neon pooled, Resend para o link mágico, 7 variáveis). Deploy e segredos são do Ricardo.
+- **Crítica do impeccable:** 22 → 27 → 26 → 31 → 28 → **35/40** (avaliadores variam; a última foi uma avaliadora independente). Relatórios em `.impeccable/critique/`.
+- **Decisões tomadas pelo Orquestrador a confirmar:** `docs/DECISOES-PENDENTES.md`.
+- **Equipe:** `docs/TEAM.md` (OpenCode: Sonda revisora, Geleira e Lume telas, Faisca motor, Crivo importação, Alicerce infra). Navegador só pelo portal `Vitrine` do Maestri.
+
 ## Retomar aqui — redesenho impeccable (2026-10-08 a 2026-10-09)
 
 **O que foi feito.** O plugin `impeccable` (skill `impeccable:impeccable`, instalado no escopo do usuário) conduziu: `init` (→ `PRODUCT.md`), crítica 22/40, `shape` com escolha de mundo visual pelo Ricardo (**Carnê de Prestações**), construção em ondas pelas agentes do canvas, `polish`, `DESIGN.md` gerado do código e três rodadas de revisão final até *ship*. Críticas: 22 → 27 → 26 (a última por avaliador mais rigoroso; especificidade virou "altamente específico").
