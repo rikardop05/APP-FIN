@@ -87,8 +87,9 @@ export function CommittedCard({
             </p>
             {endLine ? <p className="text-sm text-muted-foreground">{endLine}</p> : null}
             <p className="max-w-[65ch] text-xs text-muted-foreground">
-              {hasOverdue ? 'Faturas anteriores não pagas e faturas' : 'Faturas'} de {competenceShort(competence)} a{' '}
-              {competenceShort(windowEnd)}: compras lançadas e parcelas. Fatura marcada como paga sai da conta.
+              O comprometido é o carnê dos próximos meses:{' '}
+              {hasOverdue ? 'faturas anteriores não pagas e faturas' : 'faturas'} de {competenceShort(competence)} a{' '}
+              {competenceShort(windowEnd)}, compras lançadas e parcelas. Fatura marcada como paga sai da conta.
             </p>
           </div>
 

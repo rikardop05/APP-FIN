@@ -24,7 +24,7 @@ type HeadlineProps = {
   incomeCents: Cents;
   expenseCents: Cents;
   surplusCents: Cents;
-  /** Só o LANÇADO; o planejado vem ao lado. */
+  /** Só o LANÇADO; o planejado vem na linha de aportes. */
   contributionsCents: Cents;
   /** Aporte mensal planejado do plano de investimento; `null` = sem plano. */
   plannedContributionCents: Cents | null;
@@ -39,13 +39,13 @@ type HeadlineProps = {
 };
 
 /**
- * O primeiro olhar do Painel (impeccable distill, decisão do Ricardo, 2026-10-14): o NÚMERO CALMO
- * lidera — a Sobra em Display (36px) na abertura do bloco, no celular também —, e o VEREDITO vem
- * depois como Faixa compacta (a manchete de alerta em âmbar não ocupa mais a dobra). Quando aparece
- * o veredito dividido (as duas leituras divergem), a Faixa de atenção leva o selo W ("Depende das
- * faturas") e o link "Já paguei: marcar em Cartões". No primeiro viewport lê-se o número, não o
- * alerta inteiro. O comprometido fica no carnê logo abaixo, e as pendências são só a contagem
- * com link.
+ * O primeiro olhar do Painel (impeccable distill, 2026-10-14, mãe do P2 da crítica): UM
+ * protagonista por dobra. O bloco Sobra é o único card: a Sobra em Display (36px), a base que a
+ * explica e, abaixo de um picote, a linha secundária dos Aportes. O VEREDITO de 12 meses vem
+ * depois como Faixa compacta FORA do card (nunca card dentro de card), herdando a dobra do número
+ * que a gerou; a divergência leva o selo W ("Depende das faturas") e o link "Já paguei: marcar em
+ * Cartões". As pendências viram pill-resumo, e o comprometido fica no carnê logo abaixo. Nem no
+ * celular a dobra abre em alerta: abre no número.
  */
 export function Headline({
   competence,
@@ -84,12 +84,12 @@ export function Headline({
 
   return (
     <div className="flex flex-col gap-3">
-      <section aria-labelledby="dashboard-sobra-heading" className="flex flex-col gap-4 border border-border bg-card p-4 sm:p-5">
+      <section aria-labelledby="dashboard-sobra-heading" className="flex flex-col gap-3 border border-border bg-card p-4 sm:p-5">
         <div className="flex flex-col gap-1">
           <h2 id="dashboard-sobra-heading" className="text-sm font-medium text-muted-foreground">
             {surplusLabel(competence, surplusCents)}
           </h2>
-          {/* Display (36px): o número-manchete do Painel (DESIGN.md). Nunca a mão: vai pelo Money. */}
+          {/* Display (36px): o número-manchete do Painel (DESIGN.md). Nunca na mão: vai pelo Money. */}
           <p className="text-4xl font-semibold leading-10 text-foreground">
             <Money value={surplusCents} />
           </p>
@@ -102,76 +102,83 @@ export function Headline({
 
         <Picote />
 
-        <div className="flex flex-col gap-1">
-          <p className="text-sm text-muted-foreground">{contributionsTitle(competence)}</p>
-          <p className="text-xl font-semibold text-foreground">
-            <Money value={contributionsCents} sign="never" />
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {plannedContributionCents !== null && plannedContributionCents > 0 ? (
-              <>
-                lançados, de <Money value={plannedContributionCents} sign="never" /> planejados
-              </>
-            ) : (
-              <>
-                Sem aporte planejado.{' '}
-                <Link href="/investimentos" className="underline underline-offset-2">
-                  Definir no plano
-                </Link>
-              </>
-            )}
-          </p>
-        </div>
+        {/* Aportes como linha secundária do bloco Sobra (impeccable distill). */}
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{contributionsTitle(competence)}:</span>{' '}
+          <Money value={contributionsCents} sign="never" />{' '}
+          {plannedContributionCents !== null && plannedContributionCents > 0 ? (
+            <>
+              lançados, de <Money value={plannedContributionCents} sign="never" /> planejados
+            </>
+          ) : (
+            <>
+              lançados. Sem aporte planejado:{' '}
+              <Link href="/investimentos" className="underline underline-offset-2">
+                definir no plano
+              </Link>
+            </>
+          )}
+        </p>
+      </section>
 
-        {divergence !== null ? (
-          <Faixa tone="attention">
-            <p className="flex flex-wrap items-center gap-2">
-              <Selo tone="attention" label={DIVERGENCE_SELO_LABEL} />
-              <span className="font-medium">{verdictDivergenceText(divergence)}.</span>
-            </p>
+      {divergence !== null ? (
+        <Faixa tone="attention">
+          <p className="flex flex-wrap items-center gap-2">
+            <Selo tone="attention" label={DIVERGENCE_SELO_LABEL} />
+            <span className="font-medium">{verdictDivergenceText(divergence)}.</span>
+          </p>
+          <p>
+            <Link href="/cartoes" className="font-medium underline underline-offset-2">
+              {DIVERGENCE_LINK_LABEL}
+            </Link>{' '}
+            ·{' '}
+            <Link href="/fluxo" className="underline underline-offset-2">
+              Ver o fluxo e simular
+            </Link>
+          </p>
+        </Faixa>
+      ) : (
+        <Faixa
+          tone={
+            verdict.tone === 'danger' || projected.kind === 'unavailable'
+              ? 'danger'
+              : verdict.tone === 'ok'
+                ? 'ok'
+                : 'info'
+          }
+        >
+          <p>{verdict.text}</p>
+          {verdict.tone !== 'neutral' && overdueNote ? (
             <p>
-              <Link href="/cartoes" className="font-medium underline underline-offset-2">
-                {DIVERGENCE_LINK_LABEL}
-              </Link>{' '}
-              ·{' '}
+              {overdueNote}.{' '}
+              <a href="#comprometido" className="font-medium underline underline-offset-2">
+                Ver no comprometido
+              </a>
+            </p>
+          ) : null}
+          {verdict.tone !== 'neutral' ? (
+            <p>
               <Link href="/fluxo" className="underline underline-offset-2">
                 Ver o fluxo e simular
               </Link>
             </p>
-          </Faixa>
-        ) : (
-          <Faixa
-            tone={verdict.tone === 'ok' ? 'ok' : verdict.tone === 'danger' ? 'danger' : 'info'}
-          >
-            <p>{verdict.text}</p>
-            {verdict.tone !== 'neutral' && overdueNote ? (
-              <p>
-                {overdueNote}.{' '}
-                <a href="#comprometido" className="font-medium underline underline-offset-2">
-                  Ver no comprometido
-                </a>
-              </p>
-            ) : null}
-            {verdict.tone !== 'neutral' ? (
-              <p>
-                <Link href="/fluxo" className="underline underline-offset-2">
-                  Ver o fluxo e simular
-                </Link>
-              </p>
-            ) : null}
-          </Faixa>
-        )}
-      </section>
+          ) : null}
+        </Faixa>
+      )}
 
+      {/* Pendências como pill-resumo (impeccable distill): contagem e link, sem moldura pesada. */}
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" aria-label="Pendências">
-        <a href="#pendencias" className="min-h-11 py-2 font-medium text-foreground underline underline-offset-2 sm:min-h-0 sm:py-0">
+        <a
+          href="#pendencias"
+          className="inline-flex min-h-9 items-center border border-border bg-secondary px-3 text-xs font-medium text-foreground hover:bg-secondary/70"
+        >
           {pendingTitle(pending.total)}
         </a>
         {pending.parts.length > 0 ? (
-          <span className="text-muted-foreground">{pending.parts.join(' · ')}</span>
+          <span className="text-xs text-muted-foreground">{pending.parts.join(' · ')}</span>
         ) : null}
         {pendingUnavailable ? (
-          <span className="text-muted-foreground">Não deu para conferir os orçamentos agora.</span>
+          <span className="text-xs text-muted-foreground">Não deu para conferir os orçamentos agora.</span>
         ) : null}
       </p>
     </div>

@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { z } from 'zod';
-import { CreditCard, Landmark, Pencil, Plus, Trash2 } from 'lucide-react';
-import { parseBRL } from '@/lib/money';
-import { Badge, Button, DateText, EmptyState, Money, PageHeader, SkeletonCanhotos } from '@/components/ui-kit';
+import { CreditCard, Landmark, Pencil, Plus } from 'lucide-react';
+import { cents, parseBRL, type Cents } from '@/lib/money';
+import { futureCommitment } from '@/lib/finance/commitment';
+import { Badge, Button, DateText, EmptyState, Faixa, LoadingBlock, Money, PageHeader } from '@/components/ui-kit';
 import { AccountForm } from './account-form';
 import { CardForm } from './card-form';
 import {
@@ -28,6 +29,8 @@ import type { CommitmentInput } from '@/lib/finance/commitment';
 type DialogState =
   | { kind: 'account'; record?: AccountRecord }
   | { kind: 'card'; record?: CardRecord };
+
+type ArchiveTarget = { kind: 'account' | 'card'; id: string; name: string };
 
 const accountKindLabel: Record<AccountRecord['kind'], string> = {
   checking: 'Conta corrente',
@@ -68,12 +71,90 @@ type CartoesScreenProps = {
   commitmentTransactions: CommitmentInput['transactions'];
 };
 
+/**
+ * Confirmar desativação no mundo (nada de `confirm` nativo): Faixa com o texto em tinta,
+ * botão destructive em pt-BR e a consequência calculada pelo motor. `usedCents` é o
+ * comprometimento do cartão na janela (`limitUsage`, negativo); `null` = conta, que não
+ * tem comprometimento e sim saldo inicial no fluxo.
+ */
+function ArchiveConfirmDialog({
+  target,
+  commitmentMonths,
+  usedCents,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  target: { kind: 'account' | 'card'; id: string; name: string };
+  commitmentMonths: number;
+  usedCents: Cents | null;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const kindNoun = target.kind === 'card' ? 'o cartão' : 'a conta';
+  // Foco entra no diálogo ao abrir e volta ao gatilho ao fechar; Escape cancela.
+  // O `onCancel` vai num ref para o efeito rodar uma vez só (ouvido + devolução).
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+  useEffect(() => {
+    const previous = document.activeElement;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCancelRef.current();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      if (previous instanceof HTMLElement) previous.focus();
+    };
+  }, []);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/20 p-0 sm:items-center sm:p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
+      <div className="max-h-[90vh] w-full overflow-y-auto border border-border bg-background p-4 shadow-lg sm:max-w-xl sm:p-6" role="dialog" aria-modal="true" aria-labelledby="archive-dialog-title">
+        <h2 id="archive-dialog-title" className="text-lg font-semibold">
+          Desativar {kindNoun} &ldquo;{target.name}&rdquo;?
+        </h2>
+        <Faixa tone="attention" title="O que acontece" className="mt-3">
+          {target.kind === 'card' ? (
+            <p>
+              {usedCents !== null && usedCents < 0 ? (
+                <>O comprometimento de <Money value={cents(-usedCents)} sign="never" /> nos próximos {commitmentMonths} meses deixa de contar. </>
+              ) : (
+                <>Este cartão não tem nada comprometido nos próximos {commitmentMonths} meses. </>
+              )}
+              Ele some das listas e seleções; os lançamentos já registrados ficam.
+            </p>
+          ) : (
+            <p>
+              A conta some das listas e seleções, e o saldo inicial dela deixa de entrar no fluxo de caixa.
+              Os lançamentos já registrados ficam.
+            </p>
+          )}
+        </Faixa>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" onClick={onCancel} disabled={busy} autoFocus>
+            Manter {kindNoun}
+          </Button>
+          <Button variant="destructive" onClick={onConfirm} disabled={busy}>
+            {busy ? 'Desativando…' : `Desativar ${kindNoun}`}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CartoesScreen({ today, commitmentMonths, commitmentTransactions }: CartoesScreenProps) {
   const router = useRouter();
   const [accounts, setAccounts] = useState<AccountList['accounts']>([]);
   const [cards, setCards] = useState<CardList['cards']>([]);
   const [members, setMembers] = useState<CardList['members']>([]);
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  /**
+   * Alvo da confirmação de desativar, SOBRE o editor (o editor continua montado atrás:
+   * "Manter" volta para os campos com o que foi digitado intacto).
+   */
+  const [confirmTarget, setConfirmTarget] = useState<ArchiveTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +189,20 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * Comprometimento por cartão na janela, do motor (`futureCommitment`, Esquadro): alimenta o
+   * texto de consequência do diálogo de desativar. A tela não soma nada — só procura o cartão.
+   */
+  const usedByCard = useMemo(() => {
+    const result = futureCommitment({
+      fromCompetence: toCompetence(today),
+      months: commitmentMonths,
+      cards: cards.map((card) => ({ id: card.id, name: card.name, creditLimitCents: card.creditLimitCents })),
+      transactions: commitmentTransactions,
+    });
+    return new Map(result.limitUsage.map((item) => [item.cardId, item.usedCents]));
+  }, [cards, commitmentTransactions, commitmentMonths, today]);
 
   async function saveAccount(values: AccountFormData, id?: string) {
     const openingBalanceCents = parseBRL(values.openingBalance);
@@ -174,9 +269,14 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
     }
   }
 
-  async function archive(kind: 'account' | 'card', id: string, name: string) {
-    if (!window.confirm(`Desativar ${kind === 'card' ? 'o cartão' : 'a conta'} "${name}"?`)) return;
+  /**
+   * Desativar é soft (`active = false`, o histórico fica): conta some das listas e o saldo
+   * inicial dela deixa de entrar no fluxo; cartão deixa de contar no comprometimento. O
+   * diálogo que chama esta função já mostrou a consequência — aqui não há `confirm` nativo.
+   */
+  async function archive(kind: 'account' | 'card', id: string) {
     setError(null);
+    setSaving(true);
     try {
       const response = await fetch(`/${kind === 'card' ? 'api/cards' : 'api/accounts'}/${id}`, {
         method: 'DELETE',
@@ -186,12 +286,19 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
       } else {
         await readResponse(response, accountListSchema);
       }
+      setDialog(null);
+      setConfirmTarget(null);
       await load();
       router.refresh();
     } catch (archiveError) {
       setError(errorMessage(archiveError));
+    } finally {
+      setSaving(false);
     }
   }
+
+  /** Registro aberto no editor (conta ou cartão): `const` para o estreitamento valer no `onDeactivate`. */
+  const editingRecord = dialog !== null ? dialog.record : undefined;
 
   return (
     <>
@@ -221,11 +328,15 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
         </div>
       ) : null}
 
-      {loading ? (
-        <SkeletonCanhotos srText="Carregando contas e cartões…" count={4} />
-      ) : (
-        <div className="flex flex-col gap-8">
-          <section aria-labelledby="accounts-heading" className="flex flex-col gap-3">
+      <LoadingBlock
+        loading={loading}
+        endText={error === null ? 'Contas e cartões carregados.' : null}
+        label="Carregando contas e cartões…"
+        count={4}
+        retry={() => void load()}
+      />
+      <div className="flex flex-col gap-8">
+        <section aria-labelledby="accounts-heading" className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 id="accounts-heading" className="text-lg font-semibold tracking-tight">Contas</h2>
@@ -256,9 +367,6 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
                       <div className="flex shrink-0 items-center">
                         <Button variant="ghost" size="sm" aria-label={`Editar ${account.name}`} onClick={() => setDialog({ kind: 'account', record: account })}>
                           <Pencil className="h-4 w-4" aria-hidden="true" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="ml-4 border-l border-border hover:text-destructive focus-visible:text-destructive" aria-label={`Desativar ${account.name}`} onClick={() => void archive('account', account.id, account.name)}>
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </div>
                     </div>
@@ -310,9 +418,6 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
                         <Button variant="ghost" size="sm" aria-label={`Editar ${card.name}`} onClick={() => setDialog({ kind: 'card', record: card })}>
                           <Pencil className="h-4 w-4" aria-hidden="true" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="ml-4 border-l border-border hover:text-destructive focus-visible:text-destructive" aria-label={`Desativar ${card.name}`} onClick={() => void archive('card', card.id, card.name)}>
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        </Button>
                       </div>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
@@ -350,8 +455,18 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
           </section>
 
           {cards.length > 0 ? <CommitmentSection cards={cards} transactions={commitmentTransactions} months={commitmentMonths} today={today} /> : null}
-        </div>
-      )}
+      </div>
+
+      {confirmTarget ? (
+        <ArchiveConfirmDialog
+          target={confirmTarget}
+          commitmentMonths={commitmentMonths}
+          usedCents={confirmTarget.kind === 'card' ? (usedByCard.get(confirmTarget.id) ?? cents(0)) : null}
+          busy={saving}
+          onCancel={() => setConfirmTarget(null)}
+          onConfirm={() => void archive(confirmTarget.kind, confirmTarget.id)}
+        />
+      ) : null}
 
       {dialog ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/20 p-0 sm:items-center sm:p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(null); }}>
@@ -368,9 +483,34 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
               <Button variant="ghost" size="sm" aria-label="Fechar" onClick={() => setDialog(null)}>Fechar</Button>
             </div>
             {dialog.kind === 'account' ? (
-              <AccountForm key={dialog.record?.id ?? 'new-account'} initial={dialog.record} today={today} busy={saving} onCancel={() => setDialog(null)} onSubmit={(values, id) => void saveAccount(values, id)} />
+              <AccountForm
+                key={dialog.record?.id ?? 'new-account'}
+                initial={dialog.record}
+                today={today}
+                busy={saving}
+                onCancel={() => setDialog(null)}
+                onSubmit={(values, id) => void saveAccount(values, id)}
+                onDeactivate={
+                  editingRecord === undefined
+                    ? undefined
+                    : () => setConfirmTarget({ kind: 'account', id: editingRecord.id, name: editingRecord.name })
+                }
+              />
             ) : (
-              <CardForm key={dialog.record?.id ?? 'new-card'} initial={dialog.record} accounts={accounts} members={members} busy={saving} onCancel={() => setDialog(null)} onSubmit={(values, id) => void saveCard(values, id)} />
+              <CardForm
+                key={dialog.record?.id ?? 'new-card'}
+                initial={dialog.record}
+                accounts={accounts}
+                members={members}
+                busy={saving}
+                onCancel={() => setDialog(null)}
+                onSubmit={(values, id) => void saveCard(values, id)}
+                onDeactivate={
+                  editingRecord === undefined
+                    ? undefined
+                    : () => setConfirmTarget({ kind: 'card', id: editingRecord.id, name: editingRecord.name })
+                }
+              />
             )}
           </div>
         </div>

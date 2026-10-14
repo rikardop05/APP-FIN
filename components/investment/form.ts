@@ -39,9 +39,15 @@ const DEFAULT_PERCENTS: Record<ScenarioLabel, { returnPct: string; withdrawalPct
   optimistic: { returnPct: '7', withdrawalPct: '5' },
 };
 
+/**
+ * Valores iniciais do formulário de criar: tudo vazio ou zerado, para ninguém confundir
+ * sugestão com dado. As únicas exceções são os percentuais dos cenários, que vêm do
+ * padrão do modelo (conservador 3/3, médio 5/4, otimista 7/5) e são ditos como padrão na
+ * tela. Também é a base de `planToValues`, que sobrescreve tudo com o plano salvo.
+ */
 export function emptyPlanValues(): PlanFormValues {
   return {
-    name: 'Meu plano',
+    name: '',
     desiredIncome: '',
     portfolio: formatBRL(cents(0)),
     contribution: formatBRL(cents(0)),

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PiggyBank, Pencil, Plus, Target, Trash2 } from 'lucide-react';
 
-import { Badge, Button, Canhoto, DateText, EmptyState, Money, PageHeader, Parcela, SkeletonCanhotos } from '@/components/ui-kit';
+import { Badge, Button, Canhoto, DateText, EmptyState, LoadingBlock, Money, PageHeader, Parcela } from '@/components/ui-kit';
 import { competenceShort } from '@/components/cashflow/labels';
 import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 import { basisPoints } from '@/lib/money';
@@ -261,11 +261,17 @@ export function GoalsScreen() {
         actions={<Button onClick={() => setDialog({})}><Plus className="mr-1 h-4 w-4" aria-hidden="true" />Nova meta</Button>}
       />
 
-      {error ? <p className="mb-4 border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{error}</p> : null}
+      <LoadingBlock
+        loading={loading && data === null}
+        failed={!loading && data === null && error !== null}
+        failedText={error ?? undefined}
+        endText={error === null ? 'Metas carregadas.' : null}
+        label="Carregando metas…"
+        count={3}
+        retry={() => void load()}
+      />
 
-      {loading ? (
-        <SkeletonCanhotos srText="Carregando metas…" count={3} />
-      ) : data === null ? null : (
+      {data !== null ? (
         <div className="flex flex-col gap-6">
           {data.emergency.exists ? null : <EmergencySuggestion data={data.emergency} onCreate={() => setDialog({ emergencyDraft: true })} />}
 
@@ -284,7 +290,7 @@ export function GoalsScreen() {
             </section>
           )}
         </div>
-      )}
+      ) : null}
 
       {dialog && data ? (
         <div

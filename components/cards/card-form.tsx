@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { Archive } from 'lucide-react';
 import { formatBRL, parseBRL } from '@/lib/money';
 import { Button, Input, Select } from '@/components/ui-kit';
 import type {
@@ -20,6 +21,8 @@ type CardFormProps = {
   busy?: boolean;
   onCancel: () => void;
   onSubmit: (values: CardFormData, id?: string) => void;
+  /** Só com `initial`: abre o diálogo de desativar (longe do lápis, com consequência). */
+  onDeactivate?: () => void;
 };
 
 function issueMap(error: { issues: { path: PropertyKey[]; message: string }[] }) {
@@ -53,6 +56,7 @@ export function CardForm({
   busy = false,
   onCancel,
   onSubmit,
+  onDeactivate,
 }: CardFormProps) {
   const [values, setValues] = useState<CardFormValues>(() => initialValues(initial));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -184,6 +188,14 @@ export function CardForm({
           {busy ? 'Salvando…' : initial ? 'Salvar alterações' : 'Criar cartão'}
         </Button>
       </div>
+      {initial && onDeactivate ? (
+        <div className="border-t border-border pt-4">
+          <Button type="button" variant="ghost" className="w-full text-muted-foreground sm:w-auto" onClick={onDeactivate} disabled={busy}>
+            <Archive className="mr-2 h-4 w-4" aria-hidden="true" />
+            Desativar cartão
+          </Button>
+        </div>
+      ) : null}
     </form>
   );
 }

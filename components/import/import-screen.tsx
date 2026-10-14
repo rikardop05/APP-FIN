@@ -9,7 +9,7 @@ import {
 } from 'react';
 import Link from 'next/link';
 import { detectSource, type DetectedSource } from '@/lib/import/detect';
-import { Button, Faixa, Input, MonthPicker, PageHeader, Picote, Select, SkeletonBarras } from '@/components/ui-kit';
+import { Button, Faixa, Input, LoadingBlock, MonthPicker, PageHeader, Picote, Select } from '@/components/ui-kit';
 import { DropZone } from './drop-zone';
 import { successMessage } from './review-model';
 import {
@@ -205,6 +205,8 @@ export function ImportScreen({ today }: ImportScreenProps) {
    * só precisa mudar de identidade.
    */
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+  /** Recarga das origens (deep link "Tentar de novo" do bloco de carregamento). */
+  const [sourcesReloadKey, setSourcesReloadKey] = useState(0);
 
   const sources = useMemo(
     () => (sourceKind === 'credit_card' ? cards : accounts),
@@ -272,7 +274,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [sourcesReloadKey]);
 
   useEffect(() => {
     if (sources.some((source) => source.id === sourceId)) return;
@@ -540,7 +542,14 @@ export function ImportScreen({ today }: ImportScreenProps) {
                   {busy ? 'Processando…' : 'Pré-visualizar PDF'}
                 </Button>
               </div>
-              {loadingSources ? <SkeletonBarras srText="Carregando origens…" count={2} /> : null}
+              <LoadingBlock
+                loading={loadingSources}
+                endText={error === null ? 'Origens carregadas.' : null}
+                label="Carregando origens"
+                variant="barras"
+                count={3}
+                retry={() => setSourcesReloadKey((key) => key + 1)}
+              />
             </form>
           </section>
 

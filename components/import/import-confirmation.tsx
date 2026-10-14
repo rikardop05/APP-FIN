@@ -5,7 +5,7 @@ import { Check } from 'lucide-react';
 import { z } from 'zod';
 import { formatDateBR } from '@/lib/date';
 import { cn } from '@/lib/utils';
-import { dataTalao, SeloLegend, ShortcutLegend } from '@/components/ui-kit';
+import { dataTalao, HelpNote, SeloLegend, ShortcutLegend } from '@/components/ui-kit';
 import { formatBRL, parseBRL } from '@/lib/money';
 import type { Cents } from '@/lib/money';
 import type { RecalculateBody } from '@/app/api/import/recalculate/schema';
@@ -599,6 +599,13 @@ export function ImportConfirmation({
           Voltar para a entrada
         </Button>
       </div>
+
+      {/* Ajuda do mundo (heurística 10): o Placar é o vocabulário do app que ninguém adivinha. */}
+      <HelpNote>
+        O placar confere o lote no rodapé fixo: soma o que você incluiu e compara com o total impresso
+        na fatura. Quando a diferença zera, aparece CONFERE; quando não zera, dá para vê-la e decidir,
+        nunca fica travado.
+      </HelpNote>
 
       <BatchCover
         bankKey={preview.bankKey}

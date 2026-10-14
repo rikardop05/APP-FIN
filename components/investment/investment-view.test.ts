@@ -9,6 +9,7 @@ import {
   visibleConfirmation,
   feasibleText,
   formatCompactBRL,
+  formatMonthsStub,
   formatMonthsToTarget,
   percentInputToBp,
   yearTickLabel,
@@ -42,6 +43,25 @@ describe('formatMonthsToTarget: nunca NaN, nunca número absurdo', () => {
     expect(formatMonthsToTarget(7).text).toBe('7 meses');
     expect(formatMonthsToTarget(24).text).toBe('2 anos');
     expect(formatMonthsToTarget(1).text).toBe('1 mês');
+  });
+});
+
+describe('formatMonthsStub: o prazo compacto do talão', () => {
+  it('sem resposta do motor = sem prazo; zero = atingido; além de 100 anos = +100 anos', () => {
+    expect(formatMonthsStub(null)).toBe('sem prazo');
+    expect(formatMonthsStub(Number.NaN)).toBe('sem prazo');
+    expect(formatMonthsStub(-2)).toBe('sem prazo');
+    expect(formatMonthsStub(0)).toBe('atingido');
+    expect(formatMonthsStub(1201)).toBe('+100 anos');
+  });
+
+  it('meses e anos compactos, com singular', () => {
+    expect(formatMonthsStub(1)).toBe('1 mês');
+    expect(formatMonthsStub(7)).toBe('7 meses');
+    expect(formatMonthsStub(12)).toBe('1 ano');
+    expect(formatMonthsStub(24)).toBe('2 anos');
+    expect(formatMonthsStub(38)).toBe('38 meses');
+    expect(formatMonthsStub(1200)).toBe('100 anos');
   });
 });
 
@@ -140,12 +160,13 @@ describe('formulário do plano', () => {
     });
   });
 
-  it('formulário vazio de criar: defaults do modelo de dados e renda ainda sem valor (erro)', () => {
+  it('formulário vazio de criar: nome e renda pedem preenchimento; o resto vem zerado ou do padrão', () => {
     const values = emptyPlanValues();
+    expect(values.name).toBe('');
     expect(values.scenarios.moderate).toEqual({ returnPct: '5', withdrawalPct: '4' });
     const result = parsePlanForm(values);
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(Object.keys(result.errors)).toEqual(['desiredIncome']);
+    if (!result.ok) expect(Object.keys(result.errors)).toEqual(['name', 'desiredIncome']);
   });
 
   it('recusa retirada zero, retorno fora da faixa e dinheiro negativo, cada erro no seu campo', () => {

@@ -53,7 +53,7 @@ const TONE_CLASS: Record<'neutral' | 'ok' | 'gap', string> = {
   gap: 'text-warning',
 };
 
-/** Linha "Cabe na sua sobra?" no cartão do cenário. */
+/** Linha "Cabe na sua sobra?" no bloco do cenário. */
 export function FeasibilityLine({
   scenario,
   surplus,

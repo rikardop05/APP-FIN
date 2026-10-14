@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { TrendingUp } from 'lucide-react';
 
-import { Badge, Button, DateField, Money, PageHeader } from '@/components/ui-kit';
+import { Button, Canhoto, Carimbo, DateField, Money, PageHeader, Placar } from '@/components/ui-kit';
 
 import { AccumulationChart } from './accumulation-chart';
 import { FeasibilityLine, SurplusSummary } from './feasibility/feasibility';
@@ -13,6 +13,7 @@ import {
   saveButtonHint,
   visibleConfirmation,
   type SaveEvent,
+  formatMonthsStub,
   formatMonthsToTarget,
   SCENARIO_ORDER,
   scenarioName,
@@ -83,8 +84,8 @@ function PlanFields({ values, errors, onChange }: PlanFieldsProps) {
     onChange({ ...values, [field]: event.target.value });
   return (
     <div className="flex flex-col gap-4">
-      <Field label="Nome do plano" htmlFor="plan-name" error={errors.name}>
-        <input id="plan-name" className={inputClass} value={values.name} onChange={set('name')} autoComplete="off" />
+      <Field label="Nome do plano" htmlFor="plan-name" error={errors.name} hint="Dê um nome que seja seu, como “Aposentadoria aos 60”.">
+        <input id="plan-name" className={inputClass} value={values.name} onChange={set('name')} autoComplete="off" placeholder="Ex.: Aposentadoria aos 60" />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Renda mensal desejada" htmlFor="plan-income" error={errors.desiredIncome} hint="Quanto você quer receber por mês, em valores de hoje.">
@@ -103,10 +104,10 @@ function PlanFields({ values, errors, onChange }: PlanFieldsProps) {
       <details className="text-sm">
         <summary className="cursor-pointer font-medium text-foreground">Outras premissas do plano</summary>
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
-          <Field label="Inflação esperada ao ano (%)" htmlFor="plan-inflation" error={errors.inflation} hint="Só informativa por enquanto: os cálculos já usam retornos reais.">
+          <Field label="Inflação esperada ao ano (%)" htmlFor="plan-inflation" error={errors.inflation} hint="Padrão 4,5 % — só informativa por enquanto: os cálculos já usam retornos reais.">
             <input id="plan-inflation" className={inputClass} value={values.inflation} onChange={set('inflation')} inputMode="decimal" />
           </Field>
-          <Field label="Imposto sobre o rendimento (%)" htmlFor="plan-tax" error={errors.tax} hint="Só informativo por enquanto: ainda não entra nos cálculos.">
+          <Field label="Imposto sobre o rendimento (%)" htmlFor="plan-tax" error={errors.tax} hint="Padrão 15 % — só informativo por enquanto: ainda não entra nos cálculos.">
             <input id="plan-tax" className={inputClass} value={values.tax} onChange={set('tax')} inputMode="decimal" />
           </Field>
         </div>
@@ -203,59 +204,70 @@ type ScenarioCardProps = {
   onChange: (next: PlanFormValues) => void;
 };
 
+/**
+ * Cada cenário é um bloco do mundo: o PRAZO (meses até o alvo, vindo do motor) vai no
+ * talão, o patrimônio necessário é o valor do canhoto, a renda passiva projetada fecha
+ * no Placar e o veredito vai no Carimbo (reservado a veredito). As premissas editáveis
+ * (retorno e retirada) ficam visíveis ao lado dos números, nunca escondidas.
+ */
 function ScenarioCard({ scenario, surplus, maxYears, values, errors, onChange }: ScenarioCardProps) {
   const label = scenario.label;
   const row = values.scenarios[label];
   const months = formatMonthsToTarget(scenario.result.monthsWithCurrentContribution);
+  const feasible = scenario.result.feasible;
   const setPremise = (field: 'returnPct' | 'withdrawalPct') => (event: { target: { value: string } }) =>
     onChange({ ...values, scenarios: { ...values.scenarios, [label]: { ...row, [field]: event.target.value } } });
   return (
-    <article className="flex min-w-0 flex-col gap-4 border border-border bg-card p-4 sm:p-5" aria-labelledby={`scenario-${label}`}>
-      <div className="flex items-center justify-between gap-2">
+    <article className="flex min-w-0 flex-col gap-3 border-t-2 border-foreground pt-3" aria-labelledby={`scenario-${label}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id={`scenario-${label}`} className="text-base font-semibold">{scenarioName(label)}</h3>
-        <Badge variant={scenario.result.feasible ? 'success' : 'warning'}>
-          {scenario.result.feasible ? 'Viável' : values.targetDate !== '' ? 'Fora do prazo' : `Passa de ${maxYears} anos`}
-        </Badge>
+        <Carimbo tone={feasible ? 'ok' : 'danger'}>{feasible ? 'Alcança' : 'Não alcança'}</Carimbo>
       </div>
+      {!feasible && values.targetDate !== '' ? (
+        <p className="text-xs text-muted-foreground">Fora do prazo do plano: com o aporte atual, o alvo passa do prazo.</p>
+      ) : null}
 
-      <div className="grid grid-cols-2 items-end gap-3 bg-secondary/40 p-3">
-        <Field label="Retorno real ao ano (%)" htmlFor={`ret-${label}`} error={errors[`${label}.return`]}>
-          <input id={`ret-${label}`} className={inputClass} value={row.returnPct} onChange={setPremise('returnPct')} inputMode="decimal" />
-        </Field>
-        <Field label="Retirada ao ano (%)" htmlFor={`wd-${label}`} error={errors[`${label}.withdrawal`]}>
-          <input id={`wd-${label}`} className={inputClass} value={row.withdrawalPct} onChange={setPremise('withdrawalPct')} inputMode="decimal" />
-        </Field>
+      <Canhoto
+        stub={formatMonthsStub(scenario.result.monthsWithCurrentContribution)}
+        valor={<Money value={scenario.result.targetPortfolioCents} sign="never" />}
+        ariaLabel={`Cenário ${scenarioName(label)}: ${feasible ? 'alcança' : 'não alcança'} o alvo, ${months.text}`}
+      >
+        <span className="text-sm text-muted-foreground">
+          Patrimônio necessário{months.kind === 'time' ? '' : ` · ${months.text}`}
+        </span>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Retorno real ao ano (%)" htmlFor={`ret-${label}`} error={errors[`${label}.return`]}>
+            <input id={`ret-${label}`} className={inputClass} value={row.returnPct} onChange={setPremise('returnPct')} inputMode="decimal" />
+          </Field>
+          <Field label="Retirada ao ano (%)" htmlFor={`wd-${label}`} error={errors[`${label}.withdrawal`]}>
+            <input id={`wd-${label}`} className={inputClass} value={row.withdrawalPct} onChange={setPremise('withdrawalPct')} inputMode="decimal" />
+          </Field>
+        </div>
+      </Canhoto>
+
+      <div className="flex flex-col gap-1 text-sm">
+        <p className="text-muted-foreground">Aporte mensal necessário para chegar em</p>
+        <ul className="flex flex-col divide-y divide-border border border-border">
+          {scenario.result.requiredByHorizon.map((item) => (
+            <li key={item.years} className="flex items-baseline justify-between gap-3 px-3 py-1.5">
+              <span>{item.years} anos</span>
+              <span className="font-medium"><Money value={item.contributionCents} sign="never" /></span>
+            </li>
+          ))}
+        </ul>
       </div>
-
-      <dl className="flex flex-col gap-3 text-sm">
-        <div>
-          <dt className="text-muted-foreground">Patrimônio necessário</dt>
-          <dd className="text-lg font-semibold"><Money value={scenario.result.targetPortfolioCents} sign="never" /></dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Tempo para chegar lá com o aporte planejado</dt>
-          <dd className={months.kind === 'unreachable' || months.kind === 'too-long' ? 'font-medium text-warning' : 'font-medium'}>{months.text}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Renda mensal projetada em {maxYears} anos, mantendo o aporte planejado</dt>
-          <dd className="font-medium"><Money value={scenario.result.projectedIncomeWithCurrentPlanCents} sign="never" /></dd>
-        </div>
-        <div>
-          <dt className="mb-1 text-muted-foreground">Aporte mensal necessário para chegar em</dt>
-          <dd>
-            <ul className="flex flex-col divide-y divide-border border border-border">
-              {scenario.result.requiredByHorizon.map((item) => (
-                <li key={item.years} className="flex items-baseline justify-between gap-3 px-3 py-1.5">
-                  <span>{item.years} anos</span>
-                  <span className="font-medium"><Money value={item.contributionCents} sign="never" /></span>
-                </li>
-              ))}
-            </ul>
-          </dd>
-        </div>
-      </dl>
       <FeasibilityLine scenario={scenario} surplus={surplus} />
       <p className="text-xs text-muted-foreground">{feasibleText(scenario.result.feasible, maxYears)}</p>
+      <Placar
+        title="Renda passiva"
+        items={[
+          {
+            label: `Por mês em ${maxYears} anos, com o aporte atual`,
+            value: <Money value={scenario.result.projectedIncomeWithCurrentPlanCents} sign="never" />,
+            primary: true,
+          },
+        ]}
+      />
     </article>
   );
 }
@@ -344,7 +356,7 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
             <div>
               <h2 id="scenarios-heading" className="font-semibold">Três cenários</h2>
               <p className="text-sm text-muted-foreground">
-                O <strong className="font-medium">retorno real</strong> é o rendimento já descontada a inflação; a <strong className="font-medium">retirada</strong> é a parte do patrimônio que você tira por ano sem consumir o principal. As premissas de cada cenário ficam ao lado do resultado e podem ser editadas.
+                O <strong className="font-medium">retorno real</strong> é o rendimento já descontada a inflação; a <strong className="font-medium">retirada</strong> é a parte do patrimônio que você tira por ano sem consumir o principal. Cada cenário começa no padrão do modelo (3/3, 5/4 e 7/5) — as premissas ficam ao lado do resultado e podem ser editadas.
               </p>
             </div>
             {dirty ? (

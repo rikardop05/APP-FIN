@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { Trash2 } from 'lucide-react';
 
-import { Button, Input, Select } from '@/components/ui-kit';
+import { Button, Faixa, Input, Select } from '@/components/ui-kit';
 
 import {
   buildHolderBody,
@@ -54,6 +54,8 @@ export function CardHolders({ card, members, onUpdated }: CardHoldersProps) {
   const [failure, setFailure] = useState<string | null>(null);
   const [event, setEvent] = useState<HolderEvent | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Final aguardando confirmação de remoção (diálogo do mundo, nada de `confirm` nativo). */
+  const [pendingRemove, setPendingRemove] = useState<HolderRow | null>(null);
 
   const hint = holderSubmitHint(card.holders, last4, members);
   const idPrefix = `holder-${card.id}`;
@@ -92,7 +94,6 @@ export function CardHolders({ card, members, onUpdated }: CardHoldersProps) {
   }
 
   async function remove(row: HolderRow) {
-    if (!window.confirm(deleteHolderQuestion(row))) return;
     setBusy(true);
     setFailure(null);
     setEvent(null);
@@ -104,6 +105,7 @@ export function CardHolders({ card, members, onUpdated }: CardHoldersProps) {
       setFailure(error instanceof Error ? error.message : 'Não foi possível remover o final.');
     } finally {
       setBusy(false);
+      setPendingRemove(null);
     }
   }
 
@@ -126,13 +128,27 @@ export function CardHolders({ card, members, onUpdated }: CardHoldersProps) {
                 <span className="font-medium tabular-nums">{row.display}</span>
                 <span className="text-muted-foreground"> · {row.memberName ?? '—'}</span>
               </span>
-              <Button variant="ghost" size="sm" className="hover:text-destructive focus-visible:text-destructive" aria-label={`Remover o final ${row.last4}`} disabled={busy} onClick={() => void remove(row)}>
+              <Button variant="ghost" size="sm" className="hover:text-destructive focus-visible:text-destructive" aria-label={`Remover o final ${row.last4}`} disabled={busy} onClick={() => setPendingRemove(row)}>
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
               </Button>
             </li>
           ))}
         </ul>
       )}
+
+      {pendingRemove ? (
+        <Faixa tone="attention" title="Remover este final?" className="mt-3">
+          <p>{deleteHolderQuestion(pendingRemove)} O mapeamento some, sem mexer nos lançamentos.</p>
+          <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" size="sm" onClick={() => setPendingRemove(null)} disabled={busy}>
+              Manter
+            </Button>
+            <Button variant="destructive" size="sm" onClick={() => void remove(pendingRemove)} disabled={busy}>
+              {busy ? 'Removendo…' : 'Remover'}
+            </Button>
+          </div>
+        </Faixa>
+      ) : null}
 
       <form className="mt-4 flex flex-col gap-3" onSubmit={(e) => void submit(e)} noValidate>
         <div className="grid gap-3 sm:grid-cols-2">

@@ -19,6 +19,8 @@ export { ESTADO_LETRA, dataTalao, letraDoEstado, parcelaLabel, placarTone, seloL
 export { Faixa } from './faixa';
 export { SkeletonCanhotos } from './skeleton';
 export { SkeletonBarras } from './skeleton-barras';
+export { LoadingBlock } from './loading-block';
+export { HelpNote } from './help-note';
 export { SeloLegend } from './selo-legend';
 export { ShortcutLegend } from './shortcuts-legend';
 export { MonthPicker } from './month-picker';

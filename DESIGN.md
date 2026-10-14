@@ -265,7 +265,7 @@ Retângulos de régua, sem pílula, sem sombra.
   | W | Depende das faturas | | |
 
 ### Carimbo (signature)
-Moldura dupla (borda de 2px mais contorno de 1px afastado 2px), texto de 12px em caixa alta, 600, tracking largo, girado -3°. Verde confere para PAGO/CONFERE, vermelho de carimbo para DIVERGE. Reservado a esse veredito.
+Moldura dupla (borda de 2px mais contorno de 1px afastado 2px), texto de 12px em caixa alta, 600, tracking largo, girado -3°. Verde confere para PAGO, CONFERE e ALCANÇA; vermelho de carimbo para DIVERGE e NÃO ALCANÇA. Reservado a veredito binário (conferência da fatura, fatura paga, meta ou cenário alcançado); nunca decoração nem estado intermediário.
 
 ### Canhoto (signature)
 A linha de lançamento ou parcela. Grade de quatro colunas: canhoto de 68px (numeral; ver a regra do talão abaixo), picote vertical, corpo (descrição e selos), valor à direita em numeral. No celular o valor desce para baixo do corpo e a linha mantém 44px ou mais; no desktop a densidade é de documento de trabalho: a linha assenta entre **44 e 52px** — o corpo do canhoto compacta o padding a partir de `sm` (8px em vez de 16px) e os controles de linha (abrir, selecionar) soltam a altura mínima em `sm`, deixando a régua e o próprio canhoto segurarem o toque no celular e o mouse no desktop. Linhas com selos de estado passam da medida: o selo é a raridade, não a regra. Papel do canhoto com régua de 1px; régua âmbar quando pede atenção, vermelha quando há perigo. O editor da linha abre como faixa abaixo, depois de um picote horizontal. **Preso** (parcela futura): borda tracejada na cor de campo e texto atenuado.
@@ -330,4 +330,4 @@ Transições de cor curtas nos estados. Um único movimento de assinatura, "dest
 - **Don't** dar sombra a cartão ou painel em repouso; sombra é só da folha que flutua (diálogo).
 - **Don't** usar cores cruas do Tailwind fora da rede de segurança (`sky`, `blue`, `violet` etc.), nem hex solto em componente.
 - **Don't** usar texto abaixo de 12px.
-- **Don't** usar o carimbo para algo que não seja o veredito PAGO, CONFERE ou DIVERGE.
+- **Don't** usar o carimbo para algo que não seja um veredito binário (PAGO, CONFERE, DIVERGE, ALCANÇA, NÃO ALCANÇA).

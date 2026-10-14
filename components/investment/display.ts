@@ -54,6 +54,20 @@ export function feasibleText(feasible: boolean, maxYears: number): string {
     : `Não: com o aporte atual o alvo passa de ${String(maxYears)} anos.`;
 }
 
+/**
+ * O prazo no TALÃO do canhoto do cenário: uma coisa só por linha, compacta. O
+ * texto completo ("3 anos e 2 meses") continua no corpo, via `formatMonthsToTarget`.
+ */
+export function formatMonthsStub(months: number | null): string {
+  if (months === null || !Number.isInteger(months) || months < 0) return 'sem prazo';
+  if (months === 0) return 'atingido';
+  if (months > MAX_MONTHS_SHOWN) return '+100 anos';
+  if (months === 1) return '1 mês';
+  if (months < 12) return `${String(months)} meses`;
+  if (months % 12 === 0) return months === 12 ? '1 ano' : `${String(months / 12)} anos`;
+  return `${String(months)} meses`;
+}
+
 /** `300` -> `3`, `350` -> `3,5`, `-150` -> `-1,5`: o que a pessoa digita, com vírgula. */
 export function bpToPercentInput(bp: BasisPoints | number): string {
   const sign = bp < 0 ? '-' : '';

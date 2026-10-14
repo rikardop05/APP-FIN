@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Tipos e schemas da tela de configuracoes — T-114.
+ * Tipos e schemas da tela de configuracoes (T-114).
  *
  * Mesmos vocabularios das rotas de `app/api`, redigitados aqui para o cliente
  * nao depender de modulo de servidor. O que a tela le da API e validado antes
@@ -129,7 +129,7 @@ export const ruleFormSchema = z
   });
 
 /**
- * Barreira estrutural contra backtracking catastrofico (ReDoS), best-effort —
+ * Barreira estrutural contra backtracking catastrofico (ReDoS), best-effort:
  * mesma logica da fronteira da API, redigitada para o cliente nao importar
  * modulo de servidor. Ver `app/api/rules/schemas.ts`.
  */

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { Archive } from 'lucide-react';
 import { Button, DateField, Input, Select } from '@/components/ui-kit';
 import type { AccountRecord, AccountFormData, AccountFormValues } from './schemas';
 import { cents, formatBRL, parseBRL } from '@/lib/money';
@@ -13,6 +14,8 @@ type AccountFormProps = {
   busy?: boolean;
   onCancel: () => void;
   onSubmit: (values: AccountFormData, id?: string) => void;
+  /** Só com `initial`: abre o diálogo de desativar (longe do lápis, com consequência). */
+  onDeactivate?: () => void;
 };
 
 function issueMap(error: { issues: { path: PropertyKey[]; message: string }[] }) {
@@ -42,6 +45,7 @@ export function AccountForm({
   busy = false,
   onCancel,
   onSubmit,
+  onDeactivate,
 }: AccountFormProps) {
   const [values, setValues] = useState<AccountFormValues>(() => initialValues(initial, today));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -123,6 +127,14 @@ export function AccountForm({
           {busy ? 'Salvando…' : initial ? 'Salvar alterações' : 'Criar conta'}
         </Button>
       </div>
+      {initial && onDeactivate ? (
+        <div className="border-t border-border pt-4">
+          <Button type="button" variant="ghost" className="w-full text-muted-foreground sm:w-auto" onClick={onDeactivate} disabled={busy}>
+            <Archive className="mr-2 h-4 w-4" aria-hidden="true" />
+            Desativar conta
+          </Button>
+        </div>
+      ) : null}
     </form>
   );
 }

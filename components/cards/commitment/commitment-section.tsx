@@ -3,7 +3,7 @@
 import { BarChart3, CreditCard } from 'lucide-react';
 import { toCompetence, type Competence } from '@/lib/date';
 import { futureCommitment, type CommitmentInput } from '@/lib/finance/commitment';
-import type { Cents } from '@/lib/money';
+import { cents, formatBRL, type Cents } from '@/lib/money';
 import { competenceMonth, competenceShort } from '@/components/cashflow/labels';
 import { BAR_X_CLASS, BAR_Y_CLASS, barScaleStyle } from '@/components/dashboard/bar-scale';
 import { Badge, EmptyState, Money } from '@/components/ui-kit';
@@ -37,13 +37,16 @@ function magnitude(value: Cents): number {
 function CommitmentChart({
   entries,
   maxMagnitude,
+  summary,
 }: {
   entries: ReturnType<typeof futureCommitment>['byCompetence'];
   maxMagnitude: number;
+  /** Uma narrativa só para o leitor de tela (as barras, uma a uma, virariam ruído). */
+  summary: string;
 }) {
   return (
-    <div className="overflow-x-auto pb-2" role="img" aria-label="Gráfico de comprometimento por competência">
-      <div className="flex min-w-[840px] items-end gap-2 px-1 pt-4 sm:min-w-0 sm:gap-3">
+    <div className="overflow-x-auto pb-2" role="img" aria-label={summary}>
+      <div className="flex min-w-[840px] items-end gap-2 px-1 pt-4 sm:min-w-0 sm:gap-3" aria-hidden="true">
         {entries.map((entry) => {
           const isDebt = entry.totalCents < 0;
           const height = isDebt && maxMagnitude > 0
@@ -57,7 +60,6 @@ function CommitmentChart({
                   <div
                     className={`${BAR_Y_CLASS} bg-primary`}
                     style={barScaleStyle(height, 'y')}
-                    aria-label={`${competenceLabel(entry.competence)}: comprometimento devedor`}
                   />
                 ) : null}
               </div>
@@ -178,6 +180,28 @@ function LimitUsage({
   );
 }
 
+/**
+ * A narrativa do gráfico em UMA frase (só apresentação de números do motor): janela,
+ * quantos meses devedores, o maior e quando termina. A tabela abaixo tem os valores exatos.
+ */
+function commitmentChartSummary(
+  entries: ReturnType<typeof futureCommitment>['byCompetence'],
+  lastCommittedCompetence: ReturnType<typeof futureCommitment>['lastCommittedCompetence'],
+): string {
+  if (entries.length === 0) return 'Comprometimento futuro: sem meses na janela.';
+  const first = entries[0]?.competence;
+  const last = entries[entries.length - 1]?.competence;
+  const debtors = entries.filter((entry) => entry.totalCents < 0);
+  const range = first && last ? `De ${competenceShort(first)} a ${competenceShort(last)}` : 'Na janela';
+  if (debtors.length === 0) return `${range}: nenhum mês devedor.`;
+  const peak = debtors.reduce((a, b) => (magnitude(b.totalCents) > magnitude(a.totalCents) ? b : a));
+  const monthWord = debtors.length === 1 ? '1 mês devedor' : `${String(debtors.length)} meses devedores`;
+  const peakText = `maior em ${competenceShort(peak.competence)} (${formatBRL(cents(-peak.totalCents))})`;
+  const endText =
+    lastCommittedCompetence !== null ? `; termina de pagar em ${competenceShort(lastCommittedCompetence)}` : '';
+  return `${range}: ${monthWord}, ${peakText}${endText}.`;
+}
+
 export function CommitmentSection({ cards, transactions, months, today }: CommitmentSectionProps) {
   const fromCompetence = toCompetence(today);
   const result = futureCommitment({
@@ -195,6 +219,7 @@ export function CommitmentSection({ cards, transactions, months, today }: Commit
     0,
   );
   const lastCommittedCompetence = result.lastCommittedCompetence;
+  const chartSummary = commitmentChartSummary(result.byCompetence, lastCommittedCompetence);
 
   return (
     <section aria-labelledby="commitment-heading" className="flex flex-col gap-5">
@@ -219,7 +244,7 @@ export function CommitmentSection({ cards, transactions, months, today }: Commit
         <EmptyState
           icon={BarChart3}
           title="Nenhum comprometimento futuro"
-          description="Não há mês devedor na janela de {months} meses. Estornos isolados não contam como comprometimento."
+          description={`Não há mês devedor na janela de ${String(months)} meses. Estornos isolados não contam como comprometimento.`}
           action={{ label: 'Ver lançamentos', href: '/lancamentos' }}
         />
       )}
@@ -232,7 +257,7 @@ export function CommitmentSection({ cards, transactions, months, today }: Commit
           </div>
           <Badge variant="neutral">{months} meses</Badge>
         </div>
-        <CommitmentChart entries={result.byCompetence} maxMagnitude={maxMagnitude} />
+        <CommitmentChart entries={result.byCompetence} maxMagnitude={maxMagnitude} summary={chartSummary} />
       </div>
 
       <div className="border border-border bg-card p-4 sm:p-5">

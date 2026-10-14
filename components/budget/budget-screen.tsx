@@ -13,9 +13,9 @@ import {
   EmptyState,
   Faixa,
   Input,
+  LoadingBlock,
   Money,
   PageHeader,
-  SkeletonCanhotos,
 } from '@/components/ui-kit';
 
 import { changedCount, monthTotals, saveHint, totalLine } from './totals';
@@ -276,9 +276,15 @@ export function BudgetScreen({ today }: { today: string }) {
           </div>
         ) : null}
 
-        {loading && data === null && loadError === null ? (
-          <SkeletonCanhotos srText="Carregando o orçamento…" count={3} className="mt-4" />
-        ) : null}
+        <LoadingBlock
+          loading={loading && data === null && loadError === null}
+          endText={loadError === null ? 'Orçamento carregado.' : null}
+          label="Carregando o orçamento…"
+          variant="barras"
+          count={4}
+          className="mt-4"
+          retry={() => setReloadKey((key) => key + 1)}
+        />
 
         {data !== null && data.categories.length === 0 ? (
           <EmptyState

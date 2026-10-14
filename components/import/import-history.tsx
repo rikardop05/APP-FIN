@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Undo2 } from 'lucide-react';
 
-import { Button, Faixa, SkeletonCanhotos, Selo, SeloLegend, type SeloTone } from '@/components/ui-kit';
+import { Button, Faixa, LoadingBlock, Selo, SeloLegend, type SeloTone } from '@/components/ui-kit';
 import { formatDateBR } from '@/lib/date';
 
 import { ImportHistoryEmptyState } from './import-history-empty-state';
@@ -197,13 +197,20 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
 
       <SeloLegend estados={['Pendente', 'Confirmado', 'Desfeito', 'Falhou']} />
 
-      {state.kind === 'loading' || state.kind === 'idle' ? (
-        <SkeletonCanhotos srText="Carregando histórico…" count={3} />
-      ) : null}
+      <LoadingBlock
+        loading={state.kind === 'loading' || state.kind === 'idle'}
+        endText={state.kind === 'ready' ? 'Histórico de importações carregado.' : null}
+        label="Carregando histórico…"
+        count={3}
+        retry={() => void refetch()}
+      />
 
       {state.kind === 'error' ? (
         <Faixa tone="danger" role="alert">
           <span>{state.message}</span>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Tentar de novo
+          </Button>
         </Faixa>
       ) : null}
 

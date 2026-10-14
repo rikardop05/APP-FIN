@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Checkbox, EmptyState, Input, Money, PageHeader, Select, SkeletonCanhotos } from '@/components/ui-kit';
+import { Button, Checkbox, EmptyState, Input, LoadingBlock, Money, PageHeader, Select } from '@/components/ui-kit';
 import {
   categoryChoices,
   confirmationBody,
@@ -104,12 +104,21 @@ export function ReviewScreen() {
         actions={<Link href="/lancamentos" className="text-sm font-medium text-primary underline-offset-4 hover:underline">Voltar aos lançamentos</Link>}
       />
 
-      {error ? <div role="alert" className="border border-destructive/50 bg-destructive-soft px-4 py-3 text-sm text-foreground">{error}</div> : null}
+      {/* Falha de CARGA fica no bloco de carregamento; falha de confirmação (com grupos à vista) fica aqui. */}
+      {error && groups !== null ? <div role="alert" className="border border-destructive/50 bg-destructive-soft px-4 py-3 text-sm text-foreground">{error}</div> : null}
       {notice ? <div role="status" className="flex items-center justify-between gap-3 border border-success/50 bg-success-soft px-4 py-3 text-sm text-foreground"><span>{notice}</span><Button variant="ghost" size="sm" onClick={() => setNotice(null)}>Fechar</Button></div> : null}
 
-      {groups === null ? (
-        error ? null : <SkeletonCanhotos srText="Carregando…" count={3} />
-      ) : pending.length === 0 ? (
+      <LoadingBlock
+        loading={groups === null && error === null}
+        failed={groups === null && error !== null}
+        failedText={error ?? undefined}
+        endText={groups !== null && error === null ? 'Revisão carregada.' : null}
+        label="Carregando a revisão…"
+        count={3}
+        retry={() => void load()}
+      />
+
+      {groups === null ? null : pending.length === 0 ? (
         <EmptyState
           title="Nada a revisar"
           description="Todos os gastos e receitas têm categoria. Pagamentos de fatura, transferências e previsões de despesa fixa não entram aqui."

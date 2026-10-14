@@ -15,7 +15,7 @@ import {
   Users,
   Workflow,
 } from 'lucide-react';
-import { Badge, Button, EmptyState, Faixa, PageHeader, SkeletonBarras } from '@/components/ui-kit';
+import { Badge, Button, EmptyState, Faixa, LoadingBlock, PageHeader } from '@/components/ui-kit';
 import { BackupSection } from './backup-section';
 import { CategoryForm } from './category-form';
 import { RuleForm, type CategoryOption } from './rule-form';
@@ -69,7 +69,7 @@ function errorMessage(error: unknown): string {
 
 /**
  * Categorias **folha** numa lista plana, para o seletor de regra. Raiz com
- * filhas e agrupamento e nao recebe lancamento — a regra aponta para a folha
+ * filhas e agrupamento e nao recebe lancamento: a regra aponta para a folha
  * (DATA-MODEL §2). Raiz sem filhas funciona como folha e entra normalmente.
  */
 function flattenCategories(nodes: CategoryNode[]): CategoryOption[] {
@@ -343,9 +343,17 @@ export function ConfigScreen() {
         </div>
       ) : null}
 
-      {loading ? (
-        <SkeletonBarras srText="Carregando configurações…" count={4} className="mt-4" />
-      ) : (
+      <LoadingBlock
+        loading={loading}
+        endText={error === null ? 'Configurações carregadas.' : null}
+        label="Carregando configurações…"
+        variant="barras"
+        count={4}
+        className="mt-4"
+        retry={() => void load()}
+      />
+
+      {loading ? null : (
         <div className="mt-6 flex flex-col gap-6">
           <nav aria-label="Seções da configuração">
             <ul className="flex flex-wrap gap-x-1 gap-y-1" role="tablist">
@@ -410,7 +418,7 @@ export function ConfigScreen() {
                             a folha). */}
                         <p className="mt-1 text-xs text-muted-foreground">
                           {root.children.length === 0
-                            ? 'Sem subcategorias — recebe lançamentos direto.'
+                            ? 'Sem subcategorias: recebe lançamentos direto.'
                             : subcategoriesText(root.children.length)}
                         </p>
                       </div>
