@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { cents } from '@/lib/money';
 import { Plus, Tags, Wand2 } from 'lucide-react';
-import { Button, EmptyState, PageHeader } from '@/components/ui-kit';
+import { Button, EmptyState, PageHeader, SeloLegend, ShortcutLegend, SkeletonCanhotos } from '@/components/ui-kit';
 import { TransactionFilters } from './transaction-filters';
 import { applyDelayMs, EMPTY_FILTERS, type TransactionFilterValues } from './filter-presentation';
 import {
@@ -115,6 +115,8 @@ export function LancamentosScreen({ today }: { today: string }) {
   // O estado vazio enganoso so nasce da FALHA DE CARGA, entao ela tem flag
   // propria: uma acao que falha mostra o alerta sem esconder a lista carregada.
   const [loadFailed, setLoadFailed] = useState(false);
+  /** O deep link `?aplicarRegras=1` so tenta abrir a prévia UMA vez (F5 nao reabre). */
+  const [autoApplyOpened, setAutoApplyOpened] = useState(false);
 
   const load = useCallback(async (nextFilters: TransactionFilterValues) => {
     setLoading(true);
@@ -199,8 +201,7 @@ export function LancamentosScreen({ today }: { today: string }) {
     }
   }
 
-  /** Recalcula a oferta para o trecho editado no dialogo. */
-  const previewOffer = useCallback(async (transactionIds: string[], pattern: string) => {
+  /** Recalcula a oferta para o trecho editado no dialogo. */  const previewOffer = useCallback(async (transactionIds: string[], pattern: string) => {
     const response = await fetch('/api/rules/offer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -355,16 +356,16 @@ export function LancamentosScreen({ today }: { today: string }) {
     }
   }
 
-  async function previewRules(ruleId: string | null): Promise<RuleApplicationPreview> {
+  const previewRules = useCallback(async (ruleId: string | null): Promise<RuleApplicationPreview> => {
     const response = await fetch('/api/rules/apply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dryRun: true, ruleId }),
     });
     return readJson(response, ruleApplicationPreviewSchema);
-  }
+  }, []);
 
-  async function openApplyAll() {
+  const openApplyAll = useCallback(async () => {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -375,7 +376,22 @@ export function LancamentosScreen({ today }: { today: string }) {
     } finally {
       setBusy(false);
     }
-  }
+  }, [previewRules]);
+
+  /**
+   * Deep link da aba Regras do Config (`/lancamentos?aplicarRegras=1`): depois da carga inicial
+   * bem-sucedida, abre a prévia de "Aplicar regras aos não categorizados" uma vez e consome o
+   * param — nada de o F5 reabrir o diálogo. Com erro de carga não dispara (o alerta pede
+   * "Tentar novamente", e a recarga não reabre).
+   */
+  useEffect(() => {
+    if (loading || autoApplyOpened) return;
+    setAutoApplyOpened(true);
+    if (loadFailed) return;
+    if (new URLSearchParams(window.location.search).get('aplicarRegras') !== '1') return;
+    window.history.replaceState(null, '', '/lancamentos');
+    void openApplyAll();
+  }, [loading, loadFailed, autoApplyOpened, openApplyAll]);
 
   async function applyRules(items: { transactionId: string; ruleId: string; categoryId: string }[]) {
     setBusy(true);
@@ -437,7 +453,7 @@ export function LancamentosScreen({ today }: { today: string }) {
         </div>
       ) : null}
 
-      {contentState === 'loading' ? <div className=" border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">Carregando lançamentos…</div> : contentState === 'empty' ? (
+      {contentState === 'loading' ? <SkeletonCanhotos srText="Carregando lançamentos…" count={4} /> : contentState === 'empty' ? (
         <EmptyState
           title={hasFilters(appliedFilters) ? 'Nenhum lançamento encontrado' : 'Nenhum lançamento ainda'}
           description={hasFilters(appliedFilters) ? 'Ajuste os filtros ou limpe a busca para ver outros lançamentos.' : 'Registre um lançamento manual ou importe uma fatura ou extrato para começar.'}
@@ -449,6 +465,27 @@ export function LancamentosScreen({ today }: { today: string }) {
           <TransactionList rows={rows} options={options} selectedIds={selectedIds} onToggle={toggleSelection} onToggleAll={toggleAll} onEdit={setEditingId} onRule={openRule} onDelete={(id) => setDialog({ kind: 'delete', transactionId: id })} editingId={editingId} onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} />
         </div>
       ) : null}
+
+      {/* Legenda e atalhos (impeccable clarify): o extenso lidera; a letra vira apoio. */}
+      <div className="flex items-start gap-x-6 gap-y-1 border-t border-border pt-1">
+        <SeloLegend estados={['Previsto', 'Não categorizado']} />
+        <ShortcutLegend
+          atalhos={[
+            {
+              keys: (
+                <kbd className="num border border-border bg-card px-1">J</kbd>
+              ),
+              label: 'próxima linha',
+            },
+            {
+              keys: (
+                <kbd className="num border border-border bg-card px-1">K</kbd>
+              ),
+              label: 'linha anterior',
+            },
+          ]}
+        />
+      </div>
 
       {dialog?.kind === 'manual' ? <ManualTransactionDialog today={today} options={options} busy={busy} initial={dialog.initial} onClose={() => setDialog(null)} onSubmit={createManual} /> : null}
       {dialog?.kind === 'reconcile' ? (

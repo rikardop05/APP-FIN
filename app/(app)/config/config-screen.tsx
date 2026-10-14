@@ -1,18 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { z } from 'zod';
 import {
   ChevronDown,
   ChevronUp,
   Pencil,
   Plus,
+  Settings2,
   Tags,
   Trash2,
   Users,
   Workflow,
 } from 'lucide-react';
-import { Badge, Button, EmptyState, PageHeader } from '@/components/ui-kit';
+import { Badge, Button, EmptyState, Faixa, PageHeader, SkeletonBarras } from '@/components/ui-kit';
 import { BackupSection } from './backup-section';
 import { CategoryForm } from './category-form';
 import { RuleForm, type CategoryOption } from './rule-form';
@@ -36,6 +39,13 @@ type DialogState =
   | { kind: 'leaf'; parent: CategoryNode }
   | { kind: 'editCategory'; record: CategoryNode; parent: CategoryNode | null }
   | { kind: 'rule'; record?: RuleRecord };
+
+/** Aba ativa, vinda da URL (`/config?aba=regras`). Valor desconhecido cai em `categorias`. */
+type ConfigTab = (typeof CONFIG_SECTIONS)[number]['id'];
+
+function resolveTab(raw: string | null): ConfigTab {
+  return CONFIG_SECTIONS.some((section) => section.id === raw) ? (raw as ConfigTab) : 'categorias';
+}
 
 async function readResponse<T>(response: Response, schema: z.ZodType<T>): Promise<T> {
   const body: unknown = await response.json().catch(() => null);
@@ -85,6 +95,7 @@ export function ConfigScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const activeTab = resolveTab(useSearchParams().get('aba'));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -333,28 +344,38 @@ export function ConfigScreen() {
       ) : null}
 
       {loading ? (
-        <div className="mt-4 border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">
-          Carregando configurações…
-        </div>
+        <SkeletonBarras srText="Carregando configurações…" count={4} className="mt-4" />
       ) : (
-        <div className="mt-6 flex flex-col gap-10">
+        <div className="mt-6 flex flex-col gap-6">
           <nav aria-label="Seções da configuração">
-            <ul className="flex flex-wrap gap-x-1 gap-y-1">
-              {CONFIG_SECTIONS.map((section) => (
-                <li key={section.id}>
-                  <a
-                    href={`#${section.id}`}
-                    className="inline-flex min-h-11 items-center border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
-                  >
-                    {section.label}
-                  </a>
-                </li>
-              ))}
+            <ul className="flex flex-wrap gap-x-1 gap-y-1" role="tablist">
+              {CONFIG_SECTIONS.map((section) => {
+                const selected = activeTab === section.id;
+                return (
+                  <li key={section.id}>
+                    <Link
+                      href={`/config?aba=${section.id}`}
+                      role="tab"
+                      aria-selected={selected}
+                      aria-controls={`panel-${section.id}`}
+                      id={`tab-${section.id}`}
+                      className={
+                        selected
+                          ? 'inline-flex min-h-11 items-center bg-primary px-3 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9'
+                          : 'inline-flex min-h-11 items-center border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9'
+                      }
+                    >
+                      {section.label}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </nav>
 
           {/* Categorias */}
-          <section id="categorias" aria-labelledby="categories-heading" className="flex scroll-mt-4 flex-col gap-3">
+          {activeTab === 'categorias' ? (
+          <section id="panel-categorias" role="tabpanel" aria-labelledby="categories-heading" className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 id="categories-heading" className="text-lg font-semibold tracking-tight">
@@ -463,9 +484,23 @@ export function ConfigScreen() {
               </ul>
             )}
           </section>
+          ) : null}
 
           {/* Regras */}
-          <section id="regras" aria-labelledby="rules-heading" className="flex scroll-mt-4 flex-col gap-3">
+          {activeTab === 'regras' ? (
+          <section id="panel-regras" role="tabpanel" aria-labelledby="rules-heading" className="flex flex-col gap-3">
+            <Faixa tone="info">
+              <p>
+                As regras valem para os lançamentos novos e não retroagem: um contador em
+                &ldquo;0 usos&rdquo; quer dizer que nenhum lançamento foi categorizado por
+                essa regra ainda. Para aplicar as regras aos lançamentos que já estão sem
+                categoria, use o fluxo da tela de Lançamentos:{' '}
+                <Link href="/lancamentos?aplicarRegras=1" className="font-medium underline underline-offset-2">
+                  Aplicar regras aos não categorizados
+                </Link>
+                .
+              </p>
+            </Faixa>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 id="rules-heading" className="text-lg font-semibold tracking-tight">
@@ -574,9 +609,11 @@ export function ConfigScreen() {
               </ol>
             )}
           </section>
+          ) : null}
 
           {/* Membros */}
-          <section id="membros" aria-labelledby="members-heading" className="flex scroll-mt-4 flex-col gap-3">
+          {activeTab === 'membros' ? (
+          <section id="panel-membros" role="tabpanel" aria-labelledby="members-heading" className="flex flex-col gap-3">
             <div>
               <h2 id="members-heading" className="text-lg font-semibold tracking-tight">
                 Membros
@@ -586,9 +623,12 @@ export function ConfigScreen() {
               </p>
             </div>
             {members.length === 0 ? (
-              <p className="border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                Nenhum membro cadastrado.
-              </p>
+              <EmptyState
+                icon={Users}
+                title="Nenhum membro cadastrado"
+                description="Os membros da casa aparecem aqui e podem ser usados como responsável de regra e de lançamento."
+                action={{ label: 'Recarregar', onClick: () => void load() }}
+              />
             ) : (
               <ul className="flex flex-wrap gap-2">
                 {members.map((member) => (
@@ -603,9 +643,11 @@ export function ConfigScreen() {
               </ul>
             )}
           </section>
+          ) : null}
 
           {/* Premissas globais */}
-          <section id="premissas" aria-labelledby="settings-heading" className="flex scroll-mt-4 flex-col gap-3">
+          {activeTab === 'premissas' ? (
+          <section id="panel-premissas" role="tabpanel" aria-labelledby="settings-heading" className="flex flex-col gap-3">
             <div>
               <h2 id="settings-heading" className="text-lg font-semibold tracking-tight">
                 Premissas globais
@@ -615,17 +657,21 @@ export function ConfigScreen() {
               </p>
             </div>
             {settings === null ? (
-              <p className="border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                Premissas indisponíveis.
-              </p>
+              <EmptyState
+                icon={Settings2}
+                title="Premissas indisponíveis"
+                description="Não foi possível carregar os valores que orçamento, fluxo e metas usam como padrão."
+                action={{ label: 'Tentar novamente', onClick: () => void load() }}
+              />
             ) : (
               <div className="border border-border bg-card p-4">
                 <SettingsForm initial={settings} busy={saving} onSubmit={(values) => void saveSettings(values)} />
               </div>
             )}
           </section>
+          ) : null}
 
-          <BackupSection />
+          {activeTab === 'backup' ? <BackupSection /> : null}
         </div>
       )}
 

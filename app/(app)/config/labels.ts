@@ -19,7 +19,7 @@ export function subcategoriesText(count: number): string {
   return `${String(count)} ${count === 1 ? 'subcategoria' : 'subcategorias'}`;
 }
 
-/** As seções da tela, na ordem, com a âncora de cada uma (o menu do topo e os `id` usam esta lista). */
+/** As abas da tela, na ordem (`/config?aba=<id>`; o painel de cada aba usa `panel-<id>`). */
 export const CONFIG_SECTIONS = [
   { id: 'categorias', label: 'Categorias' },
   { id: 'regras', label: 'Regras' },

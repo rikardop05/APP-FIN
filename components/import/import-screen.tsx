@@ -9,7 +9,7 @@ import {
 } from 'react';
 import Link from 'next/link';
 import { detectSource, type DetectedSource } from '@/lib/import/detect';
-import { Button, Faixa, Input, MonthPicker, PageHeader, Picote, Select } from '@/components/ui-kit';
+import { Button, Faixa, Input, MonthPicker, PageHeader, Picote, Select, SkeletonBarras } from '@/components/ui-kit';
 import { DropZone } from './drop-zone';
 import { successMessage } from './review-model';
 import {
@@ -540,7 +540,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
                   {busy ? 'Processando…' : 'Pré-visualizar PDF'}
                 </Button>
               </div>
-              {loadingSources ? <p className="text-sm text-muted-foreground">Carregando origens…</p> : null}
+              {loadingSources ? <SkeletonBarras srText="Carregando origens…" count={2} /> : null}
             </form>
           </section>
 

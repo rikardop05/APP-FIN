@@ -256,21 +256,22 @@ export function TransactionList({
         const shared = commonMarks(group.rows);
         return (
         <div key={group.competence} className="flex flex-col gap-1.5">
-          <h3 className="flex flex-col gap-0.5 border-b-2 border-foreground pb-1 text-sm font-semibold sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-            <span className="flex flex-wrap items-center gap-2">
-              <span className="first-letter:uppercase">{competenceLong(group.competence)}</span>
+          {/* h2 = só o MÊS (impeccable clarify): nome acessível curto, sem selos dentro do heading. */}
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b-2 border-foreground pb-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-semibold first-letter:uppercase">{competenceLong(group.competence)}</h2>
               {shared.map(({ label, count }) => (
                 <span key={label} className="inline-flex items-center gap-1">
                   <Selo tone={label === 'Previsto' ? 'neutral' : 'attention'} label={label} />
                   <span className="text-xs font-normal text-muted-foreground">{count} de {group.rows.length}</span>
                 </span>
               ))}
-            </span>
+            </div>
             <span className="flex items-baseline gap-2 font-normal text-muted-foreground">
               {group.rows.length} {group.rows.length === 1 ? 'lançamento' : 'lançamentos'} · receitas − despesas{' '}
               <Money value={cents(group.totalCents)} className="font-semibold text-foreground" />
             </span>
-          </h3>
+          </div>
           <ul className="flex flex-col gap-1.5">
             {group.rows.map((row) => {
               const title = rowTitle(row);

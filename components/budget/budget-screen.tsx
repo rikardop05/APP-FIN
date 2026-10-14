@@ -15,6 +15,7 @@ import {
   Input,
   Money,
   PageHeader,
+  SkeletonCanhotos,
 } from '@/components/ui-kit';
 
 import { changedCount, monthTotals, saveHint, totalLine } from './totals';
@@ -276,9 +277,7 @@ export function BudgetScreen({ today }: { today: string }) {
         ) : null}
 
         {loading && data === null && loadError === null ? (
-          <p className="text-sm text-muted-foreground" role="status">
-            Carregando o orçamento…
-          </p>
+          <SkeletonCanhotos srText="Carregando o orçamento…" count={3} className="mt-4" />
         ) : null}
 
         {data !== null && data.categories.length === 0 ? (

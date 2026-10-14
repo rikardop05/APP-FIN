@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Undo2 } from 'lucide-react';
 
-import { Button, Faixa, Selo, type SeloTone } from '@/components/ui-kit';
+import { Button, Faixa, SkeletonCanhotos, Selo, SeloLegend, type SeloTone } from '@/components/ui-kit';
 import { formatDateBR } from '@/lib/date';
 
 import { ImportHistoryEmptyState } from './import-history-empty-state';
@@ -195,8 +195,10 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
         </p>
       </div>
 
+      <SeloLegend estados={['Pendente', 'Confirmado', 'Desfeito', 'Falhou']} />
+
       {state.kind === 'loading' || state.kind === 'idle' ? (
-        <p className="text-sm text-muted-foreground">Carregando histórico…</p>
+        <SkeletonCanhotos srText="Carregando histórico…" count={3} />
       ) : null}
 
       {state.kind === 'error' ? (

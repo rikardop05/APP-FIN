@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Checkbox, EmptyState, Input, Money, PageHeader, Select } from '@/components/ui-kit';
+import { Button, Checkbox, EmptyState, Input, Money, PageHeader, Select, SkeletonCanhotos } from '@/components/ui-kit';
 import {
   categoryChoices,
   confirmationBody,
@@ -108,7 +108,7 @@ export function ReviewScreen() {
       {notice ? <div role="status" className="flex items-center justify-between gap-3 border border-success/50 bg-success-soft px-4 py-3 text-sm text-foreground"><span>{notice}</span><Button variant="ghost" size="sm" onClick={() => setNotice(null)}>Fechar</Button></div> : null}
 
       {groups === null ? (
-        error ? null : <div className="border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">Carregando…</div>
+        error ? null : <SkeletonCanhotos srText="Carregando…" count={3} />
       ) : pending.length === 0 ? (
         <EmptyState
           title="Nada a revisar"

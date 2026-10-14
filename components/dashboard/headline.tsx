@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { Money, Picote, Selo } from '@/components/ui-kit';
+import { Faixa, Money, Picote, Selo } from '@/components/ui-kit';
 import type { Competence } from '@/lib/date';
 import type { Cents } from '@/lib/money';
 
@@ -39,10 +39,12 @@ type HeadlineProps = {
 };
 
 /**
- * O primeiro olhar do Painel: começa pelo VEREDITO como frase (o que acontece com o saldo nos próximos
- * 12 meses), e logo abaixo os dois números do mês corrente, a sobra com a base visível e os aportes
- * lançados contra o planejado. Nada de faixa de indicadores nem de cartões lado a lado: um bloco só,
- * dividido por um picote. O comprometido fica no carnê logo abaixo, e as pendências são só a contagem
+ * O primeiro olhar do Painel (impeccable distill, decisão do Ricardo, 2026-10-14): o NÚMERO CALMO
+ * lidera — a Sobra em Display (36px) na abertura do bloco, no celular também —, e o VEREDITO vem
+ * depois como Faixa compacta (a manchete de alerta em âmbar não ocupa mais a dobra). Quando aparece
+ * o veredito dividido (as duas leituras divergem), a Faixa de atenção leva o selo W ("Depende das
+ * faturas") e o link "Já paguei: marcar em Cartões". No primeiro viewport lê-se o número, não o
+ * alerta inteiro. O comprometido fica no carnê logo abaixo, e as pendências são só a contagem
  * com link.
  */
 export function Headline({
@@ -82,76 +84,83 @@ export function Headline({
 
   return (
     <div className="flex flex-col gap-3">
-      <section aria-labelledby="dashboard-verdict-heading" className="flex flex-col gap-4 border border-border bg-card p-4 sm:p-5">
-        <div className="flex flex-col items-start gap-2">
-          {divergence !== null ? (
-            <Selo tone="attention" label={DIVERGENCE_SELO_LABEL} />
-          ) : verdict.tone === 'neutral' ? null : (
-            <Selo
-              tone={verdict.tone === 'danger' ? 'danger' : 'ok'}
-              label={verdict.tone === 'danger' ? 'Saldo negativo' : 'Sem saldo negativo'}
-            />
-          )}
-          <h2 id="dashboard-verdict-heading" className="max-w-3xl text-2xl font-semibold text-foreground">
-            {divergence === null ? verdict.text : `${verdictDivergenceText(divergence)}.`}
+      <section aria-labelledby="dashboard-sobra-heading" className="flex flex-col gap-4 border border-border bg-card p-4 sm:p-5">
+        <div className="flex flex-col gap-1">
+          <h2 id="dashboard-sobra-heading" className="text-sm font-medium text-muted-foreground">
+            {surplusLabel(competence, surplusCents)}
           </h2>
-          {divergence !== null ? (
-            <p className="max-w-3xl text-sm text-muted-foreground">
-              Sem contar as faturas anteriores, o saldo não fica negativo.{' '}
-              <Link href="/cartoes" className="text-primary underline underline-offset-2">
-                {DIVERGENCE_LINK_LABEL}
-              </Link>
-            </p>
-          ) : null}
-          {overdueNote ? (
-            <p className="max-w-3xl text-sm text-muted-foreground">
-              {overdueNote}.{' '}
-              <a href="#comprometido" className="text-primary underline underline-offset-2">
-                Ver no comprometido
-              </a>
-            </p>
-          ) : null}
-          <Link href="/fluxo" className="min-h-11 text-sm text-primary underline underline-offset-2 sm:min-h-0">
-            Ver o fluxo e simular
-          </Link>
+          {/* Display (36px): o número-manchete do Painel (DESIGN.md). Nunca a mão: vai pelo Money. */}
+          <p className="text-4xl font-semibold leading-10 text-foreground">
+            <Money value={surplusCents} />
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Receita <Money value={incomeCents} sign="never" /> menos despesa{' '}
+            <Money value={expenseCents} sign="never" />
+          </p>
+          <p className="text-xs text-muted-foreground">{surplusBaseLine(competence)}</p>
         </div>
 
         <Picote />
 
-        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1">
-            <dt className="text-sm text-muted-foreground">{surplusLabel(competence, surplusCents)}</dt>
-            <dd className="text-3xl font-semibold text-foreground">
-              <Money value={surplusCents} />
-            </dd>
-            <dd className="text-sm text-muted-foreground">
-              Receita <Money value={incomeCents} sign="never" /> menos despesa{' '}
-              <Money value={expenseCents} sign="never" />
-            </dd>
-            <dd className="text-xs text-muted-foreground">{surplusBaseLine(competence)}</dd>
-          </div>
+        <div className="flex flex-col gap-1">
+          <p className="text-sm text-muted-foreground">{contributionsTitle(competence)}</p>
+          <p className="text-xl font-semibold text-foreground">
+            <Money value={contributionsCents} sign="never" />
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {plannedContributionCents !== null && plannedContributionCents > 0 ? (
+              <>
+                lançados, de <Money value={plannedContributionCents} sign="never" /> planejados
+              </>
+            ) : (
+              <>
+                Sem aporte planejado.{' '}
+                <Link href="/investimentos" className="underline underline-offset-2">
+                  Definir no plano
+                </Link>
+              </>
+            )}
+          </p>
+        </div>
 
-          <div className="flex flex-col gap-1">
-            <dt className="text-sm text-muted-foreground">{contributionsTitle(competence)}</dt>
-            <dd className="text-3xl font-semibold text-foreground">
-              <Money value={contributionsCents} sign="never" />
-            </dd>
-            <dd className="text-sm text-muted-foreground">
-              {plannedContributionCents !== null && plannedContributionCents > 0 ? (
-                <>
-                  lançados, de <Money value={plannedContributionCents} sign="never" /> planejados
-                </>
-              ) : (
-                <>
-                  Sem aporte planejado.{' '}
-                  <Link href="/investimentos" className="underline underline-offset-2">
-                    Definir no plano
-                  </Link>
-                </>
-              )}
-            </dd>
-          </div>
-        </dl>
+        {divergence !== null ? (
+          <Faixa tone="attention">
+            <p className="flex flex-wrap items-center gap-2">
+              <Selo tone="attention" label={DIVERGENCE_SELO_LABEL} />
+              <span className="font-medium">{verdictDivergenceText(divergence)}.</span>
+            </p>
+            <p>
+              <Link href="/cartoes" className="font-medium underline underline-offset-2">
+                {DIVERGENCE_LINK_LABEL}
+              </Link>{' '}
+              ·{' '}
+              <Link href="/fluxo" className="underline underline-offset-2">
+                Ver o fluxo e simular
+              </Link>
+            </p>
+          </Faixa>
+        ) : (
+          <Faixa
+            tone={verdict.tone === 'ok' ? 'ok' : verdict.tone === 'danger' ? 'danger' : 'info'}
+          >
+            <p>{verdict.text}</p>
+            {verdict.tone !== 'neutral' && overdueNote ? (
+              <p>
+                {overdueNote}.{' '}
+                <a href="#comprometido" className="font-medium underline underline-offset-2">
+                  Ver no comprometido
+                </a>
+              </p>
+            ) : null}
+            {verdict.tone !== 'neutral' ? (
+              <p>
+                <Link href="/fluxo" className="underline underline-offset-2">
+                  Ver o fluxo e simular
+                </Link>
+              </p>
+            ) : null}
+          </Faixa>
+        )}
       </section>
 
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" aria-label="Pendências">

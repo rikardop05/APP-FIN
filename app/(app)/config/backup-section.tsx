@@ -23,6 +23,8 @@ type Pending = { fileName: string; payload: unknown; check: DryRunResponse };
  * Backup (T-402): baixar o household inteiro (JSON) ou só os lançamentos (CSV), e restaurar
  * um backup. Restaurar primeiro VALIDA (`dryRun=1`) e mostra o que o arquivo tem e o que vai
  * acontecer; só grava se a pessoa confirmar, e a API recusa (409) household com dado.
+ *
+ * A seção é o painel da aba Backup (`/config?aba=backup`).
  */
 export function BackupSection() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -86,7 +88,7 @@ export function BackupSection() {
   const refusal = pending === null ? null : refusalText(pending.check.targetHasData);
 
   return (
-    <section id="backup" aria-labelledby="backup-heading" className="flex scroll-mt-4 flex-col gap-3">
+    <section id="panel-backup" role="tabpanel" aria-labelledby="backup-heading" className="flex scroll-mt-4 flex-col gap-3">
       <div>
         <h2 id="backup-heading" className="text-lg font-semibold tracking-tight">
           Backup

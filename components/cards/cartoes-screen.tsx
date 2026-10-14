@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { CreditCard, Landmark, Pencil, Plus, Trash2 } from 'lucide-react';
 import { parseBRL } from '@/lib/money';
-import { Badge, Button, DateText, EmptyState, Money, PageHeader } from '@/components/ui-kit';
+import { Badge, Button, DateText, EmptyState, Money, PageHeader, SkeletonCanhotos } from '@/components/ui-kit';
 import { AccountForm } from './account-form';
 import { CardForm } from './card-form';
 import {
@@ -222,9 +222,7 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
       ) : null}
 
       {loading ? (
-        <div className="border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">
-          Carregando contas e cartões…
-        </div>
+        <SkeletonCanhotos srText="Carregando contas e cartões…" count={4} />
       ) : (
         <div className="flex flex-col gap-8">
           <section aria-labelledby="accounts-heading" className="flex flex-col gap-3">

@@ -32,9 +32,11 @@ describe('Orçamento', () => {
 
 describe('Config', () => {
   const screen = read('app/(app)/config/config-screen.tsx');
-  it('cada seção tem âncora e a lixeira só fica vermelha no hover e no foco', () => {
-    for (const id of ['categorias', 'regras', 'membros', 'premissas']) expect(screen).toContain(`id="${id}"`);
-    expect(read('app/(app)/config/backup-section.tsx')).toContain('id="backup"');
+  it('cada seção tem painel com âncora (abas) e a lixeira só fica vermelha no hover e no foco', () => {
+    for (const id of ['panel-categorias', 'panel-regras', 'panel-membros', 'panel-premissas']) {
+      expect(screen).toContain(`id="${id}"`);
+    }
+    expect(read('app/(app)/config/backup-section.tsx')).toContain('id="panel-backup"');
     expect(screen).not.toContain('(s)');
     expect(screen).not.toContain('<Trash2 className="h-4 w-4 text-destructive"');
     expect(screen).toContain('hover:text-destructive focus-visible:text-destructive');

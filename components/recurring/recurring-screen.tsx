@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, Pencil, Plus, Trash2, Wallet } from 'lucide-react';
 
-import { Button, DateField, Input, Money, Select } from '@/components/ui-kit';
+import { Button, DateField, EmptyState, Input, Money, Select } from '@/components/ui-kit';
 import { type Frequency, type IncomeKind } from '@/lib/db';
 import { formatDateBR, toCompetence } from '@/lib/date';
 import { expandRecurrence, type PlannedOccurrence } from '@/lib/finance/recurrence';
@@ -1016,9 +1016,18 @@ export function RecurringScreen({
           </Button>
         </div>
         {expenseList.length === 0 ? (
-          <p className=" border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
-            Nenhuma despesa fixa cadastrada.
-          </p>
+          <EmptyState
+            icon={CalendarClock}
+            title="Nenhuma despesa fixa cadastrada"
+            description="Cadastre aluguel, assinaturas e contas que se repetem: as ocorrências previstas entram no fluxo de caixa."
+            action={{
+              label: 'Cadastrar a primeira despesa fixa',
+              onClick: () => {
+                setCreatingExpense(true);
+                setError(null);
+              },
+            }}
+          />
         ) : (
           <ul className="flex flex-col gap-3">
             {expenseList.map((expense) => (
@@ -1099,9 +1108,18 @@ export function RecurringScreen({
           </Button>
         </div>
         {incomeList.length === 0 ? (
-          <p className=" border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
-            Nenhuma receita cadastrada.
-          </p>
+          <EmptyState
+            icon={Wallet}
+            title="Nenhuma receita cadastrada"
+            description="Cadastre salário e outras entradas que se repetem: as ocorrências previstas entram no fluxo de caixa."
+            action={{
+              label: 'Cadastrar a primeira receita',
+              onClick: () => {
+                setCreatingIncome(true);
+                setError(null);
+              },
+            }}
+          />
         ) : (
           <ul className="flex flex-col gap-3">
             {incomeList.map((income) => (

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PiggyBank, Pencil, Plus, Target, Trash2 } from 'lucide-react';
 
-import { Badge, Button, Canhoto, DateText, EmptyState, Money, PageHeader, Parcela } from '@/components/ui-kit';
+import { Badge, Button, Canhoto, DateText, EmptyState, Money, PageHeader, Parcela, SkeletonCanhotos } from '@/components/ui-kit';
 import { competenceShort } from '@/components/cashflow/labels';
 import { formatBasisPoints } from '@/components/ui-kit/format-bp';
 import { basisPoints } from '@/lib/money';
@@ -124,7 +124,7 @@ function GoalCard({ goal, onEdit, onDelete }: { goal: GoalView; onEdit: () => vo
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="break-words font-semibold">{goal.name}</h3>
+            <h2 className="break-words font-semibold">{goal.name}</h2>
             {goal.isEmergencyFund ? <Badge variant="neutral">Reserva</Badge> : null}
             {goal.status !== 'active' ? <Badge variant={goal.status === 'achieved' ? 'success' : 'warning'}>{statusLabel[goal.status]}</Badge> : null}
           </div>
@@ -264,7 +264,7 @@ export function GoalsScreen() {
       {error ? <p className="mb-4 border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{error}</p> : null}
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Carregando metas…</p>
+        <SkeletonCanhotos srText="Carregando metas…" count={3} />
       ) : data === null ? null : (
         <div className="flex flex-col gap-6">
           {data.emergency.exists ? null : <EmergencySuggestion data={data.emergency} onCreate={() => setDialog({ emergencyDraft: true })} />}

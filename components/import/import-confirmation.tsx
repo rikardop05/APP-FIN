@@ -5,7 +5,7 @@ import { Check } from 'lucide-react';
 import { z } from 'zod';
 import { formatDateBR } from '@/lib/date';
 import { cn } from '@/lib/utils';
-import { dataTalao } from '@/components/ui-kit';
+import { dataTalao, SeloLegend, ShortcutLegend } from '@/components/ui-kit';
 import { formatBRL, parseBRL } from '@/lib/money';
 import type { Cents } from '@/lib/money';
 import type { RecalculateBody } from '@/app/api/import/recalculate/schema';
@@ -1021,6 +1021,17 @@ export function ImportConfirmation({
               );
             })}
           </ul>
+          </div>
+
+          {/* Legenda e atalhos (impeccable clarify): o extenso lidera; a letra vira apoio. */}
+          <div className="flex items-start gap-x-6 gap-y-1 border-t border-border pt-1">
+            <SeloLegend estados={['Incompleta', 'Baixa confiança', 'Duplicada', 'Pagamento', 'Informativa', 'Não categorizado']} />
+            <ShortcutLegend
+              atalhos={[
+                { keys: <kbd className="num border border-border bg-card px-1">J</kbd>, label: 'próxima linha sinalizada' },
+                { keys: <kbd className="num border border-border bg-card px-1">K</kbd>, label: 'linha sinalizada anterior' },
+              ]}
+            />
           </div>
         </div>
 
