@@ -82,7 +82,8 @@ export function CommittedCard({
       ) : (
         <>
           <div className="flex flex-col gap-1">
-            <p className="text-3xl font-semibold text-foreground">
+            {/* Headline (28px, 600), não Display: peso de manchete é SÓ da Sobra (distill, crítica 6.1). */}
+            <p className="text-[1.75rem] font-semibold leading-8 text-foreground">
               <Money value={commitmentTotal(totalCents)} sign="never" />
             </p>
             {endLine ? <p className="text-sm text-muted-foreground">{endLine}</p> : null}

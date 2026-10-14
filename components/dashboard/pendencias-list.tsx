@@ -148,7 +148,13 @@ export function PendenciasList({
               </Badge>
             </div>
             <p className="text-sm text-muted-foreground">
-              Lançamentos do mês sem categoria. Vá em Lançamentos e aplique uma regra ou crie uma.
+              Lançamentos do mês sem categoria.{' '}
+              <Link
+                href="/lancamentos?semCategoria=1"
+                className="font-medium text-primary underline underline-offset-2"
+              >
+                Abrir só os sem categoria em Lançamentos →
+              </Link>
             </p>
             <ul className="flex flex-col divide-y divide-border border-y border-border">
               {uncategorizedItems.map((item) => (
@@ -168,7 +174,7 @@ export function PendenciasList({
             </ul>
             {uncategorizedCount > uncategorizedItems.length ? (
               <Link
-                href="/lancamentos"
+                href="/lancamentos?semCategoria=1"
                 className="min-h-11 text-sm text-primary underline underline-offset-2 sm:min-h-0"
               >
                 Ver mais {uncategorizedCount - uncategorizedItems.length}{' '}

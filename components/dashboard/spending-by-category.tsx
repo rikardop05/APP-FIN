@@ -81,7 +81,7 @@ export function SpendingByCategory({ items: unsortedItems, competence }: Spendin
           </p>
         </div>
         <Badge>
-          {items.length} {items.length === 1 ? 'categoria' : 'categorias'}
+          {items.length} {items.length === 1 ? 'categoria' : 'categorias'} com gasto no mês
         </Badge>
       </div>
 

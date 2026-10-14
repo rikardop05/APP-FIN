@@ -25,8 +25,9 @@ export function paidButtonLabel(current: StatementStatus): string {
 }
 
 /** Nome acessível do botão: diz qual fatura (a competência já vem formatada pelo chamador). */
-export function paidButtonAriaLabel(current: StatementStatus, periodLabel: string): string {
-  return `${paidButtonLabel(current)}: fatura de ${periodLabel}`;
+export function paidButtonAriaLabel(current: StatementStatus, periodLabel: string, cardName?: string): string {
+  const base = `${paidButtonLabel(current)}: fatura de ${periodLabel}`;
+  return cardName === undefined || cardName === '' ? base : `${base} (${cardName})`;
 }
 
 /** Feedback de sucesso. */

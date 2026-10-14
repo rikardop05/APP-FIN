@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { cents } from '@/lib/money';
 import { Plus, Tags, Wand2 } from 'lucide-react';
@@ -96,6 +96,12 @@ function hasFilters(filters: TransactionFilterValues): boolean {
   return Object.entries(filters).some(([key, value]) => key === 'uncategorized' ? value === true : value !== '');
 }
 
+/** Deep link do Painel: "N sem categoria" abre `/lancamentos?semCategoria=1` já filtrado e com a caixa de filtros à vista. */
+function deepLinkSemCategoria(): boolean {
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get('semCategoria') === '1';
+}
+
 export function LancamentosScreen({ today }: { today: string }) {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
@@ -137,6 +143,18 @@ export function LancamentosScreen({ today }: { today: string }) {
   }, []);
 
   useEffect(() => { void load(appliedFilters); }, [appliedFilters, load]);
+
+  // Deep link do Painel ("N sem categoria" → /lancamentos?semCategoria=1): aplica o filtro e abre a
+  // caixa APÓS a montagem (nunca no render inicial, que o servidor monta sem window — hidratação).
+  const deepLinkApplied = useRef(false);
+  useEffect(() => {
+    if (deepLinkApplied.current) return;
+    deepLinkApplied.current = true;
+    if (!deepLinkSemCategoria()) return;
+    setFilters({ ...EMPTY_FILTERS, uncategorized: true });
+    setAppliedFilters({ ...EMPTY_FILTERS, uncategorized: true });
+    setFiltersOpen(true);
+  }, []);
 
   // Filtros aplicam sozinhos: campos discretos na hora, texto com atraso curto (sem botao Filtrar).
   useEffect(() => {
@@ -416,6 +434,10 @@ export function LancamentosScreen({ today }: { today: string }) {
   function clearFilters() {
     setFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
+    // A URL acompanha o estado: o deep link ?semCategoria=1 morre ao limpar (F5 não traz de volta).
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('semCategoria') === '1') {
+      window.history.replaceState(null, '', '/lancamentos');
+    }
   }
 
   return (

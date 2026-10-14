@@ -116,14 +116,41 @@ export function groupByCompetence<T extends { competence: string; amountCents: n
   return groups;
 }
 
-export type RowMarkLabel = 'Previsto' | 'Não categorizado';
+export type RowMarkLabel = 'Previsto' | 'Não categorizado' | 'Incompleta';
+
+/**
+ * A descrição da linha está INCOMPLETA: vazia ou o literal "NULL" que o banco imprime na fatura
+ * (crítica 6.5). O estado entra como selo de atenção com carimbo ("Incompleta", letra I) e CTA de
+ * editar direto no canhoto, em vez de um texto que parece agulha.
+ */
+export function isIncompleteDescription(description: string): boolean {
+  const trimmed = description.trim();
+  return trimmed === '' || trimmed.toLowerCase() === 'null';
+}
+
+/**
+ * A descrição ainda é o TEXTO DO BANCO (`raw_description` sem resumo à mão: marca discreta até a
+ * ser editada; lançamento manual traz `rawDescription` vazio e nunca leva a marca).
+ */
+export function isBankText(row: { description: string; rawDescription: string }): boolean {
+  const raw = row.rawDescription.trim();
+  return raw !== '' && raw === row.description.trim();
+}
 
 /** Os estados que a linha carrega como selo: previsto (ainda não lançado) e sem categoria. */
-export function rowMarkLabels(row: { status: string; categoryName: string | null }): RowMarkLabel[] {
+export function rowMarkLabels(row: { status: string; categoryName: string | null; description: string }): RowMarkLabel[] {
   const labels: RowMarkLabel[] = [];
   if (row.status === 'planned') labels.push('Previsto');
   if (row.categoryName === null) labels.push('Não categorizado');
+  if (isIncompleteDescription(row.description)) labels.push('Incompleta');
   return labels;
+}
+
+/** Tom do selo: previsto é neutro, incompleta usa carimbo (erro do dado), o resto é atenção âmbar. */
+export function rowMarkTone(label: RowMarkLabel): 'neutral' | 'attention' | 'danger' {
+  if (label === 'Previsto') return 'neutral';
+  if (label === 'Incompleta') return 'danger';
+  return 'attention';
 }
 
 /**
@@ -132,7 +159,7 @@ export function rowMarkLabels(row: { status: string; categoryName: string | null
  * grupo: quem tem o selo da maioria o perde (o cabeçalho já o diz); quem não tem, segue sem selo.
  */
 export function commonMarks(
-  rows: readonly { status: string; categoryName: string | null }[],
+  rows: readonly { status: string; categoryName: string | null; description: string }[],
 ): { label: RowMarkLabel; count: number }[] {
   if (rows.length < 2) return [];
   const counts = new Map<RowMarkLabel, number>();

@@ -66,7 +66,7 @@ async function readData(response: Response): Promise<InvestmentData> {
 /** Avisos permanentes do módulo (RF-INV-01 e RF-INV-03): aparecem em toda visita, sem fechar. */
 function Notices() {
   return (
-    <div className="mt-4 flex flex-col gap-1 border border-border bg-secondary/40 px-4 py-3 text-sm" role="note">
+    <div className="mt-4 flex max-w-prose flex-col gap-1 border border-border bg-secondary/40 px-4 py-3 text-sm" role="note">
       <p><strong className="font-semibold">Valores em R$ de hoje.</strong> Tudo aqui está no poder de compra de hoje, já descontada a inflação.</p>
       <p className="text-muted-foreground">Retorno passado não é garantia de retorno futuro. Os cenários são hipóteses para planejar, não previsões.</p>
     </div>
@@ -179,7 +179,7 @@ function CreatePlan({ onCreated }: { onCreated: (data: InvestmentData) => void }
         <TrendingUp className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
         <div>
           <h2 id="create-heading" className="font-semibold">Crie seu plano de renda passiva</h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
             Informe a renda que você quer receber, o patrimônio e o aporte mensal planejado. Mostramos três cenários (conservador, médio e otimista) com as premissas de cada um, que você pode editar depois.
           </p>
         </div>
@@ -219,10 +219,7 @@ function ScenarioCard({ scenario, surplus, maxYears, values, errors, onChange }:
     onChange({ ...values, scenarios: { ...values.scenarios, [label]: { ...row, [field]: event.target.value } } });
   return (
     <article className="flex min-w-0 flex-col gap-3 border-t-2 border-foreground pt-3" aria-labelledby={`scenario-${label}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 id={`scenario-${label}`} className="text-base font-semibold">{scenarioName(label)}</h3>
-        <Carimbo tone={feasible ? 'ok' : 'danger'}>{feasible ? 'Alcança' : 'Não alcança'}</Carimbo>
-      </div>
+      <h3 id={`scenario-${label}`} className="text-base font-semibold">{scenarioName(label)}</h3>
       {!feasible && values.targetDate !== '' ? (
         <p className="text-xs text-muted-foreground">Fora do prazo do plano: com o aporte atual, o alvo passa do prazo.</p>
       ) : null}
@@ -260,6 +257,7 @@ function ScenarioCard({ scenario, surplus, maxYears, values, errors, onChange }:
       <p className="text-xs text-muted-foreground">{feasibleText(scenario.result.feasible, maxYears)}</p>
       <Placar
         title="Renda passiva"
+        action={<Carimbo tone={feasible ? 'ok' : 'danger'}>{feasible ? 'Alcança' : 'Não alcança'}</Carimbo>}
         items={[
           {
             label: `Por mês em ${maxYears} anos, com o aporte atual`,
@@ -355,7 +353,7 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
           <section aria-labelledby="scenarios-heading" className="flex flex-col gap-3">
             <div>
               <h2 id="scenarios-heading" className="font-semibold">Três cenários</h2>
-              <p className="text-sm text-muted-foreground">
+              <p className="mt-1 max-w-prose text-sm text-muted-foreground">
                 O <strong className="font-medium">retorno real</strong> é o rendimento já descontada a inflação; a <strong className="font-medium">retirada</strong> é a parte do patrimônio que você tira por ano sem consumir o principal. Cada cenário começa no padrão do modelo (3/3, 5/4 e 7/5) — as premissas ficam ao lado do resultado e podem ser editadas.
               </p>
             </div>

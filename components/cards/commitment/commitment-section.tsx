@@ -79,8 +79,27 @@ function CommitmentTable({
 }: {
   entries: ReturnType<typeof futureCommitment>['byCompetence'];
 }) {
+  // Só do primeiro ao último mês com valor: os zeros das pontas não informam. A linha de
+  // fecho diz onde o comprometimento acaba (ou some, se a janela inteira for zero).
+  let first = -1;
+  let last = -1;
+  for (let index = 0; index < entries.length; index += 1) {
+    if (entries[index]?.totalCents !== 0) {
+      if (first === -1) first = index;
+      last = index;
+    }
+  }
+  const valued = first === -1 || last === -1 ? [] : entries.slice(first, last + 1);
+  const trailing = last !== -1 && last < entries.length - 1 ? entries[last]?.competence : null;
+  if (valued.length === 0) {
+    return <p className="text-sm text-muted-foreground">Nada comprometido na janela.</p>;
+  }
+  const firstValued = valued[0]?.competence;
   return (
     <>
+      {first > 0 && firstValued ? (
+        <p className="mb-2 text-xs text-muted-foreground">Nada comprometido antes de {competenceLabel(firstValued)}.</p>
+      ) : null}
       <div className="hidden overflow-x-auto sm:block">
         <table className="w-full min-w-[480px] text-left text-sm">
           <caption className="sr-only">Comprometimento futuro por competência</caption>
@@ -92,7 +111,7 @@ function CommitmentTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {entries.map((entry) => (
+            {valued.map((entry) => (
               <tr key={entry.competence} className={entry.totalCents < 0 ? undefined : 'text-muted-foreground'}>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">
                   {competenceLabel(entry.competence)}
@@ -108,7 +127,7 @@ function CommitmentTable({
       </div>
 
       <div className="flex flex-col gap-2 sm:hidden">
-        {entries.map((entry) => (
+        {valued.map((entry) => (
           <article key={entry.competence} className="flex items-center justify-between gap-3 border border-border px-3 py-3">
             <div className="min-w-0">
               <h4 className="font-medium">{competenceLabel(entry.competence)}</h4>
@@ -120,6 +139,9 @@ function CommitmentTable({
           </article>
         ))}
       </div>
+      {trailing ? (
+        <p className="mt-2 text-xs text-muted-foreground">Depois de {competenceLabel(trailing)}, nada comprometido.</p>
+      ) : null}
     </>
   );
 }

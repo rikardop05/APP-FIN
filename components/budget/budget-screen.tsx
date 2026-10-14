@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { addCompetence, toCompetence } from '@/lib/date';
@@ -12,6 +12,7 @@ import {
   Canhoto,
   EmptyState,
   Faixa,
+  HelpNote,
   Input,
   LoadingBlock,
   Money,
@@ -394,14 +395,15 @@ export function BudgetScreen({ today }: { today: string }) {
               </p>
             ) : null}
 
-            <p className="max-w-[65ch] text-xs text-muted-foreground">
-              A cor mede o <strong className="font-medium text-foreground">{EXPECTED_LABEL.toLowerCase()}</strong>{' '}
-              do mês: o que já foi lançado (<strong className="font-medium text-foreground">realizado</strong>)
-              mais as despesas esperadas que ainda não foram lançadas (
-              <strong className="font-medium text-foreground">previsto a realizar</strong>). Ela responde
-              &ldquo;ainda posso gastar nesta categoria?&rdquo;. A cor muda para amarelo a partir de{' '}
+            {/* Ajuda da cor como disclosure (crítica 6.4 do relatório, heurística 10): texto corrido fora do caminho de leitura. */}
+            <HelpNote question="A cor da barra mede o que?">
+              A cor mede o <strong className="font-medium text-foreground">{EXPECTED_LABEL.toLowerCase()}</strong> do
+              mês: o que já foi lançado (<strong className="font-medium text-foreground">realizado</strong>) mais as
+              despesas esperadas que ainda não foram lançadas (
+              <strong className="font-medium text-foreground">previsto a realizar</strong>). Ela responde &ldquo;ainda
+              posso gastar nesta categoria?&rdquo;. A cor muda para amarelo a partir de{' '}
               {formatPercent(data.warnBp)} e para vermelho acima de 100%.
-            </p>
+            </HelpNote>
 
             <BudgetGroups
               data={data}
@@ -486,6 +488,12 @@ function CategoryRow({
   const inputId = `orcamento-${category.id}`;
   // O talão é UM número: o uso do orçamento, sem casas. Sem orçamento salvo, traço.
   const usage = row !== undefined && !stale && row.usageBp !== null ? formatPercent(row.usageBp) : '—';
+  // Linha compacta (crítica 6.4): dentro do limite (folga), UMA altura — nome + input + barra curta.
+  // O corpo completo ("Restam…" e o gasto esperado) fica para atenção (>= 80%), ou a expandir no clique.
+  const [expanded, setExpanded] = useState(false);
+  const detailId = `${inputId}-detalhe`;
+  const hasDetail = row !== undefined && !stale;
+  const showFull = !hasDetail || invalid || row.light !== 'green' || expanded;
 
   return (
     <Canhoto
@@ -525,17 +533,54 @@ function CategoryRow({
       <label htmlFor={inputId} className="text-sm font-medium text-foreground">
         {category.name}
       </label>
-      {row === undefined ? (
-        <p className="text-sm text-muted-foreground">
-          {typed === null ? 'Sem orçamento definido.' : 'Salve para ver o realizado desta categoria.'}
-        </p>
-      ) : stale ? (
-        <p className="text-sm text-muted-foreground">Valor alterado: salve para atualizar o realizado e a cor.</p>
-      ) : (
-        <div className="flex flex-col gap-1 text-sm">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        {row === undefined ? (
+          <p className="text-sm text-muted-foreground">
+            {typed === null ? 'Sem orçamento definido.' : 'Salve para ver o realizado desta categoria.'}
+          </p>
+        ) : stale ? (
+          <p className="text-sm text-muted-foreground">Valor alterado: salve para atualizar o realizado e a cor.</p>
+        ) : row.usageBp !== null ? (
+          <>
+            {/* Barra curta: a cor que conta o realizado + previsto aparece mesmo na linha compacta. */}
+            <div
+              className="h-1.5 min-w-[8rem] max-w-56 flex-1 overflow-hidden bg-secondary"
+              role="img"
+              aria-label={expectedUsageText(row.usageBp)}
+            >
+              <div
+                className={`${BAR_X_CLASS} ${LIGHT_VIEW[row.light].bar}`}
+                style={barScaleStyle(row.usageBp / 100, 'x')}
+              />
+            </div>
+            {row.light === 'green' ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-expanded={expanded}
+                aria-controls={detailId}
+                onClick={() => setExpanded((current) => !current)}
+              >
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                  aria-hidden="true"
+                />
+                {expanded ? 'Menos' : 'Detalhe'}
+              </Button>
+            ) : null}
+          </>
+        ) : (
+          <p className="text-muted-foreground">Orçamento zero.</p>
+        )}
+      </div>
+      {showFull && hasDetail && row !== undefined ? (
+        <div id={detailId} className="flex flex-col gap-1 text-sm">
           {/* Um número por conceito: gasto esperado aqui, orçado no campo, restante abaixo. A divisão em
               realizado e previsto fica na dica e para leitor de tela, não como terceira versão do número. */}
-          <p className="flex flex-wrap items-baseline gap-x-2" title={`Realizado ${formatBRL(row.spentCents, { sign: 'never' })} + previsto ${formatBRL(row.upcomingCents, { sign: 'never' })}`}>
+          <p
+            className="flex flex-wrap items-baseline gap-x-2"
+            title={`Realizado ${formatBRL(row.spentCents, { sign: 'never' })} + previsto ${formatBRL(row.upcomingCents, { sign: 'never' })}`}
+          >
             <span className="text-muted-foreground">Gasto esperado</span>
             <Money value={row.expectedCents} sign="never" className="font-medium text-foreground" />
             <span className="sr-only">
@@ -543,21 +588,11 @@ function CategoryRow({
               {formatBRL(row.upcomingCents, { sign: 'never' })}
             </span>
           </p>
-          {row.usageBp !== null ? (
-            <div className="h-1.5 overflow-hidden bg-secondary" role="img" aria-label={expectedUsageText(row.usageBp)}>
-              <div
-                className={`${BAR_X_CLASS} ${LIGHT_VIEW[row.light].bar}`}
-                style={barScaleStyle(row.usageBp / 100, 'x')}
-              />
-            </div>
-          ) : (
-            <p className="text-muted-foreground">Orçamento zero.</p>
-          )}
           <p className={`text-xs ${row.remainingCents < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
             {remainingText(row.remainingCents)}
           </p>
         </div>
-      )}
+      ) : null}
     </Canhoto>
   );
 }

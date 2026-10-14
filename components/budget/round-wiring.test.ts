@@ -25,8 +25,8 @@ describe('Orçamento', () => {
   it('selo e letra só para atenção: a linha dentro do limite não leva selo', () => {
     expect(screen).toContain('rowMarca(row.light)');
   });
-  it('a legenda da cor tem medida limitada', () => {
-    expect(screen).toContain('max-w-[65ch]');
+  it('a legenda da cor é disclosure ("O que é isto?"), não texto corrido', () => {
+    expect(screen).toContain('question="A cor da barra mede o que?"');
   });
 });
 

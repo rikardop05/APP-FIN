@@ -43,11 +43,13 @@ type StatementListProps = {
   today: IsoDate;
   /** Meses seguintes com fatura devedora ainda não gravada (`futureStubsForCard`). */
   futureStubs?: FutureStub[];
+  /** Nome do cartão: contexto do botão "Marcar como paga" (âncora no celular). */
+  cardName?: string;
   /** Depois de marcar ou desmarcar como paga: a tela recarrega as faturas. */
   onStatusChanged?: () => void;
 };
 
-export function StatementList({ statements, cycle, today, futureStubs = [], onStatusChanged }: StatementListProps) {
+export function StatementList({ statements, cycle, today, futureStubs = [], cardName, onStatusChanged }: StatementListProps) {
   const changed = onStatusChanged ?? (() => undefined);
   const warnings = cycle === undefined ? [] : dueDateWarnings(statements, cycle, today);
   const staleIds = new Set(warnings.map((warning) => warning.statementId));
@@ -85,6 +87,7 @@ export function StatementList({ statements, cycle, today, futureStubs = [], onSt
             statement={statement}
             staleDueDate={staleIds.has(statement.id)}
             overdue={isOverdueUnpaid(statement, today)}
+            cardName={cardName}
             onChanged={changed}
           />
         ))}
@@ -132,11 +135,13 @@ function StatementCanhoto({
   statement,
   staleDueDate,
   overdue,
+  cardName,
   onChanged,
 }: {
   statement: StatementRecord;
   staleDueDate: boolean;
   overdue: boolean;
+  cardName?: string;
   onChanged: () => void;
 }) {
   const mismatch = statement.differenceCents !== null && statement.differenceCents !== 0;
@@ -171,7 +176,7 @@ function StatementCanhoto({
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        <StatementPaidButton statement={statement} onChanged={onChanged} />
+        <StatementPaidButton statement={statement} cardName={cardName} onChanged={onChanged} />
         <Link href="/importar" className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-4 sm:min-h-0">
           Ver importação
         </Link>

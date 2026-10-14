@@ -4,7 +4,7 @@ import type { Competence } from '@/lib/date';
 import type { CashflowMonth } from '@/lib/finance/cashflow';
 import type { Cents } from '@/lib/money';
 
-import { competenceLong, competenceMonth } from './labels';
+import { competenceLong, competenceMonth, competenceShort } from './labels';
 
 type MonthTableProps = {
   months: readonly CashflowMonth[];
@@ -35,13 +35,68 @@ function MonthStub({ competence }: { competence: Competence }) {
  *  - Um número aparece UMA vez por canhoto: rubrica zerada vira texto ("zerado no mês"), sem
  *    repetir o R$ 0,00; valor que já está no corpo (total) ou no talão (fechamento) é referenciado
  *    por extenso no detalhe, em vez de impresso de novo.
+ *  - Mês futuro sem nada (sem entradas, sem saídas, sem ajuste e sem selo) não vira canhoto:
+ *    meses vazios seguidos colapsam numa linha-sumário ("Sem movimento de mar/2027 a set/2027").
  */
 export function MonthTable({ months, composition, adjustments }: MonthTableProps) {
+  // Filetes de meses vazios: só o futuro colapsa (o mês corrente fica sempre à vista) e nunca
+  // o mês com selo (o negativo precisa ser visto) nem o mês com ajuste da simulação.
+  type Row =
+    | { kind: 'month'; month: CashflowMonth; position: number }
+    | { kind: 'gap'; from: Competence; to: Competence };
+  const rows: Row[] = [];
+  let gapFrom: Competence | null = null;
+  let gapTo: Competence | null = null;
+  // `for` simples (não `forEach`): as atribuições ficam no mesmo escopo e a análise de fluxo as enxerga.
+  for (let position = 0; position < months.length; position += 1) {
+    const month = months[position];
+    if (month === undefined) continue;
+    const outflows = (month.expenseCents + month.installmentsCents + month.statementsCents + month.contributionsCents) as Cents;
+    const adjustment = adjustments?.[month.competence];
+    const empty =
+      position > 0 &&
+      !month.negative &&
+      month.incomeCents === 0 &&
+      outflows === 0 &&
+      (adjustment === undefined || adjustment === 0);
+    if (empty) {
+      if (gapFrom === null) gapFrom = month.competence;
+      gapTo = month.competence;
+    } else {
+      if (gapFrom !== null && gapTo !== null) {
+        rows.push({ kind: 'gap', from: gapFrom, to: gapTo });
+        gapFrom = null;
+        gapTo = null;
+      }
+      rows.push({ kind: 'month', month, position });
+    }
+  }
+  if (gapFrom !== null && gapTo !== null) rows.push({ kind: 'gap', from: gapFrom, to: gapTo });
+
+  // A legenda só mostra as formas que existem na página: sem mês negativo, sem selo vermelho.
+  const hasNegative = months.some((month) => month.negative);
+  const hasPreso = months.some(
+    (month, position) =>
+      position > 0 && (month.statementsCents !== 0 || month.installmentsCents !== 0),
+  );
   return (
     <>
       <p className="text-right text-xs font-medium text-muted-foreground">Saldo no fim do mês</p>
       <ol className="flex flex-col gap-1.5" aria-label="Projeção de caixa mês a mês">
-        {months.map((month, position) => {
+        {rows.map((row) => {
+          if (row.kind === 'gap') {
+            const key = `gap-${row.from}-${row.to}`;
+            const text =
+              row.from === row.to
+                ? `Sem movimento em ${competenceShort(row.from)}.`
+                : `Sem movimento de ${competenceShort(row.from)} a ${competenceShort(row.to)}.`;
+            return (
+              <li key={key} className="border border-dashed border-input px-3 py-2 text-sm text-muted-foreground">
+                {text}
+              </li>
+            );
+          }
+          const { month, position } = row;
           const part = composition[month.competence];
           const outflows = (month.expenseCents + month.installmentsCents + month.statementsCents + month.contributionsCents) as Cents;
           // Preso = mês futuro que já carrega compromisso de cartão; o mês corrente é o canhoto atual.
@@ -177,14 +232,18 @@ export function MonthTable({ months, composition, adjustments }: MonthTableProps
       </ol>
 
       <div className="mt-3 flex max-w-prose flex-col gap-1.5 text-xs text-muted-foreground">
-        <p className="flex flex-wrap items-center gap-2">
-          <Selo tone="danger" label="Saldo negativo" />
-          <span>saldo no <strong className="font-medium">fim do mês</strong> abaixo de zero.</span>
-        </p>
-        <p className="flex flex-wrap items-center gap-2">
-          <span className="inline-block h-4 w-8 border border-dashed border-input" aria-hidden="true" />
-          <span>canhoto tracejado: mês futuro que já carrega fatura ou parcela de cartão. Sem caixa: mês futuro sem nada comprometido.</span>
-        </p>
+        {hasNegative ? (
+          <p className="flex flex-wrap items-center gap-2">
+            <Selo tone="danger" label="Saldo negativo" />
+            <span>saldo no <strong className="font-medium">fim do mês</strong> abaixo de zero.</span>
+          </p>
+        ) : null}
+        {hasPreso ? (
+          <p className="flex flex-wrap items-center gap-2">
+            <span className="inline-block h-4 w-8 border border-dashed border-input" aria-hidden="true" />
+            <span>canhoto tracejado: mês futuro que já carrega fatura ou parcela de cartão. Sem caixa: mês futuro sem nada comprometido.</span>
+          </p>
+        ) : null}
         <p>
           &ldquo;Entradas&rdquo; e &ldquo;Saídas&rdquo; mostram o mês; saída maior que entrada não
           quer dizer saldo negativo. A fatura entra no mês em que vence, e as parcelas de cartão

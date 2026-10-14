@@ -74,20 +74,9 @@ export function Verdict({ projection, baseProjection, overdueUnpaidCents = cents
             id="fluxo-verdict-heading"
             className="text-lg font-semibold text-foreground"
           >
-            {divergence ? `${verdictDivergenceText(divergence)}.` : 'Quando o saldo fica negativo?'}
+            {divergence ? `Fica negativo em ${competenceShort(divergence.competence)}` : 'Quando o saldo fica negativo?'}
           </h2>
-          {divergence ? (
-            <>
-              <Link href="/cartoes" className="text-sm font-medium text-foreground underline underline-offset-2">
-                {DIVERGENCE_LINK_LABEL}
-              </Link>
-              <p className="text-sm text-muted-foreground">
-                Sem contar <Money value={overdueUnpaidCents} sign="never" /> de faturas anteriores não marcadas como pagas
-                {overdueUnpaidCompetences.length > 0 ? ` (${overdueUnpaidCompetences.map((c) => competenceShort(c)).join(', ')})` : ''},
-                o saldo não fica negativo nos próximos {projection.months.length} meses com os compromissos cadastrados.
-              </p>
-            </>
-          ) : first === null ? (
+          {divergence ? null : first === null ? (
             <p className="text-base font-medium text-foreground">
               Com os compromissos cadastrados, o saldo não fica negativo nos próximos{' '}
               {projection.months.length} meses.
@@ -129,6 +118,25 @@ export function Verdict({ projection, baseProjection, overdueUnpaidCents = cents
         </div>
       </div>
 
+      {divergence ? (
+      <details className="border-t border-border pt-2 text-sm text-muted-foreground">
+        <summary className="inline-flex min-h-11 cursor-pointer items-center font-medium text-foreground sm:min-h-0">
+          Por que depende das faturas?
+        </summary>
+        <div className="mt-1 flex max-w-prose flex-col gap-1">
+          <p>
+            {verdictDivergenceText(divergence)}. Sem contar <Money value={overdueUnpaidCents} sign="never" /> de faturas anteriores não marcadas como pagas
+            {overdueUnpaidCompetences.length > 0 ? ` (${overdueUnpaidCompetences.map((c) => competenceShort(c)).join(', ')})` : ''},
+            o saldo não fica negativo nos próximos {projection.months.length} meses com os compromissos cadastrados.
+          </p>
+          <p>
+            <Link href="/cartoes" className="font-medium text-foreground underline underline-offset-2">
+              {DIVERGENCE_LINK_LABEL}
+            </Link>
+          </p>
+        </div>
+      </details>
+      ) : null}
       <details className="border-t border-border pt-2 text-sm text-muted-foreground">
         <summary className="inline-flex min-h-11 cursor-pointer items-center font-medium text-foreground sm:min-h-0">
           Esta projeção é otimista por construção.

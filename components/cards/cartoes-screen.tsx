@@ -438,7 +438,7 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
                         <h4 className="font-medium">Faturas</h4>
                         <Badge variant="neutral">{card.statements.length} {card.statements.length === 1 ? 'fatura' : 'faturas'}</Badge>
                       </div>
-                      <StatementList statements={card.statements} cycle={{ closingDay: card.closingDay, dueDay: card.dueDay }} today={today}
+                      <StatementList statements={card.statements} cardName={card.name} cycle={{ closingDay: card.closingDay, dueDay: card.dueDay }} today={today}
                         futureStubs={futureStubsForCard({
                           card,
                           transactions: commitmentTransactions,

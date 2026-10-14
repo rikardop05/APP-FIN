@@ -20,7 +20,7 @@ import {
 } from '@/components/ui-kit';
 import type { Transaction, TransactionOptions } from './schemas';
 import { amountForInput, signedAmountCents } from './manual-sign';
-import { commonMarks, groupByCompetence, installmentLabel, rowMarkLabels, stripInstallmentSuffix } from './list-presentation';
+import { commonMarks, groupByCompetence, installmentLabel, isBankText, isIncompleteDescription, rowMarkLabels, rowMarkTone, stripInstallmentSuffix } from './list-presentation';
 
 const kindLabel: Record<Transaction['kind'], string> = {
   expense: 'Despesa',
@@ -68,8 +68,9 @@ function RowStub({ row }: { row: Transaction }) {
   return <span>{dataTalao(row.occurredOn)}</span>;
 }
 
-/** Descrição sem o "(03/10)" que o talão já mostra. */
+/** Descrição do canhoto: humanizada quando a linha é incompleta ("NULL" do banco não repete). */
 function rowTitle(row: Transaction): string {
+  if (isIncompleteDescription(row.description)) return 'Sem descrição — toque para editar';
   if (row.installmentNumber === null) return row.description;
   const label = installmentLabel(row.installmentNumber, row.installmentsCount);
   return stripInstallmentSuffix(row.description, row.installmentNumber, label.total);
@@ -90,7 +91,8 @@ type EditorProps = {
 
 function TransactionEditor({ row, options, onSave, onCancel }: EditorProps) {
   const [occurredOn, setOccurredOn] = useState(row.occurredOn);
-  const [description, setDescription] = useState(row.description);
+  // Descrição incompleta ("NULL" do banco): o campo abre VAZIO, para a pessoa digitar a de verdade.
+  const [description, setDescription] = useState(isIncompleteDescription(row.description) ? '' : row.description);
   const [amount, setAmount] = useState(formatBRL(amountForInput(row.amountCents, row.kind)));
   const [categoryId, setCategoryId] = useState(row.categoryId ?? '');
   const [memberId, setMemberId] = useState(row.memberId ?? '');
@@ -262,7 +264,7 @@ export function TransactionList({
               <h2 className="text-sm font-semibold first-letter:uppercase">{competenceLong(group.competence)}</h2>
               {shared.map(({ label, count }) => (
                 <span key={label} className="inline-flex items-center gap-1">
-                  <Selo tone={label === 'Previsto' ? 'neutral' : 'attention'} label={label} />
+                  <Selo tone={rowMarkTone(label)} label={label} />
                   <span className="text-xs font-normal text-muted-foreground">{count} de {group.rows.length}</span>
                 </span>
               ))}
@@ -280,13 +282,15 @@ export function TransactionList({
               // Selo na linha só quando ela difere do grupo (o que é comum a todas sobe para o cabeçalho do mês).
               const marcas = rowMarkLabels(row)
                 .filter((label) => !shared.some((item) => item.label === label))
-                .map((label) => ({ label, tone: label === 'Previsto' ? ('neutral' as const) : ('attention' as const) }));
+                .map((label) => ({ label, tone: rowMarkTone(label) }));
               return (
                 <li key={row.id}>
                   <Canhoto
                     as="article"
                     ariaLabel={`Lançamento: ${title}`}
                     selecionado={selected}
+                    // Linha incompleta leva a régua de carimbo (o selo Incompleta diz o porquê).
+                    destaque={marcas.some((marca) => marca.label === 'Incompleta') ? 'danger' : undefined}
                     stub={
                       <button
                         type="button"
@@ -331,6 +335,13 @@ export function TransactionList({
                       <span className="truncate" title={sourceLabel(row)}>{sourceLabel(row)}</span>
                       {row.categoryName ? <span className="truncate text-foreground" title={row.categoryName}>{row.categoryName}</span> : null}
                       {row.memberName ? <span className="truncate">{row.memberName}</span> : null}
+                      {/* Descrição crua do banco (crítica 6.5): marca discreta até a edição resumir. */}
+                      {isBankText(row) ? (
+                        <span className="truncate border border-border px-1.5 text-foreground">
+                          texto do banco
+                          <span className="sr-only">: abra a linha para resumir</span>
+                        </span>
+                      ) : null}
                     </p>
                   </Canhoto>
                 </li>

@@ -18,6 +18,8 @@ import {
 
 type StatementPaidButtonProps = {
   statement: { id: string; period: string; status: StatementStatus };
+  /** Nome do cartão: âncora de contexto junto do botão (no celular, o cabeçalho da fatura fica longe). */
+  cardName?: string;
   /** Depois de gravar: a tela recarrega as faturas e o servidor refaz o comprometido. */
   onChanged: () => void;
 };
@@ -27,7 +29,7 @@ type StatementPaidButtonProps = {
  * passos: é reversível pelo mesmo botão. O resultado é dito em texto (`role="status"`), o erro em
  * `role="alert"`. A tela recarrega as faturas sem desmontar a lista, então a mensagem fica visível.
  */
-export function StatementPaidButton({ statement, onChanged }: StatementPaidButtonProps) {
+export function StatementPaidButton({ statement, cardName, onChanged }: StatementPaidButtonProps) {
   const { id: statementId, period, status } = statement;
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
@@ -58,11 +60,16 @@ export function StatementPaidButton({ statement, onChanged }: StatementPaidButto
 
   return (
     <div className="flex flex-col items-start gap-1">
+      {cardName ? (
+        <span className="text-xs text-muted-foreground sm:hidden">
+          {cardName} · {competenceShort(period)}
+        </span>
+      ) : null}
       <Button
         variant="outline"
         size="sm"
         disabled={busy}
-        aria-label={paidButtonAriaLabel(status, competenceShort(period))}
+        aria-label={paidButtonAriaLabel(status, competenceShort(period), cardName)}
         onClick={() => void toggle()}
       >
         {busy ? 'Salvando…' : paidButtonLabel(status)}

@@ -20,6 +20,8 @@ describe('marcar fatura como paga', () => {
     expect(paidButtonLabel('open')).toBe('Marcar como paga');
     expect(paidButtonLabel('paid')).toBe('Desmarcar como paga');
     expect(paidButtonAriaLabel('open', 'out/2026')).toBe('Marcar como paga: fatura de out/2026');
+    expect(paidButtonAriaLabel('open', 'out/2026', 'Nubank')).toBe('Marcar como paga: fatura de out/2026 (Nubank)');
+    expect(paidButtonAriaLabel('paid', 'set/2026', '')).toBe('Desmarcar como paga: fatura de set/2026');
   });
   it('feedback diz o efeito no comprometido', () => {
     expect(paidSuccessMessage('paid')).toContain('saiu da conta');

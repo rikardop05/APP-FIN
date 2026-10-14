@@ -132,15 +132,31 @@ describe('groupByCompetence: agrupamento por mês com total', () => {
   });
 });
 
-import { commonMarks, rowMarkLabels } from './list-presentation';
+import { commonMarks, isIncompleteDescription, rowMarkLabels } from './list-presentation';
 
 describe('selos que se repetem sobem para o cabeçalho do mês', () => {
-  const planned = { status: 'planned', categoryName: null };
-  const real = { status: 'posted', categoryName: 'Mercado' };
+  const planned = { status: 'planned', categoryName: null, description: 'Padaria' };
+  const real = { status: 'posted', categoryName: 'Mercado', description: 'Mercado do João' };
 
   it('rowMarkLabels lê previsto e sem categoria', () => {
     expect(rowMarkLabels(planned)).toEqual(['Previsto', 'Não categorizado']);
     expect(rowMarkLabels(real)).toEqual([]);
+    // Descrição incompleta ("NULL" do banco ou vazia) entra como selo de atenção com carimbo.
+    expect(rowMarkLabels({ status: 'posted', categoryName: 'Mercado', description: 'NULL' })).toEqual(['Incompleta']);
+    expect(rowMarkLabels({ status: 'posted', categoryName: null, description: ' NULL ' })).toEqual([
+      'Não categorizado',
+      'Incompleta',
+    ]);
+    expect(rowMarkLabels({ status: 'posted', categoryName: null, description: 'nulo' })).toEqual(['Não categorizado']);
+  });
+
+  it('isIncompleteDescription: vazia o literal NULL (sem caixa), mas texto normal não', () => {
+    expect(isIncompleteDescription('')).toBe(true);
+    expect(isIncompleteDescription('   ')).toBe(true);
+    expect(isIncompleteDescription('NULL')).toBe(true);
+    expect(isIncompleteDescription('null')).toBe(true);
+    expect(isIncompleteDescription('Nulléssimo')).toBe(false);
+    expect(isIncompleteDescription('Padaria do centro')).toBe(false);
   });
 
   it('sobe o que a MAIORIA das linhas tem, com a contagem', () => {
