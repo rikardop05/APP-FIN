@@ -812,6 +812,62 @@ describe('attributeRules — rastro da regra (category_rule_id) com natureza x s
   });
 });
 
+describe('regressao — regras criadas depois da importacao nao retroagem (diagnostico 2026-10-14)', () => {
+  // Cenario real: a casa importou as faturas em 2026-10-01 sem nenhuma regra e
+  // criou as 22 regras so em 2026-10-08. Na previa nao havia regra para casar,
+  // entao `suggestedCategoryId` veio null em tudo; no commit `attributeRules`
+  // nao achou vencedora para as categorias postas a mao, entao `hits` ficou 0.
+  // Estes testes travam que o pipeline SE COMPORTA ASSIM de proposito — e que,
+  // com as regras presentes, as mesmas descricoes casam (o motor nao e o culpado).
+  const base = { matchType: 'contains' as const, memberId: null, active: true };
+  const drogaria: Rule = { ...base, id: 'r-drog', pattern: 'DROGARIA', categoryId: 'cat-farmacia', priority: 6, categoryNature: 'essential' };
+  const posto: Rule = { ...base, id: 'r-posto', pattern: 'POSTO', categoryId: 'cat-combustivel', priority: 21, categoryNature: 'essential' };
+  const regras = [drogaria, posto];
+
+  function linha(descricao: string) {
+    return parsed({ rawDescription: descricao, amountCents: cents(-1000) });
+  }
+
+  it('com as regras presentes, a previa sugere: prefixo de cartao e numero de loja nao quebram o contains', () => {
+    const result = preview(
+      [linha('[final 4239] DROGARIA EXEMPLO 123'), linha('AUTO POSTO EXEMPLO LTDA')],
+      { rules: regras },
+    );
+    expect(result.rows[0]?.suggestedCategoryId).toBe('cat-farmacia');
+    expect(result.rows[1]?.suggestedCategoryId).toBe('cat-combustivel');
+  });
+
+  it('descricao fora do vocabulario das regras fica sem sugestao e conta como nao categorizada', () => {
+    const result = preview(
+      [linha('MERCADINHO DO BAIRRO'), linha('HORTIFRUTI DA ESQUINA')],
+      { rules: regras },
+    );
+    expect(result.rows.map((row) => row.suggestedCategoryId)).toEqual([null, null]);
+    expect(result.summary.uncategorizedCount).toBe(2);
+  });
+
+  it('categoria posta a mao sem regra vencedora nao leva rastro — e por isso nao soma hits', () => {
+    // As duas linhas que a casa categorizou na confirmacao (sem regra na epoca):
+    // a categoria confere com a da regra, mas a regra nao existia no commit.
+    // Sem regra vencedora no momento da gravacao, o rastro e null por desenho.
+    expect(
+      attributeRules([], [
+        { description: 'DROGARIA EXEMPLO 123', amountCents: cents(-1000), categoryId: 'cat-farmacia' },
+        { description: 'AUTO POSTO EXEMPLO LTDA', amountCents: cents(-1000), categoryId: 'cat-combustivel' },
+      ]),
+    ).toEqual([null, null]);
+  });
+
+  it('quando a regra existe no commit, a mesma categoria confirmada leva o rastro', () => {
+    expect(
+      attributeRules(regras, [
+        { description: '[final 4239] DROGARIA EXEMPLO 123', amountCents: cents(-1000), categoryId: 'cat-farmacia' },
+        { description: 'MERCADINHO DO BAIRRO', amountCents: cents(-1000), categoryId: null },
+      ]),
+    ).toEqual(['r-drog', null]);
+  });
+});
+
 describe('ponta a ponta — texto colado de fatura (o bug: compra virava receita)', () => {
   function previewFromText(raw: string, sourceKind: 'credit_card' | 'account') {
     const parse = parsePastedText(raw, { defaultCompetence: '2026-09', sourceKind });
