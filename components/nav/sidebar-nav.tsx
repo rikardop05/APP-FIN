@@ -3,10 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { NAV_ITEMS, isNavItemActive } from './nav-items';
+import { NAV_GROUPS, activeNavItemHref } from './nav-items';
 import { SignOutButton } from './sign-out-button';
 import { ThemeToggle } from './theme-toggle';
 import type { Theme } from './theme';
+
+/** Cabeçalho de seção ("Mês", "Adiante", "Config"): rótulo de 12px em caixa alta com tracking leve. */
+const GROUP_HEADING_CLASS =
+  'px-3 pb-1 pt-3 text-xs font-medium uppercase tracking-wide text-sidebar-muted';
 
 /**
  * Lombada do carnê: navegação lateral em tinta escura, visível a partir de `md`. Abaixo disso quem
@@ -14,6 +18,7 @@ import type { Theme } from './theme';
  */
 export function SidebarNav({ theme }: { theme: Theme }) {
   const pathname = usePathname();
+  const activeHref = activeNavItemHref(pathname);
 
   return (
     <nav
@@ -27,26 +32,31 @@ export function SidebarNav({ theme }: { theme: Theme }) {
         <span className="bg-sidebar px-1 text-lg font-semibold tracking-widest">APPFIN</span>
       </div>
       <div className="flex flex-col gap-0.5 px-3">
-        {NAV_ITEMS.map((item) => {
-          const active = isNavItemActive(item.href, pathname);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? 'page' : undefined}
-              className={cn(
-                'flex min-h-11 items-center gap-3 px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-foreground',
-                active
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-sidebar-muted hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground',
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {item.label}
-            </Link>
-          );
-        })}
+        {NAV_GROUPS.map((group) => (
+          <div key={group.key} className="flex flex-col gap-0.5">
+            <h2 className={GROUP_HEADING_CLASS}>{group.label}</h2>
+            {group.items.map((item) => {
+              const active = item.href === activeHref;
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'flex min-h-11 items-center gap-3 px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-foreground',
+                    active
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                      : 'text-sidebar-muted hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground',
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </div>
       <div className="mt-auto flex flex-col gap-2 border-t border-sidebar-border pt-3">
         <ThemeToggle variant="sidebar" initialTheme={theme} />

@@ -323,10 +323,21 @@ export function ImportConfirmation({
       drafts.map((draft) => ({
         ...draft,
         invalid: invalidSet.has(draft.index),
+        // Despesa sem categoria não entra em nenhuma barra do orçamento: é exatamente o que o
+        // lote pede atenção (critique P2). Só a linha INCLUÍDA conta; desmarcada não entra no lote.
+        missingCategory: draft.include && draft.suggestedCategoryId === null,
       })),
     [drafts, invalidSet],
   );
   const flagged = useMemo(() => flaggedIndexes(flagInputs), [flagInputs]);
+  // Linhas incluídas sem categoria: além de sinalizadas, pré-selecionam o editor em lote.
+  const uncategorized = useMemo(
+    () =>
+      drafts
+        .filter((draft) => draft.include && draft.suggestedCategoryId === null)
+        .map((draft) => draft.index),
+    [drafts],
+  );
   const missingCandidates = drafts.filter((draft) => mayBeMissing(draft));
   const visibleDrafts = onlyMissing
     ? missingCandidates
@@ -679,11 +690,22 @@ export function ImportConfirmation({
                 <kbd className="num border border-border bg-card px-1">K</kbd> pulam entre as linhas sinalizadas
               </p>
             </div>
-            {selected.size > 0 ? (
+            {selected.size > 0 || uncategorized.length > 0 ? (
               <div className="flex flex-wrap items-end gap-2" role="group" aria-label="Edição em lote">
                 <p className="w-full text-sm font-medium text-foreground sm:w-auto sm:pb-2">
                   {selected.size === 1 ? '1 linha selecionada' : `${selected.size} linhas selecionadas`}
                 </p>
+                {selected.size === 0 && uncategorized.length > 0 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setSelected(new Set(uncategorized))}
+                  >
+                    {uncategorized.length === 1
+                      ? 'Selecionar a linha sem categoria'
+                      : `Selecionar as ${uncategorized.length} linhas sem categoria`}
+                  </Button>
+                ) : null}
                 <label className="flex min-w-40 flex-1 flex-col gap-1 text-xs text-muted-foreground">
                   Categoria
                   <Select value={bulkCategory} onChange={(event) => setBulkCategory(event.target.value)}>
@@ -747,7 +769,12 @@ export function ImportConfirmation({
               const label = draft.description;
               const competence = calculation.competenceByIndex.get(draft.index) ?? null;
               const invalid = invalidSet.has(draft.index);
-              const flags = rowFlags({ state: draft.state, lowConfidence: draft.lowConfidence, invalid });
+              const flags = rowFlags({
+                state: draft.state,
+                lowConfidence: draft.lowConfidence,
+                invalid,
+                missingCategory: draft.include && draft.suggestedCategoryId === null,
+              });
               const isOpen = opened.has(draft.index) || invalid;
               const isDuplicate = draft.state === 'duplicate';
               const isPayment = draft.state === 'credit_card_payment';
@@ -961,7 +988,7 @@ export function ImportConfirmation({
                         aria-controls={isOpen ? editorId : undefined}
                         aria-label={`${isOpen ? 'Fechar' : 'Abrir'} a linha ${rowNumber}, ${label || 'sem descrição'}`}
                         onClick={() => toggleOpened(draft.index)}
-                        className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8"
+                        className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-6"
                       >
                         <span className="truncate">{label || 'Sem descrição'}</span>
                       </button>

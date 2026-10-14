@@ -32,7 +32,8 @@ type CanhotoProps = {
 
 /**
  * Canhoto: a linha de um lançamento ou parcela. Grade [canhoto | picote | corpo | valor]; no celular
- * o valor desce para baixo do corpo e a linha mantém 44px ou mais de altura. O canhoto (`stub`) e o
+ * o valor desce para baixo do corpo e a linha mantém 44px ou mais de altura; no desktop a linha
+ * assenta entre 44 e 52px (o corpo compacta o padding a partir de `sm`). O canhoto (`stub`) e o
  * TALÃO: significa UMA coisa por linha. Parcela n/N (`<Parcela />`, com barra, 03/10) OU data sem barra
  * (`dataTalao`, 04 out): nunca `04/10`, que se confunde com parcela. O talão e o picote levam `data-canhoto-stub`, o gancho da animação de "destacar" ao confirmar o lote.
  */
@@ -69,12 +70,12 @@ export function Canhoto({
       <div className="grid min-h-11 grid-cols-[4.25rem_auto_minmax(0,1fr)] items-stretch sm:grid-cols-[4.25rem_auto_minmax(0,1fr)_auto]">
         <div
           data-canhoto-stub=""
-          className={cn('num flex items-center justify-center px-2 py-2 text-sm', selecionado && 'bg-primary/15')}
+          className={cn('num flex items-center justify-center px-2 py-2 text-sm sm:py-0', selecionado && 'bg-primary/15')}
         >
           {stub}
         </div>
         <Picote orientation="vertical" />
-        <div className="flex min-w-0 flex-col justify-center gap-1 px-3 py-2">
+        <div className="flex min-w-0 flex-col justify-center gap-1 px-3 py-2 sm:gap-0 sm:py-1">
           {children}
           {marcas && marcas.length > 0 ? (
             <div className="flex flex-wrap gap-1">

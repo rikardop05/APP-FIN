@@ -12,7 +12,7 @@ import {
   stepFlagged,
 } from './review-model';
 
-const clean = { state: 'new', lowConfidence: false, invalid: false } as const;
+const clean = { state: 'new', lowConfidence: false, invalid: false, missingCategory: false } as const;
 
 describe('rowFlags', () => {
   it('linha limpa não tem sinal', () => {
@@ -21,16 +21,22 @@ describe('rowFlags', () => {
   });
 
   it('ordena do mais grave ao menos grave', () => {
-    expect(rowFlags({ state: 'duplicate', lowConfidence: true, invalid: true })).toEqual([
-      'invalid',
-      'low_confidence',
-      'duplicate',
-    ]);
+    expect(
+      rowFlags({ state: 'duplicate', lowConfidence: true, invalid: true, missingCategory: false }),
+    ).toEqual(['invalid', 'low_confidence', 'duplicate']);
   });
 
   it('pagamento e informativa são sinalizadas', () => {
     expect(rowFlags({ ...clean, state: 'credit_card_payment' })).toEqual(['payment']);
     expect(rowFlags({ ...clean, state: 'informational' })).toEqual(['informational']);
+  });
+
+  it('linha incluída sem categoria pede atenção: o orçamento não a vê', () => {
+    expect(rowFlags({ ...clean, missingCategory: true })).toEqual(['uncategorized']);
+    expect(rowFlags({ ...clean, missingCategory: true, state: 'duplicate' })).toEqual([
+      'duplicate',
+      'uncategorized',
+    ]);
   });
 });
 

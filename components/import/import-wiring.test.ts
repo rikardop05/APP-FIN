@@ -39,6 +39,12 @@ describe('revisão da fatura: ligações da tela', () => {
     expect(confirmation).toContain('Aplicar às selecionadas');
   });
 
+  it('a linha incluída sem categoria pede atenção e o lote pré-seleciona o editor em lote', () => {
+    expect(confirmation).toContain('missingCategory: draft.include && draft.suggestedCategoryId === null');
+    expect(confirmation).toContain('selected.size > 0 || uncategorized.length > 0');
+    expect(confirmation).toContain('linhas sem categoria`');
+  });
+
   it('a assinatura espera a animação antes de trocar de estado e respeita movimento reduzido', () => {
     expect(confirmation).toContain('esperarDestacar()');
     expect(read('components/import/destacar.ts')).toContain('prefers-reduced-motion');

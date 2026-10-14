@@ -64,7 +64,7 @@ describe('Sair na barra lateral (desktop)', () => {
   });
 
   it('o Sair fica no rodapé da barra (mt-auto), depois dos itens de navegação', () => {
-    const afterItems = sidebar.slice(sidebar.indexOf('NAV_ITEMS.map'));
+    const afterItems = sidebar.slice(sidebar.indexOf('NAV_GROUPS.map'));
     expect(afterItems.indexOf('mt-auto')).toBeGreaterThan(-1);
     expect(afterItems.indexOf('mt-auto')).toBeLessThan(afterItems.indexOf('<SignOutButton'));
   });

@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { NAV_ITEMS } from '@/components/nav/nav-items';
+import { NAV_ITEMS, navGroups } from '@/components/nav/nav-items';
 
 const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), 'utf8');
@@ -69,7 +69,24 @@ describe('estrutura do ui-kit e do shell', () => {
     const primary = NAV_ITEMS.filter((item) => item.mobile === 'primary');
     expect(primary).toHaveLength(4);
     expect(primary.map((item) => item.href)).toContain('/fluxo');
-    expect(NAV_ITEMS).toHaveLength(9);
+    expect(NAV_ITEMS).toHaveLength(10);
+  });
+
+  it('o menu é agrupado em três seções rotuladas, com entrada direta para as fixas', () => {
+    const groups = navGroups();
+    const hrefs = (key: 'mes' | 'adiante' | 'config') =>
+      groups.find((group) => group.key === key)?.items.map((item) => item.href) ?? [];
+    expect(groups.map((group) => group.key)).toEqual(['mes', 'adiante', 'config']);
+    expect(groups.map((group) => group.label)).toEqual(['Mês', 'Adiante', 'Config']);
+    expect(hrefs('mes')).toEqual(['/', '/lancamentos', '/importar', '/cartoes']);
+    expect(hrefs('adiante')).toEqual([
+      '/fluxo',
+      '/orcamento',
+      '/orcamento/recorrentes',
+      '/metas',
+      '/investimentos',
+    ]);
+    expect(hrefs('config')).toEqual(['/config']);
   });
 });
 

@@ -16,13 +16,15 @@ export type RowState =
   | 'credit_card_payment'
   | 'informational';
 
-export type RowFlag = 'invalid' | 'low_confidence' | 'duplicate' | 'payment' | 'informational';
+export type RowFlag = 'invalid' | 'low_confidence' | 'duplicate' | 'payment' | 'informational' | 'uncategorized';
 
 export type FlagInput = {
   state: RowState;
   lowConfidence: boolean;
   /** Incluída e com campo faltando ou inválido: bloqueia a confirmação. */
   invalid: boolean;
+  /** Incluída e sem categoria: entra no orçamento zero, é o que o lote manda conferir. */
+  missingCategory?: boolean;
 };
 
 /** Sinais da linha, do mais grave ao menos grave. Vazio = linha sem nada a conferir. */
@@ -33,6 +35,7 @@ export function rowFlags(row: FlagInput): RowFlag[] {
   if (row.state === 'duplicate') flags.push('duplicate');
   if (row.state === 'credit_card_payment') flags.push('payment');
   if (row.state === 'informational') flags.push('informational');
+  if (row.missingCategory) flags.push('uncategorized');
   return flags;
 }
 
@@ -43,6 +46,7 @@ export const FLAG_SELO: Record<RowFlag, { label: string; tone: SeloTone }> = {
   duplicate: { label: 'Duplicada', tone: 'attention' },
   payment: { label: 'Pagamento', tone: 'attention' },
   informational: { label: 'Informativa', tone: 'attention' },
+  uncategorized: { label: 'Não categorizado', tone: 'attention' },
 };
 
 /** `index` das linhas que precisam de atenção, na ordem da lista. */

@@ -320,7 +320,7 @@ export function TransactionList({
                       aria-expanded={editing}
                       aria-label={`${editing ? 'Fechar' : 'Abrir'} ${title}`}
                       onClick={() => (editing ? onCancelEdit() : onEdit(row.id))}
-                      className="flex min-h-11 min-w-0 items-center gap-2 text-left text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8"
+                      className="flex min-h-11 min-w-0 items-center gap-2 text-left text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-6"
                     >
                       <span className="truncate" title={title}>{title}</span>
                       <Pencil className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
