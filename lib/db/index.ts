@@ -40,6 +40,14 @@ function getClient(): ReturnType<typeof postgres> {
     // O seed e as migrations rodam em processo curto; o app roda em serverless.
     // Um pool pequeno evita estourar o limite do free tier.
     max: 5,
+    // Producao (Vercel Functions + endpoint pooled do Neon): instancia
+    // serverless nasce e morre o tempo todo, e conexao ociosa presa num pool
+    // de instancia morta so aparece. `idle_timeout` fecha a ociosa em 20 s;
+    // `connect_timeout` falha rapido (10 s) em vez de prender a funcao ate o
+    // timeout da Vercel. Em desenvolvimento e nos testes, os mesmos valores
+    // so encurtam a espera quando o banco cai — o comportamento normal nao muda.
+    idle_timeout: 20,
+    connect_timeout: 10,
     /**
      * Prepared statement desligado por padrao, por portabilidade. O pooler de
      * transacao do Supabase nao aceita prepared statement nomeado, e o sintoma
