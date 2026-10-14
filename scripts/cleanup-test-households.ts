@@ -1,6 +1,16 @@
-import { eq, sql } from 'drizzle-orm';
+import { pathToFileURL } from 'node:url';
 
-import { db, households, sql as pgClient } from '../lib/db/index.ts';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+
+import {
+  creditCards,
+  db,
+  households,
+  importBatches,
+  statements,
+  transactions,
+  sql as pgClient,
+} from '../lib/db/index.ts';
 
 /**
  * Faxina dos households de TESTE orfaos no banco (residuo de suites que
@@ -106,6 +116,42 @@ function deletable(candidate: Candidate, keep: string): boolean {
   return true;
 }
 
+/** `tx` de `db.transaction` — a exclusao roda inteira dentro dela. */
+export type CleanupTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Apaga os households da lista, com tudo que e deles. Mesma ordem do cleanup
+ * dos testes (FKs RESTRICT/NO ACTION sao imediatas): reabre as conciliadas e
+ * solta o pagamento de fatura antes de apagar as linhas; o cascade leva o
+ * resto. `inArray` com lista vazia nao apaga nada. Roda dentro da transacao
+ * do chamador: ou sai tudo, ou nao sai nada.
+ */
+export async function deleteTestHouseholds(tx: CleanupTransaction, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await tx
+    .update(transactions)
+    .set({ status: 'planned', reconciledByTransactionId: null })
+    .where(and(inArray(transactions.householdId, ids), eq(transactions.status, 'reconciled')));
+  const cards = await tx
+    .select({ id: creditCards.id })
+    .from(creditCards)
+    .where(inArray(creditCards.householdId, ids));
+  if (cards.length > 0) {
+    await tx
+      .update(statements)
+      .set({ paidTransactionId: null })
+      .where(
+        inArray(
+          statements.creditCardId,
+          cards.map((card) => card.id),
+        ),
+      );
+  }
+  await tx.delete(transactions).where(inArray(transactions.householdId, ids));
+  await tx.delete(importBatches).where(inArray(importBatches.householdId, ids));
+  await tx.delete(households).where(inArray(households.id, ids));
+}
+
 async function main(): Promise<void> {
   const { execute, keep } = parseArgs(process.argv.slice(2));
 
@@ -143,23 +189,9 @@ async function main(): Promise<void> {
     }
     console.log(`Apagando ${targets.length} households de teste em UMA transacao...`);
     await db.transaction(async (tx) => {
-      const ids = targets.map((candidate) => candidate.id);
-      // Mesma ordem do cleanup dos testes (FKs RESTRICT sao imediatas):
-      // reabre as conciliadas e solta o pagamento de fatura antes de apagar.
-      await tx.execute(
-        sql`update transactions set status = 'planned', reconciled_by_transaction_id = null where household_id in (select unnest(${ids}::uuid[])) and status = 'reconciled'`,
-      );
-      await tx.execute(
-        sql`update statements set paid_transaction_id = null where credit_card_id in (select id from credit_cards where household_id in (select unnest(${ids}::uuid[])))`,
-      );
-      await tx.execute(
-        sql`delete from transactions where household_id in (select unnest(${ids}::uuid[]))`,
-      );
-      await tx.execute(
-        sql`delete from import_batches where household_id in (select unnest(${ids}::uuid[]))`,
-      );
-      await tx.execute(
-        sql`delete from households where id in (select unnest(${ids}::uuid[]))`,
+      await deleteTestHouseholds(
+        tx,
+        targets.map((candidate) => candidate.id),
       );
     });
     for (const candidate of targets) {
@@ -184,12 +216,18 @@ async function main(): Promise<void> {
   console.log('  node --env-file=.env.local scripts/cleanup-test-households.ts --execute --keep <uuid-da-Casa>');
 }
 
-main()
-  .then(async () => {
-    await pgClient.end();
-  })
-  .catch(async (error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
-    await pgClient.end();
-    process.exit(1);
-  });
+// So roda o CLI quando executado direto (`node scripts/...`); importado pelo
+// teste, exporta `deleteTestHouseholds` sem efeito colateral.
+const runAsScript =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (runAsScript) {
+  main()
+    .then(async () => {
+      await pgClient.end();
+    })
+    .catch(async (error: unknown) => {
+      console.error(error instanceof Error ? error.message : error);
+      await pgClient.end();
+      process.exit(1);
+    });
+}
