@@ -5,7 +5,7 @@ Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATI
 
 **Última atualização:** 2026-10-14 · 1894 testes verdes · **Redesenho visual "Carnê de Prestações" entregue (impeccable). Fases 1, 2 e 3 completas** (Fase 3 com gate humano aprovado em 2026-10-02; auditoria da Faisca em 2026-10-14 confirmou T-301..T-306; falta só conferir Investimentos a 390px por imagem). Equipe nova em OpenCode desde 2026-10-14 (`TEAM.md`).
 
-**2026-10-14:** texto colado em cartão agora inverte o sinal como os PDFs (compra sem sinal = despesa). Carregar o Fluxo grava as previstas das recorrências **de propósito** (RF-ORC-02), de forma idempotente. As regras de categorização mostram "0 usos" porque não retroagem sobre importações antigas: use "Aplicar regras aos não categorizados". **Achado aberto:** ~300 households de teste órfãos no banco de produção.
+**2026-10-14:** texto colado em cartão agora inverte o sinal como os PDFs (compra sem sinal = despesa). Carregar o Fluxo grava as previstas das recorrências **de propósito** (RF-ORC-02), de forma idempotente. As regras de categorização mostram "0 usos" porque não retroagem sobre importações antigas: use "Aplicar regras aos não categorizados". **Resolvido em 2026-10-14:** 264 households de teste órfãos apagados (`scripts/cleanup-test-households.ts`); o banco tem só a "Casa". O vazamento nos testes de banco foi fechado (seed autocontido).
 
 ## Retomar aqui — redesenho impeccable (2026-10-08 a 2026-10-09)
 
