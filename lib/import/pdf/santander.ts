@@ -1,12 +1,12 @@
 ﻿/**
- * Parser de fatura Santander em PDF â€” CONTRACTS Â§15 (`parseSantanderPdf`), T-117b.
+ * Parser de fatura Santander em PDF — CONTRACTS §15 (`parseSantanderPdf`), T-117b.
  *
  * Recebe as linhas ja remontadas (`PdfTextRow[]`) e devolve `ParseResult`. Este
  * e o mais hostil dos tres bancos, e por dois motivos que nao existem nos outros:
  *
  * 1. **Data e descricao vem FUNDIDAS num unico run, em `x=33`**
  *    (`"99/99 AAAAA..."`): e `dd/MM` + espaco + descricao no mesmo item de
- *    texto. A separacao e por **parsing de string**, nao por coordenada â€” por
+ *    texto. A separacao e por **parsing de string**, nao por coordenada — por
  *    isso o parser do Nubank nao serve de molde.
  * 2. **Duas tabelas independentes dividem as mesmas `y`**: lancamentos em
  *    `x < 250`, quadro-resumo em `x > 320`. Na mesma `y=425` convivem uma compra
@@ -17,29 +17,29 @@
  *    lancamento).
  *
  * A geometria vem da medicao de fatura real, anonimizada em `IMPORT-SOURCES.md`
- * Â§8 (medicao de 2026-09-16). O arquivo real vive em `.private/` e nao e
+ * §8 (medicao de 2026-09-16). O arquivo real vive em `.private/` e nao e
  * acessivel a este agente (RNF-01). Tudo que e layout esta em `SANTANDER_LAYOUT`,
  * marcado `MEDIDO`; o que e decisao de dominio esta marcado `SUPOSICAO`.
  *
  * ## O ano
  *
  * A data e `dd/MM`, **sem ano**. O ano existe no arquivo em data completa
- * `dd/MM/aaaa`, e a medicao Â§8.2 (2026-09-17) fixou onde procura-lo: a **primeira
+ * `dd/MM/aaaa`, e a medicao §8.2 (2026-09-17) fixou onde procura-lo: a **primeira
  * ocorrencia de `dd/MM/aaaa` fora da area de lancamentos** (`x > 250`, o
- * quadro-resumo). A regra e deliberadamente robusta em vez de posicional â€” nao
+ * quadro-resumo). A regra e deliberadamente robusta em vez de posicional — nao
  * fixar `y`, porque a altura do bloco-resumo muda a cada fatura.
  *
  * Ordem: **documento -> parametro do chamador -> `null`**. Nunca do relogio:
- * `new Date()` e proibido em `/lib` (CONVENTIONS Â§4). Sem nenhuma das duas
+ * `new Date()` e proibido em `/lib` (CONVENTIONS §4). Sem nenhuma das duas
  * fontes, a linha volta com `occurredOn: null` para o usuario completar.
  *
  * **Virada de ano (gate T-116).** Uma data `dd/MM` sem ano que cai **depois** da
  * data de referencia do documento e do ano anterior. A referencia do **documento
  * vence** o parametro: e a data impressa pela propria fatura. O parametro so
- * fornece o ano quando o resumo nao traz data completa â€” e, nesse caso, sem
+ * fornece o ano quando o resumo nao traz data completa — e, nesse caso, sem
  * virada.
  *
- * Modulo puro (CONVENTIONS Â§5): sem I/O, sem `Date`, sem `process.env`. Toda
+ * Modulo puro (CONVENTIONS §5): sem I/O, sem `Date`, sem `process.env`. Toda
  * conta de calendario passa por `lib/date` (`clampDayToMonth`).
  */
 
@@ -68,7 +68,7 @@ interface XBand {
 }
 
 /**
- * MEDIDO (Â§8): fronteiras das duas tabelas. Lancamentos terminam antes de 250; o
+ * MEDIDO (§8): fronteiras das duas tabelas. Lancamentos terminam antes de 250; o
  * quadro-resumo comeca depois de 320. Exportadas para o chamador passar a
  * `groupIntoRows` e obter `text` limpo por tabela.
  */
@@ -84,14 +84,14 @@ export const SANTANDER_X_BANDS: readonly (readonly [number, number])[] = [
 ];
 
 /**
- * Layout da fatura Santander. `MEDIDO` veio da medicao (Â§8); `SUPOSICAO` nao foi
+ * Layout da fatura Santander. `MEDIDO` veio da medicao (§8); `SUPOSICAO` nao foi
  * medido e esta comentado como tal.
  */
 export const SANTANDER_LAYOUT = {
   /** Data da medicao que originou estas faixas. */
   measuredOn: '2026-09-16',
   /** Fonte anonimizada das medidas. */
-  measuredFrom: 'IMPORT-SOURCES.md Â§8 (fatura real de 2026-09)',
+  measuredFrom: 'IMPORT-SOURCES.md §8 (fatura real de 2026-09)',
 
   /**
    * MEDIDO (§8; `aux` RECLASSIFICADA no gate T-116): a celula fundida
@@ -110,21 +110,21 @@ export const SANTANDER_LAYOUT = {
     value: { minX: 200, maxX: LAUNCH_MAX_X },
   } as Readonly<Record<'date' | 'aux' | 'value', XBand>>,
 
-  /** MEDIDO (Â§8): limites das tabelas, iguais a `SANTANDER_X_BANDS`. */
+  /** MEDIDO (§8): limites das tabelas, iguais a `SANTANDER_X_BANDS`. */
   launchMaxX: LAUNCH_MAX_X,
   summaryMinX: SUMMARY_MIN_X,
 
   /**
-   * MEDIDO (Â§8.2): o ano vem da primeira data completa `dd/MM/aaaa` fora da area
+   * MEDIDO (§8.2): o ano vem da primeira data completa `dd/MM/aaaa` fora da area
    * de lancamentos (`x > launchMaxX`). Nao fixar `y`: a altura do bloco-resumo
    * depende do texto promocional e muda a cada fatura.
    */
   fullDatePattern: /(\d{2})\/(\d{2})\/(\d{4})/,
 
   /**
-   * MEDIDO (Â§8): no mesmo run, `dd/MM` seguido de espaco e da descricao. Exigir
-   * o espaco depois do mes rejeita uma data completa (`22/08/2026`) â€” que nao e
-   * lancamento â€” e o texto restante e a descricao.
+   * MEDIDO (§8): no mesmo run, `dd/MM` seguido de espaco e da descricao. Exigir
+   * o espaco depois do mes rejeita uma data completa (`22/08/2026`) — que nao e
+   * lancamento — e o texto restante e a descricao.
    */
   fusedDatePattern: /^(\d{1,2})\/(\d{1,2})(?:\s+(.*))?$/,
 
@@ -132,8 +132,8 @@ export const SANTANDER_LAYOUT = {
   moneyToken: PDF_MONEY_TOKEN,
 
   /**
-   * MEDIDO (Â§8): a linha de resumo com prefixo `(=)`. Os demais literais sao
-   * SUPOSICAO â€” a medicao so garantiu o `(=)`; que ele carregue o total impresso
+   * MEDIDO (§8): a linha de resumo com prefixo `(=)`. Os demais literais sao
+   * SUPOSICAO — a medicao so garantiu o `(=)`; que ele carregue o total impresso
    * e inferencia, a ajustar se a fatura real disser outra coisa.
    */
   totalMarkers: [
@@ -150,8 +150,8 @@ export const SANTANDER_LAYOUT = {
   ignoredMarkers: ['parcele sua fatura'] as readonly string[],
 
   /**
-   * SUPOSICAO (nao coberto pela medicao Â§8): compra vem impressa sem sinal e
-   * pagamento/credito com `-`; pela convencao do sistema (CONVENTIONS Â§2, saida
+   * SUPOSICAO (nao coberto pela medicao §8): compra vem impressa sem sinal e
+   * pagamento/credito com `-`; pela convencao do sistema (CONVENTIONS §2, saida
    * negativa) o sinal impresso e invertido, igual ao Nubank. Se a fatura real
    * marcar a direcao ao contrario, e este campo que muda.
    */
@@ -224,9 +224,9 @@ function rightmostPureMoney(
 }
 
 /**
- * Valor do lancamento. A faixa medida (Â§8, `x 200..250`) vem primeiro; se ela
+ * Valor do lancamento. A faixa medida (§8, `x 200..250`) vem primeiro; se ela
  * nao tiver valor, cai para as celulas da area de lancamentos. O valor e
- * alinhado a direita, entao o `x` inicial encolhe conforme o numero cresce â€” um
+ * alinhado a direita, entao o `x` inicial encolhe conforme o numero cresce — um
  * valor longo comeca antes da faixa medida e seria perdido sem o fallback.
  */
 function amountFrom(row: PdfTextRow): Cents | null {
@@ -249,7 +249,7 @@ function installmentFor(row: PdfTextRow): string {
 }
 
 /**
- * Data de referencia do documento (Â§8.2): a primeira data completa `dd/MM/aaaa`
+ * Data de referencia do documento (§8.2): a primeira data completa `dd/MM/aaaa`
  * fora da area de lancamentos (`x > launchMaxX`). `null` quando o quadro-resumo
  * nao a traz. E a fonte da virada de ano.
  */
@@ -304,7 +304,7 @@ function toSystemAmount(printed: Cents): Cents {
 
 /**
  * Le o run fundido `dd/MM + descricao` a partir das celulas da faixa de data.
- * `null` quando a linha nao comeca com uma data `dd/MM` â€” cabecalho, propaganda,
+ * `null` quando a linha nao comeca com uma data `dd/MM` — cabecalho, propaganda,
  * quadro-resumo ou data auxiliar solta.
  */
 function matchFusedDate(row: PdfTextRow): FusedDateMatch | null {
@@ -324,14 +324,14 @@ function matchFusedDate(row: PdfTextRow): FusedDateMatch | null {
  * Parseia as linhas de uma fatura Santander de cartao.
  *
  * Uma linha vira lancamento quando a faixa de data comeca com `dd/MM` seguido de
- * descricao. O `x` da faixa de valor e o das colunas medidas (Â§8); a tabela de
+ * descricao. O `x` da faixa de valor e o das colunas medidas (§8); a tabela de
  * resumo (`x > 320`) e ignorada, exceto pela linha `(=)`, que traz o total
  * impresso (`SUPOSICAO`).
  *
  * `defaultYear` e a fonte de ano de reserva, usada quando o documento nao traz
  * `dd/MM/aaaa`; sem nenhuma das duas, `occurredOn` volta `null`. Linha candidata
- * sempre vira `ParsedRow` â€” o campo que nao foi lido volta como `null`, nunca
- * sentinela e nunca descartada (CONTRACTS Â§15). Por isso `diagnostics` volta
+ * sempre vira `ParsedRow` — o campo que nao foi lido volta como `null`, nunca
+ * sentinela e nunca descartada (CONTRACTS §15). Por isso `diagnostics` volta
  * vazio.
  */
 export function parseSantanderPdf(
