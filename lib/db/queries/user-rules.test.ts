@@ -22,93 +22,101 @@ async function createFixture(label: string) {
     .returning({ id: schema.households.id });
   if (household === undefined) throw new Error('Household de teste nao foi criado.');
   const householdId = household.id;
+  try {
+    const [account] = await db
+      .insert(schema.accounts)
+      .values({ householdId, name: 'Conta', kind: 'checking', openingDate: '2026-01-01' })
+      .returning({ id: schema.accounts.id });
+    const [member] = await db
+      .insert(schema.members)
+      .values({ householdId, name: 'Pessoa', email: `f5-${label}-${householdId}@teste.local`, color: '#000000' })
+      .returning({ id: schema.members.id });
+    const [mercado, casa, alimentacao, salario] = await db
+      .insert(schema.categories)
+      .values([
+        { householdId, name: 'Mercado', nature: 'essential' },
+        { householdId, name: 'Casa', nature: 'non_essential' },
+        { householdId, name: 'Alimentacao', nature: 'essential' },
+        { householdId, name: 'Salario', nature: 'income' },
+      ])
+      .returning({ id: schema.categories.id });
+    if (!account || !member || !mercado || !casa || !alimentacao || !salario) throw new Error('Fixture incompleta.');
+    await db.insert(schema.categories).values({ householdId, name: 'Delivery', nature: 'non_essential', parentId: alimentacao.id });
+    const accountId = account.id;
 
-  const [account] = await db
-    .insert(schema.accounts)
-    .values({ householdId, name: 'Conta', kind: 'checking', openingDate: '2026-01-01' })
-    .returning({ id: schema.accounts.id });
-  const [member] = await db
-    .insert(schema.members)
-    .values({ householdId, name: 'Pessoa', email: `f5-${label}-${householdId}@teste.local`, color: '#000000' })
-    .returning({ id: schema.members.id });
-  const [mercado, casa, alimentacao, salario] = await db
-    .insert(schema.categories)
-    .values([
-      { householdId, name: 'Mercado', nature: 'essential' },
-      { householdId, name: 'Casa', nature: 'non_essential' },
-      { householdId, name: 'Alimentacao', nature: 'essential' },
-      { householdId, name: 'Salario', nature: 'income' },
-    ])
-    .returning({ id: schema.categories.id });
-  if (!account || !member || !mercado || !casa || !alimentacao || !salario) throw new Error('Fixture incompleta.');
-  await db.insert(schema.categories).values({ householdId, name: 'Delivery', nature: 'non_essential', parentId: alimentacao.id });
-  const accountId = account.id;
+    async function rule(pattern: string, categoryId: string, priority: number) {
+      const [row] = await db
+        .insert(schema.categorizationRules)
+        .values({ householdId, pattern, matchType: 'contains', categoryId, priority, hits: 0 })
+        .returning({ id: schema.categorizationRules.id });
+      if (row === undefined) throw new Error('Regra nao criada.');
+      return row.id;
+    }
 
-  async function rule(pattern: string, categoryId: string, priority: number) {
-    const [row] = await db
-      .insert(schema.categorizationRules)
-      .values({ householdId, pattern, matchType: 'contains', categoryId, priority, hits: 0 })
-      .returning({ id: schema.categorizationRules.id });
-    if (row === undefined) throw new Error('Regra nao criada.');
-    return row.id;
+    async function tx(description: string, extra: Partial<typeof schema.transactions.$inferInsert> = {}) {
+      const [row] = await db
+        .insert(schema.transactions)
+        .values({
+          householdId,
+          occurredOn: '2026-09-05',
+          competence: '2026-09',
+          description,
+          rawDescription: description,
+          amountCents: cents(-1000),
+          kind: 'expense',
+          accountId,
+          ...extra,
+        })
+        .returning({ id: schema.transactions.id });
+      if (row === undefined) throw new Error('Lancamento nao criado.');
+      return row.id;
+    }
+
+    async function read(id: string) {
+      const [row] = await db
+        .select({ categoryId: schema.transactions.categoryId, categoryRuleId: schema.transactions.categoryRuleId })
+        .from(schema.transactions)
+        .where(eq(schema.transactions.id, id));
+      return row;
+    }
+
+    async function rules() {
+      return db
+        .select({
+          id: schema.categorizationRules.id,
+          pattern: schema.categorizationRules.pattern,
+          categoryId: schema.categorizationRules.categoryId,
+          memberId: schema.categorizationRules.memberId,
+          priority: schema.categorizationRules.priority,
+        })
+        .from(schema.categorizationRules)
+        .where(eq(schema.categorizationRules.householdId, householdId))
+        .orderBy(asc(schema.categorizationRules.priority), asc(schema.categorizationRules.id));
+    }
+
+    return {
+      db,
+      schema,
+      householdId,
+      memberId: member.id,
+      mercadoId: mercado.id,
+      casaId: casa.id,
+      alimentacaoId: alimentacao.id,
+      salarioId: salario.id,
+      rule,
+      tx,
+      read,
+      rules,
+      cleanup: () => db.delete(schema.households).where(eq(schema.households.id, householdId)),
+    };
+  } catch (error) {
+    try {
+      await db.delete(schema.households).where(eq(schema.households.id, householdId));
+    } catch {
+      // Se a compensacao falhar, o orfao cai na faxina de households de teste.
+    }
+    throw error;
   }
-
-  async function tx(description: string, extra: Partial<typeof schema.transactions.$inferInsert> = {}) {
-    const [row] = await db
-      .insert(schema.transactions)
-      .values({
-        householdId,
-        occurredOn: '2026-09-05',
-        competence: '2026-09',
-        description,
-        rawDescription: description,
-        amountCents: cents(-1000),
-        kind: 'expense',
-        accountId,
-        ...extra,
-      })
-      .returning({ id: schema.transactions.id });
-    if (row === undefined) throw new Error('Lancamento nao criado.');
-    return row.id;
-  }
-
-  async function read(id: string) {
-    const [row] = await db
-      .select({ categoryId: schema.transactions.categoryId, categoryRuleId: schema.transactions.categoryRuleId })
-      .from(schema.transactions)
-      .where(eq(schema.transactions.id, id));
-    return row;
-  }
-
-  async function rules() {
-    return db
-      .select({
-        id: schema.categorizationRules.id,
-        pattern: schema.categorizationRules.pattern,
-        categoryId: schema.categorizationRules.categoryId,
-        memberId: schema.categorizationRules.memberId,
-        priority: schema.categorizationRules.priority,
-      })
-      .from(schema.categorizationRules)
-      .where(eq(schema.categorizationRules.householdId, householdId))
-      .orderBy(asc(schema.categorizationRules.priority), asc(schema.categorizationRules.id));
-  }
-
-  return {
-    db,
-    schema,
-    householdId,
-    memberId: member.id,
-    mercadoId: mercado.id,
-    casaId: casa.id,
-    alimentacaoId: alimentacao.id,
-    salarioId: salario.id,
-    rule,
-    tx,
-    read,
-    rules,
-    cleanup: () => db.delete(schema.households).where(eq(schema.households.id, householdId)),
-  };
 }
 
 describe.skipIf(process.env.DATABASE_URL === undefined)('createUserRule (F5)', () => {
@@ -140,19 +148,22 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('createUserRule (F5)', (
 
   it('recusa categoria agrupamento, categoria ou membro de outro household', async () => {
     const f = await createFixture('invalida');
-    const outro = await createFixture('invalida-outro');
     try {
-      const { createUserRule, InvalidUserRuleError } = await import('./user-rules');
-      const base = { pattern: 'x', matchType: 'contains' as const, memberId: null };
-      await expect(createUserRule(f.householdId, { ...base, categoryId: f.alimentacaoId })).rejects.toThrow(InvalidUserRuleError);
-      await expect(createUserRule(f.householdId, { ...base, categoryId: outro.mercadoId })).rejects.toThrow(InvalidUserRuleError);
-      await expect(
-        createUserRule(f.householdId, { ...base, categoryId: f.mercadoId, memberId: outro.memberId }),
-      ).rejects.toThrow(InvalidUserRuleError);
-      expect(await f.rules()).toEqual([]);
+      const outro = await createFixture('invalida-outro');
+      try {
+        const { createUserRule, InvalidUserRuleError } = await import('./user-rules');
+        const base = { pattern: 'x', matchType: 'contains' as const, memberId: null };
+        await expect(createUserRule(f.householdId, { ...base, categoryId: f.alimentacaoId })).rejects.toThrow(InvalidUserRuleError);
+        await expect(createUserRule(f.householdId, { ...base, categoryId: outro.mercadoId })).rejects.toThrow(InvalidUserRuleError);
+        await expect(
+          createUserRule(f.householdId, { ...base, categoryId: f.mercadoId, memberId: outro.memberId }),
+        ).rejects.toThrow(InvalidUserRuleError);
+        expect(await f.rules()).toEqual([]);
+      } finally {
+        await outro.cleanup();
+      }
     } finally {
       await f.cleanup();
-      await outro.cleanup();
     }
   });
 });
@@ -210,21 +221,24 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('getRuleOffer / acceptRu
 
   it('sem oferta: linha sem categoria, ja coberta por regra, ou de outro household', async () => {
     const f = await createFixture('sem-oferta');
-    const outro = await createFixture('sem-oferta-outro');
     try {
-      const { getRuleOffer } = await import('./user-rules');
-      const semCategoria = await f.tx('IRMAOS BOA');
-      await f.rule('kabum', f.mercadoId, 1);
-      const coberta = await f.tx('KABUM', { categoryId: f.mercadoId });
-      const alheia = await outro.tx('IRMAOS BOA', { categoryId: outro.mercadoId });
+      const outro = await createFixture('sem-oferta-outro');
+      try {
+        const { getRuleOffer } = await import('./user-rules');
+        const semCategoria = await f.tx('IRMAOS BOA');
+        await f.rule('kabum', f.mercadoId, 1);
+        const coberta = await f.tx('KABUM', { categoryId: f.mercadoId });
+        const alheia = await outro.tx('IRMAOS BOA', { categoryId: outro.mercadoId });
 
-      expect(await getRuleOffer(f.householdId, [semCategoria])).toBeNull();
-      expect(await getRuleOffer(f.householdId, [coberta])).toBeNull();
-      expect(await getRuleOffer(f.householdId, [alheia])).toBeNull();
-      expect(await getRuleOffer(f.householdId, [])).toBeNull();
+        expect(await getRuleOffer(f.householdId, [semCategoria])).toBeNull();
+        expect(await getRuleOffer(f.householdId, [coberta])).toBeNull();
+        expect(await getRuleOffer(f.householdId, [alheia])).toBeNull();
+        expect(await getRuleOffer(f.householdId, [])).toBeNull();
+      } finally {
+        await outro.cleanup();
+      }
     } finally {
       await f.cleanup();
-      await outro.cleanup();
     }
   });
 

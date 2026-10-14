@@ -116,6 +116,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
         const key = (row: { competence: string; amountCents: number; status: string }) =>
           `${row.competence}|${row.amountCents}|${row.status}`;
         expect(dashboard.commitmentTransactions.map(key).sort()).toEqual(commitment.map(key).sort());
+      } catch (error) {
+        try {
+          await db.delete(households).where(eq(households.id, householdId));
+        } catch {
+          // Se a compensação falhar, o órfão cai na faxina de households de teste.
+        }
+        throw error;
       } finally {
         // Transações primeiro: `transactions.credit_card_id` é RESTRICT, e a ordem
         // do cascade a partir de `households` não é garantida.
@@ -169,6 +176,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
         const total = (rows: { amountCents: number }[]) => rows.reduce((sum, row) => sum + row.amountCents, 0);
         expect(total(cards)).toBe(-300);
         expect(total(dashboard.commitmentTransactions)).toBe(-300);
+      } catch (error) {
+        try {
+          await db.delete(households).where(eq(households.id, householdId));
+        } catch {
+          // Se a compensação falhar, o órfão cai na faxina de households de teste.
+        }
+        throw error;
       } finally {
         await db.delete(transactions).where(eq(transactions.householdId, householdId));
         await db.delete(households).where(eq(households.id, householdId));

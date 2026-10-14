@@ -116,32 +116,41 @@ async function createImportFixture(label: string) {
     .returning({ id: schema.households.id });
   if (household === undefined) throw new Error('Test household was not created.');
 
-  const [card] = await db
-    .insert(schema.creditCards)
-    .values({
-      householdId: household.id,
-      name: `T-108 ${label} card`,
-      bank: null,
-      brand: 'other',
-      holderMemberId: null,
-      paymentAccountId: null,
-      creditLimitCents: null,
-      closingDay: 10,
-      dueDay: 20,
-      active: true,
-    })
-    .returning({ id: schema.creditCards.id });
-  if (card === undefined) throw new Error('Test card was not created.');
+  try {
+    const [card] = await db
+      .insert(schema.creditCards)
+      .values({
+        householdId: household.id,
+        name: `T-108 ${label} card`,
+        bank: null,
+        brand: 'other',
+        holderMemberId: null,
+        paymentAccountId: null,
+        creditLimitCents: null,
+        closingDay: 10,
+        dueDay: 20,
+        active: true,
+      })
+      .returning({ id: schema.creditCards.id });
+    if (card === undefined) throw new Error('Test card was not created.');
 
-  return {
-    db,
-    schema,
-    householdId: household.id,
-    cardId: card.id,
-    cleanup: async () => {
+    return {
+      db,
+      schema,
+      householdId: household.id,
+      cardId: card.id,
+      cleanup: async () => {
+        await db.delete(schema.households).where(eq(schema.households.id, household.id));
+      },
+    };
+  } catch (error) {
+    try {
       await db.delete(schema.households).where(eq(schema.households.id, household.id));
-    },
-  };
+    } catch {
+      // Se a compensação falhar, o órfão cai na faxina de households de teste.
+    }
+    throw error;
+  }
 }
 
 describe.skipIf(process.env.DATABASE_URL === undefined)('import dedupe and revert boundaries', () => {

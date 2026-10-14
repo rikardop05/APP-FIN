@@ -37,76 +37,87 @@ async function seed(m: Modules, name = 'F2 auto-categorization test') {
   if (household === undefined) throw new Error('Household de teste não foi criado.');
   const householdId = household.id;
 
-  const category = async (categoryName: string, parentId: string | null = null) => {
-    const [row] = await db
-      .insert(schema.categories)
-      .values({ householdId, name: categoryName, parentId, nature: 'non_essential' })
-      .returning({ id: schema.categories.id });
-    if (row === undefined) throw new Error('Categoria não foi criada.');
-    return row.id;
-  };
-  const root = await category('Compras teste');
-  const eletronicos = await category('Eletrônicos teste', root);
-  const casa = await category('Casa teste', root);
-  const presentes = await category('Presentes teste', root);
+  try {
+    const category = async (categoryName: string, parentId: string | null = null) => {
+      const [row] = await db
+        .insert(schema.categories)
+        .values({ householdId, name: categoryName, parentId, nature: 'non_essential' })
+        .returning({ id: schema.categories.id });
+      if (row === undefined) throw new Error('Categoria não foi criada.');
+      return row.id;
+    };
+    const root = await category('Compras teste');
+    const eletronicos = await category('Eletrônicos teste', root);
+    const casa = await category('Casa teste', root);
+    const presentes = await category('Presentes teste', root);
 
-  const [card] = await db
-    .insert(schema.creditCards)
-    .values({ householdId, name: 'Cartão teste', closingDay: 1, dueDay: 10 })
-    .returning({ id: schema.creditCards.id });
-  if (card === undefined) throw new Error('Cartão não foi criado.');
+    const [card] = await db
+      .insert(schema.creditCards)
+      .values({ householdId, name: 'Cartão teste', closingDay: 1, dueDay: 10 })
+      .returning({ id: schema.creditCards.id });
+    if (card === undefined) throw new Error('Cartão não foi criado.');
 
-  const rule = async (pattern: string, categoryId: string) => {
-    const [row] = await db
-      .insert(schema.categorizationRules)
-      .values({ householdId, pattern, categoryId })
-      .returning({ id: schema.categorizationRules.id });
-    if (row === undefined) throw new Error('Regra não foi criada.');
-    return row.id;
-  };
+    const rule = async (pattern: string, categoryId: string) => {
+      const [row] = await db
+        .insert(schema.categorizationRules)
+        .values({ householdId, pattern, categoryId })
+        .returning({ id: schema.categorizationRules.id });
+      if (row === undefined) throw new Error('Regra não foi criada.');
+      return row.id;
+    };
 
-  /** Plano de 4 parcelas: 1-2 `posted`, 3-4 `planned`. */
-  const plan = async (categoryId: string | null) => {
-    const [row] = await db
-      .insert(schema.installmentPlans)
-      .values({
-        householdId,
-        creditCardId: card.id,
-        description: 'TV 4X',
-        totalCents: -400_00,
-        installmentsCount: 4,
-        firstCompetence: '2026-08',
-        categoryId,
-        source: 'import',
-      })
-      .returning({ id: schema.installmentPlans.id });
-    if (row === undefined) throw new Error('Plano não foi criado.');
-    const ids: string[] = [];
-    for (let n = 1; n <= 4; n += 1) {
-      const competence = `2026-${String(7 + n).padStart(2, '0')}`;
-      const [tx] = await db
-        .insert(schema.transactions)
+    /** Plano de 4 parcelas: 1-2 `posted`, 3-4 `planned`. */
+    const plan = async (categoryId: string | null) => {
+      const [row] = await db
+        .insert(schema.installmentPlans)
         .values({
           householdId,
-          occurredOn: '2026-07-20',
-          competence,
-          description: `TV ${n}/4`,
-          rawDescription: `TV ${n}/4`,
-          amountCents: -100_00,
-          kind: 'expense',
-          status: n <= 2 ? 'posted' : 'planned',
           creditCardId: card.id,
-          installmentPlanId: row.id,
-          installmentNumber: n,
+          description: 'TV 4X',
+          totalCents: -400_00,
+          installmentsCount: 4,
+          firstCompetence: '2026-08',
+          categoryId,
+          source: 'import',
         })
-        .returning({ id: schema.transactions.id });
-      if (tx === undefined) throw new Error('Parcela não foi criada.');
-      ids.push(tx.id);
-    }
-    return { planId: row.id, installmentIds: ids };
-  };
+        .returning({ id: schema.installmentPlans.id });
+      if (row === undefined) throw new Error('Plano não foi criado.');
+      const ids: string[] = [];
+      for (let n = 1; n <= 4; n += 1) {
+        const competence = `2026-${String(7 + n).padStart(2, '0')}`;
+        const [tx] = await db
+          .insert(schema.transactions)
+          .values({
+            householdId,
+            occurredOn: '2026-07-20',
+            competence,
+            description: `TV ${n}/4`,
+            rawDescription: `TV ${n}/4`,
+            amountCents: -100_00,
+            kind: 'expense',
+            status: n <= 2 ? 'posted' : 'planned',
+            creditCardId: card.id,
+            installmentPlanId: row.id,
+            installmentNumber: n,
+          })
+          .returning({ id: schema.transactions.id });
+        if (tx === undefined) throw new Error('Parcela não foi criada.');
+        ids.push(tx.id);
+      }
+      return { planId: row.id, installmentIds: ids };
+    };
 
-  return { householdId, root, eletronicos, casa, presentes, rule, plan };
+    return { householdId, root, eletronicos, casa, presentes, rule, plan };
+  } catch (error) {
+    // Seed falhou no meio: apaga o household parcial para não virar órfão.
+    // Melhor esforço (o erro original é que sobe); cascade leva os filhos.
+    try {
+      await db.delete(schema.households).where(eq(schema.households.id, householdId));
+    } catch {
+      // Se a compensação falhar, o órfão cai na faxina de households de teste.
+    }
+    throw error;
+  }
 }
 
 async function cleanup(m: Modules, householdId: string) {
@@ -198,20 +209,23 @@ describe.skipIf(!process.env.DATABASE_URL)('auto-categorization (integração)',
     it('não toca regra de outro household', async () => {
       const m = await modules();
       const s = await seed(m);
-      const other = await seed(m, 'F2 outro household');
       try {
-        const foreign = await other.rule('TV', other.eletronicos);
-        const updated = await m.auto.incrementRuleHits(s.householdId, { [foreign]: 7 });
+        const other = await seed(m, 'F2 outro household');
+        try {
+          const foreign = await other.rule('TV', other.eletronicos);
+          const updated = await m.auto.incrementRuleHits(s.householdId, { [foreign]: 7 });
 
-        expect(updated).toBe(0);
-        const [row] = await m.db
-          .select({ hits: m.schema.categorizationRules.hits })
-          .from(m.schema.categorizationRules)
-          .where(and(eq(m.schema.categorizationRules.id, foreign), eq(m.schema.categorizationRules.householdId, other.householdId)));
-        expect(row?.hits).toBe(0);
+          expect(updated).toBe(0);
+          const [row] = await m.db
+            .select({ hits: m.schema.categorizationRules.hits })
+            .from(m.schema.categorizationRules)
+            .where(and(eq(m.schema.categorizationRules.id, foreign), eq(m.schema.categorizationRules.householdId, other.householdId)));
+          expect(row?.hits).toBe(0);
+        } finally {
+          await cleanup(m, other.householdId);
+        }
       } finally {
         await cleanup(m, s.householdId);
-        await cleanup(m, other.householdId);
       }
     });
 
@@ -430,31 +444,37 @@ describe.skipIf(!process.env.DATABASE_URL)('auto-categorization (integração)',
     it('recusa plano de outro household e não toca nada', async () => {
       const m = await modules();
       const s = await seed(m);
-      const other = await seed(m, 'F2 outro household');
       try {
-        const { planId, installmentIds } = await other.plan(null);
-        await expect(
-          m.auto.setInstallmentPlanCategory(s.householdId, planId, s.eletronicos),
-        ).rejects.toBeInstanceOf(m.auto.InstallmentPlanNotFoundError);
-        expect(await categoriesOf(m, other.householdId, installmentIds)).toEqual([null, null, null, null]);
+        const other = await seed(m, 'F2 outro household');
+        try {
+          const { planId, installmentIds } = await other.plan(null);
+          await expect(
+            m.auto.setInstallmentPlanCategory(s.householdId, planId, s.eletronicos),
+          ).rejects.toBeInstanceOf(m.auto.InstallmentPlanNotFoundError);
+          expect(await categoriesOf(m, other.householdId, installmentIds)).toEqual([null, null, null, null]);
+        } finally {
+          await cleanup(m, other.householdId);
+        }
       } finally {
         await cleanup(m, s.householdId);
-        await cleanup(m, other.householdId);
       }
     });
 
     it('recusa categoria de outro household', async () => {
       const m = await modules();
       const s = await seed(m);
-      const other = await seed(m, 'F2 outro household');
       try {
-        const { planId } = await s.plan(null);
-        await expect(
-          m.auto.setInstallmentPlanCategory(s.householdId, planId, other.eletronicos),
-        ).rejects.toBeInstanceOf(m.auto.InvalidPlanCategoryError);
+        const other = await seed(m, 'F2 outro household');
+        try {
+          const { planId } = await s.plan(null);
+          await expect(
+            m.auto.setInstallmentPlanCategory(s.householdId, planId, other.eletronicos),
+          ).rejects.toBeInstanceOf(m.auto.InvalidPlanCategoryError);
+        } finally {
+          await cleanup(m, other.householdId);
+        }
       } finally {
         await cleanup(m, s.householdId);
-        await cleanup(m, other.householdId);
       }
     });
 

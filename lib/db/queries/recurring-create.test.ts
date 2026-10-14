@@ -40,28 +40,37 @@ async function seedHousehold(m: Modules, options: { withSettings: boolean; proje
     .values({ name: 'T-204 create test' })
     .returning({ id: schema.households.id });
   if (household === undefined) throw new Error('Household de teste não foi criado.');
-  if (options.withSettings) {
-    await db.insert(schema.householdSettings).values({
-      householdId: household.id,
-      projectionMonths: options.projectionMonths ?? 6,
-    });
+  try {
+    if (options.withSettings) {
+      await db.insert(schema.householdSettings).values({
+        householdId: household.id,
+        projectionMonths: options.projectionMonths ?? 6,
+      });
+    }
+    const [root] = await db
+      .insert(schema.categories)
+      .values({ householdId: household.id, name: 'Moradia teste', parentId: null, nature: 'essential' })
+      .returning({ id: schema.categories.id });
+    if (root === undefined) throw new Error('Categoria raiz não foi criada.');
+    const [leaf] = await db
+      .insert(schema.categories)
+      .values({ householdId: household.id, name: 'Luz teste', parentId: root.id, nature: 'essential' })
+      .returning({ id: schema.categories.id });
+    if (leaf === undefined) throw new Error('Categoria folha não foi criada.');
+    const [account] = await db
+      .insert(schema.accounts)
+      .values({ householdId: household.id, name: 'Conta teste', kind: 'checking', openingDate: '2026-01-01' })
+      .returning({ id: schema.accounts.id });
+    if (account === undefined) throw new Error('Conta não foi criada.');
+    return { householdId: household.id, categoryId: leaf.id, accountId: account.id };
+  } catch (error) {
+    try {
+      await db.delete(schema.households).where(eq(schema.households.id, household.id));
+    } catch {
+      // Se a compensação falhar, o órfão cai na faxina de households de teste.
+    }
+    throw error;
   }
-  const [root] = await db
-    .insert(schema.categories)
-    .values({ householdId: household.id, name: 'Moradia teste', parentId: null, nature: 'essential' })
-    .returning({ id: schema.categories.id });
-  if (root === undefined) throw new Error('Categoria raiz não foi criada.');
-  const [leaf] = await db
-    .insert(schema.categories)
-    .values({ householdId: household.id, name: 'Luz teste', parentId: root.id, nature: 'essential' })
-    .returning({ id: schema.categories.id });
-  if (leaf === undefined) throw new Error('Categoria folha não foi criada.');
-  const [account] = await db
-    .insert(schema.accounts)
-    .values({ householdId: household.id, name: 'Conta teste', kind: 'checking', openingDate: '2026-01-01' })
-    .returning({ id: schema.accounts.id });
-  if (account === undefined) throw new Error('Conta não foi criada.');
-  return { householdId: household.id, categoryId: leaf.id, accountId: account.id };
 }
 
 async function cleanup(m: Modules, householdId: string) {

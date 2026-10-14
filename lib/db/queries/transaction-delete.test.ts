@@ -43,7 +43,8 @@ async function seed(m: Modules, name = 'T-delete test') {
     .returning({ id: schema.households.id });
   if (household === undefined) throw new Error('Household de teste não foi criado.');
   const householdId = household.id;
-  await db.insert(schema.householdSettings).values({ householdId, projectionMonths: 6 });
+  try {
+    await db.insert(schema.householdSettings).values({ householdId, projectionMonths: 6 });
   const [account] = await db
     .insert(schema.accounts)
     .values({ householdId, name: 'Conta teste', kind: 'checking', openingDate: '2026-01-01' })
@@ -86,6 +87,14 @@ async function seed(m: Modules, name = 'T-delete test') {
   const exists = async (id: string) =>
     (await db.select({ id: schema.transactions.id }).from(schema.transactions).where(eq(schema.transactions.id, id))).length === 1;
   return { householdId, accountId: account.id, cardId: card.id, categoryId: leaf.id, insertTx, exists };
+  } catch (error) {
+    try {
+      await db.delete(schema.households).where(eq(schema.households.id, householdId));
+    } catch {
+      // Se a compensação falhar, o órfão cai na faxina de households de teste.
+    }
+    throw error;
+  }
 }
 
 async function cleanup(m: Modules, householdId: string) {
@@ -138,17 +147,20 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('exclusão de lançament
   it('excluir de novo ou excluir id inexistente lança "não encontrado"; id de OUTRO household não apaga nada', async () => {
     const m = await modules();
     const a = await seed(m, 'T-delete A');
-    const b = await seed(m, 'T-delete B');
     try {
-      const mine = await a.insertTx({ competence: '2026-10' });
-      await expect(m.del.deleteTransaction(b.householdId, mine, 'only')).rejects.toThrow();
-      await expect(m.del.getDeleteImpact(b.householdId, mine, 'only')).rejects.toThrow();
-      expect(await a.exists(mine)).toBe(true);
-      await m.del.deleteTransaction(a.householdId, mine, 'only');
-      await expect(m.del.deleteTransaction(a.householdId, mine, 'only')).rejects.toThrow();
+      const b = await seed(m, 'T-delete B');
+      try {
+        const mine = await a.insertTx({ competence: '2026-10' });
+        await expect(m.del.deleteTransaction(b.householdId, mine, 'only')).rejects.toThrow();
+        await expect(m.del.getDeleteImpact(b.householdId, mine, 'only')).rejects.toThrow();
+        expect(await a.exists(mine)).toBe(true);
+        await m.del.deleteTransaction(a.householdId, mine, 'only');
+        await expect(m.del.deleteTransaction(a.householdId, mine, 'only')).rejects.toThrow();
+      } finally {
+        await cleanup(m, b.householdId);
+      }
     } finally {
       await cleanup(m, a.householdId);
-      await cleanup(m, b.householdId);
     }
   });
 

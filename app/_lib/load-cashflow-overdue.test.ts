@@ -78,6 +78,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('loadProjectedCashflow: 
       });
       // A principal continua sem a fatura: nenhum mes negativo.
       expect(loaded.projection.firstNegativeCompetence).toBeNull();
+    } catch (error) {
+      try {
+        await db.delete(schema.households).where(eq(schema.households.id, householdId));
+      } catch {
+        // Se a compensacao falhar, o orfao cai na faxina de households de teste.
+      }
+      throw error;
     } finally {
       await db.delete(schema.households).where(eq(schema.households.id, householdId));
     }
@@ -140,6 +147,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('loadProjectedCashflow: 
         minClosingCompetence: '2026-10',
         firstNegativeCompetence: '2026-10',
       });
+    } catch (error) {
+      try {
+        await db.delete(schema.households).where(eq(schema.households.id, householdId));
+      } catch {
+        // Se a compensacao falhar, o orfao cai na faxina de households de teste.
+      }
+      throw error;
     } finally {
       await db.delete(schema.households).where(eq(schema.households.id, householdId));
     }

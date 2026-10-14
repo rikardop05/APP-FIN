@@ -42,7 +42,8 @@ async function setup(m: Modules) {
     .returning({ id: schema.households.id });
   if (household === undefined) throw new Error('Household de teste não foi criado.');
   const householdId = household.id;
-  await db.insert(schema.householdSettings).values({ householdId, projectionMonths: 6 });
+  try {
+    await db.insert(schema.householdSettings).values({ householdId, projectionMonths: 6 });
   const [account] = await db
     .insert(schema.accounts)
     .values({ householdId, name: 'Conta teste', kind: 'checking', openingDate: '2026-01-01' })
@@ -106,6 +107,14 @@ async function setup(m: Modules) {
     return { plannedId: planned.id, postedId: posted.id };
   };
   return { householdId, expenseId, rule, rows, reconcile };
+  } catch (error) {
+    try {
+      await db.delete(schema.households).where(eq(schema.households.id, householdId));
+    } catch {
+      // Se a compensação falhar, o órfão cai na faxina de households de teste.
+    }
+    throw error;
+  }
 }
 
 async function cleanup(m: Modules, householdId: string) {

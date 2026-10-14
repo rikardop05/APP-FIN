@@ -135,6 +135,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
         // E o índice é de verdade único: INSERT cru de uma planned repetida lança.
         await expect(db.insert(transactions).values({ ...sample })).rejects.toThrow();
         expect(await countPlanned()).toBe(12);
+      } catch (error) {
+        try {
+          await db.delete(households).where(eq(households.id, household.id));
+        } catch {
+          // Se a compensação falhar, o órfão cai na faxina de households de teste.
+        }
+        throw error;
       } finally {
         // transactions antes do household: category_id é RESTRICT imediato.
         await db.delete(transactions).where(eq(transactions.householdId, household.id));

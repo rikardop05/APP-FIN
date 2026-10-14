@@ -65,65 +65,68 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('posições reais de inv
   it('aporte efetivo: só investment_contribution posted, líquido e nunca negativo; janela 12 fechados + corrente; aderência', async () => {
     const m = await modules();
     const householdId = await newHousehold(m, 'T-404 posições test');
-    const otherId = await newHousehold(m, 'T-404 posições test (outra casa)');
     try {
-      await m.investment.createInvestmentPlan(householdId, PLAN, TODAY);
-      // Patrimônio do plano datado antes da janela: os 12 meses fechados entram na aderência.
-      await m.db.execute(sql`update investment_plans set current_portfolio_as_of = '2025-06-15' where household_id = ${householdId}`);
-      const [account] = await m.db.insert(m.schema.accounts).values({ householdId, name: 'Corretora', kind: 'brokerage', openingDate: '2025-01-01' }).returning({ id: m.schema.accounts.id });
-      const [foreignAccount] = await m.db.insert(m.schema.accounts).values({ householdId: otherId, name: 'Alheia', kind: 'checking', openingDate: '2025-01-01' }).returning({ id: m.schema.accounts.id });
-      if (account === undefined || foreignAccount === undefined) throw new Error('Conta não foi criada.');
-      const tx = (competence: string, amountCents: number, extra: Partial<typeof m.schema.transactions.$inferInsert> = {}) => ({
-        householdId,
-        accountId: account.id,
-        occurredOn: `${competence}-10`,
-        competence,
-        description: 'Aporte',
-        rawDescription: '',
-        amountCents,
-        kind: 'investment_contribution' as const,
-        status: 'posted' as const,
-        ...extra,
-      });
-      await m.db.insert(m.schema.transactions).values([
-        tx('2026-09', -200_000),
-        // Agosto: aporte de 100.000 e resgate de 50.000 no mesmo mês -> líquido 50.000.
-        tx('2026-08', -100_000),
-        tx('2026-08', 50_000),
-        // Julho: só resgate -> 0, nunca negativo.
-        tx('2026-07', 30_000),
-        // Não contam: previsto, despesa comum, outra casa, fora da janela.
-        tx('2026-09', -999_000, { status: 'planned' }),
-        tx('2026-09', -777_000, { kind: 'expense' }),
-        { ...tx('2026-09', -555_000), householdId: otherId, accountId: foreignAccount.id },
-        tx('2025-09', -444_000),
-      ]);
+      const otherId = await newHousehold(m, 'T-404 posições test (outra casa)');
+      try {
+        await m.investment.createInvestmentPlan(householdId, PLAN, TODAY);
+        // Patrimônio do plano datado antes da janela: os 12 meses fechados entram na aderência.
+        await m.db.execute(sql`update investment_plans set current_portfolio_as_of = '2025-06-15' where household_id = ${householdId}`);
+        const [account] = await m.db.insert(m.schema.accounts).values({ householdId, name: 'Corretora', kind: 'brokerage', openingDate: '2025-01-01' }).returning({ id: m.schema.accounts.id });
+        const [foreignAccount] = await m.db.insert(m.schema.accounts).values({ householdId: otherId, name: 'Alheia', kind: 'checking', openingDate: '2025-01-01' }).returning({ id: m.schema.accounts.id });
+        if (account === undefined || foreignAccount === undefined) throw new Error('Conta não foi criada.');
+        const tx = (competence: string, amountCents: number, extra: Partial<typeof m.schema.transactions.$inferInsert> = {}) => ({
+          householdId,
+          accountId: account.id,
+          occurredOn: `${competence}-10`,
+          competence,
+          description: 'Aporte',
+          rawDescription: '',
+          amountCents,
+          kind: 'investment_contribution' as const,
+          status: 'posted' as const,
+          ...extra,
+        });
+        await m.db.insert(m.schema.transactions).values([
+          tx('2026-09', -200_000),
+          // Agosto: aporte de 100.000 e resgate de 50.000 no mesmo mês -> líquido 50.000.
+          tx('2026-08', -100_000),
+          tx('2026-08', 50_000),
+          // Julho: só resgate -> 0, nunca negativo.
+          tx('2026-07', 30_000),
+          // Não contam: previsto, despesa comum, outra casa, fora da janela.
+          tx('2026-09', -999_000, { status: 'planned' }),
+          tx('2026-09', -777_000, { kind: 'expense' }),
+          { ...tx('2026-09', -555_000), householdId: otherId, accountId: foreignAccount.id },
+          tx('2025-09', -444_000),
+        ]);
 
-      const response = await m.loadPositionsResponse(householdId, TODAY);
-      expect(response.currentCompetence).toBe('2026-10');
-      expect(response.contributions).toHaveLength(13);
-      expect(response.contributions[0]?.competence).toBe('2025-10');
-      expect(response.contributions.at(-1)?.competence).toBe('2026-10');
-      const actual = Object.fromEntries(response.contributions.map((month) => [month.competence, month.actualCents]));
-      expect(actual).toMatchObject({ '2026-09': 200_000, '2026-08': 50_000, '2026-07': 0, '2026-10': 0, '2025-10': 0 });
+        const response = await m.loadPositionsResponse(householdId, TODAY);
+        expect(response.currentCompetence).toBe('2026-10');
+        expect(response.contributions).toHaveLength(13);
+        expect(response.contributions[0]?.competence).toBe('2025-10');
+        expect(response.contributions.at(-1)?.competence).toBe('2026-10');
+        const actual = Object.fromEntries(response.contributions.map((month) => [month.competence, month.actualCents]));
+        expect(actual).toMatchObject({ '2026-09': 200_000, '2026-08': 50_000, '2026-07': 0, '2026-10': 0, '2025-10': 0 });
 
-      // 200.000/200.000 = 10.000 bp; 50.000/200.000 = 2.500 bp. Resumo dos 12 fechados:
-      // 250.000 / (200.000 × 12) = 0,1041666 -> 1.042 bp; 11 meses abaixo (só setembro bateu).
-      const months = Object.fromEntries((response.adherence?.months ?? []).map((month) => [month.competence, month]));
-      expect(months['2026-09']).toMatchObject({ adherenceBp: 10_000, belowPlan: false, inProgress: false });
-      expect(months['2026-08']).toMatchObject({ adherenceBp: 2_500, belowPlan: true });
-      expect(months['2026-10']).toMatchObject({ inProgress: true });
-      expect(response.adherence?.summary).toEqual({ closedMonths: 12, averageAdherenceBp: 1_042, monthsBelowPlan: 11 });
+        // 200.000/200.000 = 10.000 bp; 50.000/200.000 = 2.500 bp. Resumo dos 12 fechados:
+        // 250.000 / (200.000 × 12) = 0,1041666 -> 1.042 bp; 11 meses abaixo (só setembro bateu).
+        const months = Object.fromEntries((response.adherence?.months ?? []).map((month) => [month.competence, month]));
+        expect(months['2026-09']).toMatchObject({ adherenceBp: 10_000, belowPlan: false, inProgress: false });
+        expect(months['2026-08']).toMatchObject({ adherenceBp: 2_500, belowPlan: true });
+        expect(months['2026-10']).toMatchObject({ inProgress: true });
+        expect(response.adherence?.summary).toEqual({ closedMonths: 12, averageAdherenceBp: 1_042, monthsBelowPlan: 11 });
 
-      // Outra casa: sem plano -> aderência e comparação null, mas o aporte dela aparece.
-      const other = await m.loadPositionsResponse(otherId, TODAY);
-      expect(other.plan).toBeNull();
-      expect(other.adherence).toBeNull();
-      expect(other.comparison).toBeNull();
-      expect(other.contributions.find((month) => month.competence === '2026-09')?.actualCents).toBe(555_000);
+        // Outra casa: sem plano -> aderência e comparação null, mas o aporte dela aparece.
+        const other = await m.loadPositionsResponse(otherId, TODAY);
+        expect(other.plan).toBeNull();
+        expect(other.adherence).toBeNull();
+        expect(other.comparison).toBeNull();
+        expect(other.contributions.find((month) => month.competence === '2026-09')?.actualCents).toBe(555_000);
+      } finally {
+        await cleanup(m, otherId);
+      }
     } finally {
       await cleanup(m, householdId);
-      await cleanup(m, otherId);
     }
   }, 30_000);
 
@@ -204,17 +207,20 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('posições reais de inv
   it('D4 sem plano é 404; registro de outra casa não é visível nem editável', async () => {
     const m = await modules();
     const householdId = await newHousehold(m, 'T-404 posições test');
-    const otherId = await newHousehold(m, 'T-404 posições test (outra casa)');
     try {
-      const saved = await m.positions.saveSnapshot(householdId, { asOf: '2026-09-30', portfolioCents: cents(100), note: null });
-      const noPlan = await m.applySnapshotToPlan(householdId, saved.id, TODAY).catch((error: unknown) => error);
-      expect(m.domainFailure(noPlan)).toEqual({ status: 404, error: 'Ainda não há plano de investimento.' });
-      const foreign = await m.positions.updateSnapshot(otherId, saved.id, { asOf: '2026-09-29', portfolioCents: cents(1), note: null }).catch((error: unknown) => error);
-      expect(m.domainFailure(foreign)?.status).toBe(404);
-      expect(await m.positions.listSnapshots(otherId)).toEqual([]);
+      const otherId = await newHousehold(m, 'T-404 posições test (outra casa)');
+      try {
+        const saved = await m.positions.saveSnapshot(householdId, { asOf: '2026-09-30', portfolioCents: cents(100), note: null });
+        const noPlan = await m.applySnapshotToPlan(householdId, saved.id, TODAY).catch((error: unknown) => error);
+        expect(m.domainFailure(noPlan)).toEqual({ status: 404, error: 'Ainda não há plano de investimento.' });
+        const foreign = await m.positions.updateSnapshot(otherId, saved.id, { asOf: '2026-09-29', portfolioCents: cents(1), note: null }).catch((error: unknown) => error);
+        expect(m.domainFailure(foreign)?.status).toBe(404);
+        expect(await m.positions.listSnapshots(otherId)).toEqual([]);
+      } finally {
+        await cleanup(m, otherId);
+      }
     } finally {
       await cleanup(m, householdId);
-      await cleanup(m, otherId);
     }
   }, 30_000);
 });

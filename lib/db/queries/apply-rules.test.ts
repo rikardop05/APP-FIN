@@ -24,151 +24,162 @@ async function createFixture(label: string) {
   if (household === undefined) throw new Error('Household de teste nao foi criado.');
   const householdId = household.id;
 
-  const [account] = await db
-    .insert(schema.accounts)
-    .values({ householdId, name: 'Conta', kind: 'checking', openingDate: '2026-01-01' })
-    .returning({ id: schema.accounts.id });
-  const [card] = await db
-    .insert(schema.creditCards)
-    .values({
+  try {
+    const [account] = await db
+      .insert(schema.accounts)
+      .values({ householdId, name: 'Conta', kind: 'checking', openingDate: '2026-01-01' })
+      .returning({ id: schema.accounts.id });
+    const [card] = await db
+      .insert(schema.creditCards)
+      .values({
+        householdId,
+        name: 'Cartao',
+        bank: null,
+        brand: 'other',
+        holderMemberId: null,
+        paymentAccountId: null,
+        creditLimitCents: null,
+        closingDay: 10,
+        dueDay: 20,
+        active: true,
+      })
+      .returning({ id: schema.creditCards.id });
+    const [member] = await db
+      .insert(schema.members)
+      .values({ householdId, name: 'Pessoa', email: `f3-${label}-${householdId}@teste.local`, color: '#000000' })
+      .returning({ id: schema.members.id });
+    const [mercado, casa] = await db
+      .insert(schema.categories)
+      .values([
+        { householdId, name: 'Mercado', nature: 'essential' },
+        { householdId, name: 'Casa', nature: 'non_essential' },
+      ])
+      .returning({ id: schema.categories.id });
+    if (!account || !card || !member || !mercado || !casa) throw new Error('Fixture incompleta.');
+    const accountId = account.id;
+    const cardId = card.id;
+
+    async function rule(pattern: string, categoryId: string, priority: number, extra: { memberId?: string; active?: boolean } = {}) {
+      const [row] = await db
+        .insert(schema.categorizationRules)
+        .values({ householdId, pattern, matchType: 'contains', categoryId, priority, hits: 0, ...extra })
+        .returning({ id: schema.categorizationRules.id });
+      if (row === undefined) throw new Error('Regra nao criada.');
+      return row.id;
+    }
+
+    async function tx(
+      description: string,
+      extra: Partial<typeof schema.transactions.$inferInsert> = {},
+    ) {
+      const [row] = await db
+        .insert(schema.transactions)
+        .values({
+          householdId,
+          occurredOn: '2026-09-05',
+          competence: '2026-09',
+          description,
+          rawDescription: description,
+          amountCents: cents(-1000),
+          kind: 'expense',
+          accountId,
+          ...extra,
+        })
+        .returning({ id: schema.transactions.id });
+      if (row === undefined) throw new Error('Lancamento nao criado.');
+      return row.id;
+    }
+
+    async function plan(description: string, installmentsCount: number, categoryId: string | null = null) {
+      const [row] = await db
+        .insert(schema.installmentPlans)
+        .values({
+          householdId,
+          creditCardId: cardId,
+          description,
+          totalCents: cents(-1000 * installmentsCount),
+          installmentsCount,
+          firstCompetence: '2026-09',
+          categoryId,
+          source: 'import',
+        })
+        .returning({ id: schema.installmentPlans.id });
+      if (row === undefined) throw new Error('Plano nao criado.');
+      return row.id;
+    }
+
+    async function recurring(categoryId: string) {
+      const [row] = await db
+        .insert(schema.recurringExpenses)
+        .values({
+          householdId,
+          description: 'IRMAOS BOA',
+          expectedCents: cents(-1000),
+          categoryId,
+          dueDay: 5,
+          startsOn: '2026-01-01',
+          accountId,
+        })
+        .returning({ id: schema.recurringExpenses.id });
+      if (row === undefined) throw new Error('Recorrencia nao criada.');
+      return row.id;
+    }
+
+    async function read(id: string) {
+      const [row] = await db
+        .select({
+          categoryId: schema.transactions.categoryId,
+          categoryRuleId: schema.transactions.categoryRuleId,
+          memberId: schema.transactions.memberId,
+        })
+        .from(schema.transactions)
+        .where(eq(schema.transactions.id, id));
+      return row;
+    }
+
+    async function planCategory(planId: string) {
+      const [row] = await db
+        .select({ categoryId: schema.installmentPlans.categoryId })
+        .from(schema.installmentPlans)
+        .where(eq(schema.installmentPlans.id, planId));
+      return row?.categoryId;
+    }
+
+    async function hits(ruleId: string) {
+      const [row] = await db
+        .select({ hits: schema.categorizationRules.hits })
+        .from(schema.categorizationRules)
+        .where(eq(schema.categorizationRules.id, ruleId));
+      return row?.hits;
+    }
+
+    return {
+      db,
+      schema,
       householdId,
-      name: 'Cartao',
-      bank: null,
-      brand: 'other',
-      holderMemberId: null,
-      paymentAccountId: null,
-      creditLimitCents: null,
-      closingDay: 10,
-      dueDay: 20,
-      active: true,
-    })
-    .returning({ id: schema.creditCards.id });
-  const [member] = await db
-    .insert(schema.members)
-    .values({ householdId, name: 'Pessoa', email: `f3-${label}-${householdId}@teste.local`, color: '#000000' })
-    .returning({ id: schema.members.id });
-  const [mercado, casa] = await db
-    .insert(schema.categories)
-    .values([
-      { householdId, name: 'Mercado', nature: 'essential' },
-      { householdId, name: 'Casa', nature: 'non_essential' },
-    ])
-    .returning({ id: schema.categories.id });
-  if (!account || !card || !member || !mercado || !casa) throw new Error('Fixture incompleta.');
-  const accountId = account.id;
-  const cardId = card.id;
-
-  async function rule(pattern: string, categoryId: string, priority: number, extra: { memberId?: string; active?: boolean } = {}) {
-    const [row] = await db
-      .insert(schema.categorizationRules)
-      .values({ householdId, pattern, matchType: 'contains', categoryId, priority, hits: 0, ...extra })
-      .returning({ id: schema.categorizationRules.id });
-    if (row === undefined) throw new Error('Regra nao criada.');
-    return row.id;
+      cardId,
+      memberId: member.id,
+      mercadoId: mercado.id,
+      casaId: casa.id,
+      rule,
+      tx,
+      plan,
+      recurring,
+      read,
+      planCategory,
+      hits,
+      cleanup: () => db.delete(schema.households).where(eq(schema.households.id, householdId)),
+    };
+  } catch (error) {
+    // Seed falhou no meio: apaga o household parcial para nao virar orfao.
+    // Melhor esforco (o erro original e que sobe); cascade leva os filhos.
+    try {
+      await db.delete(schema.households).where(eq(schema.households.id, householdId));
+    } catch {
+      // Se a compensacao falhar, o orfao cai na faxina de households de teste.
+    }
+    throw error;
   }
-
-  async function tx(
-    description: string,
-    extra: Partial<typeof schema.transactions.$inferInsert> = {},
-  ) {
-    const [row] = await db
-      .insert(schema.transactions)
-      .values({
-        householdId,
-        occurredOn: '2026-09-05',
-        competence: '2026-09',
-        description,
-        rawDescription: description,
-        amountCents: cents(-1000),
-        kind: 'expense',
-        accountId,
-        ...extra,
-      })
-      .returning({ id: schema.transactions.id });
-    if (row === undefined) throw new Error('Lancamento nao criado.');
-    return row.id;
-  }
-
-  async function plan(description: string, installmentsCount: number, categoryId: string | null = null) {
-    const [row] = await db
-      .insert(schema.installmentPlans)
-      .values({
-        householdId,
-        creditCardId: cardId,
-        description,
-        totalCents: cents(-1000 * installmentsCount),
-        installmentsCount,
-        firstCompetence: '2026-09',
-        categoryId,
-        source: 'import',
-      })
-      .returning({ id: schema.installmentPlans.id });
-    if (row === undefined) throw new Error('Plano nao criado.');
-    return row.id;
-  }
-
-  async function recurring(categoryId: string) {
-    const [row] = await db
-      .insert(schema.recurringExpenses)
-      .values({
-        householdId,
-        description: 'IRMAOS BOA',
-        expectedCents: cents(-1000),
-        categoryId,
-        dueDay: 5,
-        startsOn: '2026-01-01',
-        accountId,
-      })
-      .returning({ id: schema.recurringExpenses.id });
-    if (row === undefined) throw new Error('Recorrencia nao criada.');
-    return row.id;
-  }
-
-  async function read(id: string) {
-    const [row] = await db
-      .select({
-        categoryId: schema.transactions.categoryId,
-        categoryRuleId: schema.transactions.categoryRuleId,
-        memberId: schema.transactions.memberId,
-      })
-      .from(schema.transactions)
-      .where(eq(schema.transactions.id, id));
-    return row;
-  }
-
-  async function planCategory(planId: string) {
-    const [row] = await db
-      .select({ categoryId: schema.installmentPlans.categoryId })
-      .from(schema.installmentPlans)
-      .where(eq(schema.installmentPlans.id, planId));
-    return row?.categoryId;
-  }
-
-  async function hits(ruleId: string) {
-    const [row] = await db
-      .select({ hits: schema.categorizationRules.hits })
-      .from(schema.categorizationRules)
-      .where(eq(schema.categorizationRules.id, ruleId));
-    return row?.hits;
-  }
-
-  return {
-    db,
-    schema,
-    householdId,
-    cardId,
-    memberId: member.id,
-    mercadoId: mercado.id,
-    casaId: casa.id,
-    rule,
-    tx,
-    plan,
-    recurring,
-    read,
-    planCategory,
-    hits,
-    cleanup: () => db.delete(schema.households).where(eq(schema.households.id, householdId)),
-  };
 }
 
 describe.skipIf(process.env.DATABASE_URL === undefined)('previewRuleApplication (F3)', () => {
@@ -218,19 +229,22 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('previewRuleApplication 
 
   it('regra de outro household e regra inativa nao propoem nada', async () => {
     const f = await createFixture('previa-isolada');
-    const outro = await createFixture('previa-isolada-outro');
     try {
-      const { previewRuleApplication, RuleToApplyNotFoundError } = await import('./apply-rules');
-      const alheia = await outro.rule('irmaos', outro.casaId, 1);
-      const inativa = await f.rule('irmaos', f.casaId, 1, { active: false });
-      await f.tx('IRMAOS BOA');
+      const outro = await createFixture('previa-isolada-outro');
+      try {
+        const { previewRuleApplication, RuleToApplyNotFoundError } = await import('./apply-rules');
+        const alheia = await outro.rule('irmaos', outro.casaId, 1);
+        const inativa = await f.rule('irmaos', f.casaId, 1, { active: false });
+        await f.tx('IRMAOS BOA');
 
-      await expect(previewRuleApplication(f.householdId, alheia)).rejects.toThrow(RuleToApplyNotFoundError);
-      expect(await previewRuleApplication(f.householdId, inativa)).toEqual({ proposals: [], total: 0 });
-      expect(await previewRuleApplication(f.householdId, null)).toEqual({ proposals: [], total: 0 });
+        await expect(previewRuleApplication(f.householdId, alheia)).rejects.toThrow(RuleToApplyNotFoundError);
+        expect(await previewRuleApplication(f.householdId, inativa)).toEqual({ proposals: [], total: 0 });
+        expect(await previewRuleApplication(f.householdId, null)).toEqual({ proposals: [], total: 0 });
+      } finally {
+        await outro.cleanup();
+      }
     } finally {
       await f.cleanup();
-      await outro.cleanup();
     }
   });
 
@@ -329,61 +343,67 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('applyRuleProposals (F3)
 
   it('pula o que mudou entre a previa e o gravar, sem sobrescrever nada', async () => {
     const f = await createFixture('corrida');
-    const outro = await createFixture('corrida-outro');
     try {
-      const { applyRuleProposals } = await import('./apply-rules');
-      const regra = await f.rule('irmaos', f.mercadoId, 1);
-      const categorizadaNoMeio = await f.tx('IRMAOS BOA', { categoryId: f.casaId });
-      const naoCasaMais = await f.tx('OUTRA LOJA');
-      const alheia = await outro.tx('IRMAOS BOA');
-      const pagamento = await f.tx('IRMAOS BOA', { kind: 'credit_card_payment' });
-      const boa = await f.tx('IRMAOS BOA');
-      const item = (transactionId: string) => ({ transactionId, ruleId: regra, categoryId: f.mercadoId });
+      const outro = await createFixture('corrida-outro');
+      try {
+        const { applyRuleProposals } = await import('./apply-rules');
+        const regra = await f.rule('irmaos', f.mercadoId, 1);
+        const categorizadaNoMeio = await f.tx('IRMAOS BOA', { categoryId: f.casaId });
+        const naoCasaMais = await f.tx('OUTRA LOJA');
+        const alheia = await outro.tx('IRMAOS BOA');
+        const pagamento = await f.tx('IRMAOS BOA', { kind: 'credit_card_payment' });
+        const boa = await f.tx('IRMAOS BOA');
+        const item = (transactionId: string) => ({ transactionId, ruleId: regra, categoryId: f.mercadoId });
 
-      const result = await applyRuleProposals(f.householdId, [
-        item(categorizadaNoMeio),
-        item(naoCasaMais),
-        item(alheia),
-        item(pagamento),
-        item(boa),
-      ]);
-      expect(result).toEqual({ applied: 1, skipped: 4, propagated: 0 });
-      // Categoria posta a mao nunca e sobrescrita.
-      expect(await f.read(categorizadaNoMeio)).toEqual({ categoryId: f.casaId, categoryRuleId: null, memberId: null });
-      expect(await f.read(naoCasaMais)).toEqual({ categoryId: null, categoryRuleId: null, memberId: null });
-      expect(await outro.read(alheia)).toEqual({ categoryId: null, categoryRuleId: null, memberId: null });
-      expect(await f.hits(regra)).toBe(1);
+        const result = await applyRuleProposals(f.householdId, [
+          item(categorizadaNoMeio),
+          item(naoCasaMais),
+          item(alheia),
+          item(pagamento),
+          item(boa),
+        ]);
+        expect(result).toEqual({ applied: 1, skipped: 4, propagated: 0 });
+        // Categoria posta a mao nunca e sobrescrita.
+        expect(await f.read(categorizadaNoMeio)).toEqual({ categoryId: f.casaId, categoryRuleId: null, memberId: null });
+        expect(await f.read(naoCasaMais)).toEqual({ categoryId: null, categoryRuleId: null, memberId: null });
+        expect(await outro.read(alheia)).toEqual({ categoryId: null, categoryRuleId: null, memberId: null });
+        expect(await f.hits(regra)).toBe(1);
+      } finally {
+        await outro.cleanup();
+      }
     } finally {
       await f.cleanup();
-      await outro.cleanup();
     }
   });
 
   it('regra desativada, de outro household ou com categoria editada desde a previa: item pulado', async () => {
     const f = await createFixture('regra-mudou');
-    const outro = await createFixture('regra-mudou-outro');
     try {
-      const { applyRuleProposals } = await import('./apply-rules');
-      const inativa = await f.rule('irmaos', f.mercadoId, 1, { active: false });
-      const alheia = await outro.rule('irmaos', outro.mercadoId, 1);
-      // A previa mostrou "-> Casa"; a regra foi editada para Mercado antes do gravar.
-      const editada = await f.rule('loja', f.mercadoId, 2);
-      const a = await f.tx('IRMAOS BOA');
-      const b = await f.tx('IRMAOS LTDA');
-      const c = await f.tx('LOJA X');
+      const outro = await createFixture('regra-mudou-outro');
+      try {
+        const { applyRuleProposals } = await import('./apply-rules');
+        const inativa = await f.rule('irmaos', f.mercadoId, 1, { active: false });
+        const alheia = await outro.rule('irmaos', outro.mercadoId, 1);
+        // A previa mostrou "-> Casa"; a regra foi editada para Mercado antes do gravar.
+        const editada = await f.rule('loja', f.mercadoId, 2);
+        const a = await f.tx('IRMAOS BOA');
+        const b = await f.tx('IRMAOS LTDA');
+        const c = await f.tx('LOJA X');
 
-      const result = await applyRuleProposals(f.householdId, [
-        { transactionId: a, ruleId: inativa, categoryId: f.mercadoId },
-        { transactionId: b, ruleId: alheia, categoryId: outro.mercadoId },
-        { transactionId: c, ruleId: editada, categoryId: f.casaId },
-      ]);
-      expect(result).toEqual({ applied: 0, skipped: 3, propagated: 0 });
-      expect(await f.read(a)).toEqual({ categoryId: null, categoryRuleId: null, memberId: null });
-      expect(await f.read(c)).toEqual({ categoryId: null, categoryRuleId: null, memberId: null });
-      expect(await outro.hits(alheia)).toBe(0);
+        const result = await applyRuleProposals(f.householdId, [
+          { transactionId: a, ruleId: inativa, categoryId: f.mercadoId },
+          { transactionId: b, ruleId: alheia, categoryId: outro.mercadoId },
+          { transactionId: c, ruleId: editada, categoryId: f.casaId },
+        ]);
+        expect(result).toEqual({ applied: 0, skipped: 3, propagated: 0 });
+        expect(await f.read(a)).toEqual({ categoryId: null, categoryRuleId: null, memberId: null });
+        expect(await f.read(c)).toEqual({ categoryId: null, categoryRuleId: null, memberId: null });
+        expect(await outro.hits(alheia)).toBe(0);
+      } finally {
+        await outro.cleanup();
+      }
     } finally {
       await f.cleanup();
-      await outro.cleanup();
     }
   });
 

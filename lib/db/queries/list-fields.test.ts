@@ -36,16 +36,25 @@ async function seed(m: Modules) {
     .values({ name: 'Campos das listas test' })
     .returning({ id: m.schema.households.id });
   if (household === undefined) throw new Error('Household de teste não foi criado.');
-  const [card] = await m.db
-    .insert(m.schema.creditCards)
-    .values({ householdId: household.id, name: 'Cartão listas', closingDay: 10, dueDay: 20 })
-    .returning({ id: m.schema.creditCards.id });
-  const [account] = await m.db
-    .insert(m.schema.accounts)
-    .values({ householdId: household.id, name: 'Conta listas', kind: 'checking', openingDate: '2026-01-01' })
-    .returning({ id: m.schema.accounts.id });
-  if (card === undefined || account === undefined) throw new Error('Fixture não foi criada.');
-  return { householdId: household.id, cardId: card.id, accountId: account.id };
+  try {
+    const [card] = await m.db
+      .insert(m.schema.creditCards)
+      .values({ householdId: household.id, name: 'Cartão listas', closingDay: 10, dueDay: 20 })
+      .returning({ id: m.schema.creditCards.id });
+    const [account] = await m.db
+      .insert(m.schema.accounts)
+      .values({ householdId: household.id, name: 'Conta listas', kind: 'checking', openingDate: '2026-01-01' })
+      .returning({ id: m.schema.accounts.id });
+    if (card === undefined || account === undefined) throw new Error('Fixture não foi criada.');
+    return { householdId: household.id, cardId: card.id, accountId: account.id };
+  } catch (error) {
+    try {
+      await m.db.delete(m.schema.households).where(eq(m.schema.households.id, household.id));
+    } catch {
+      // Se a compensacao falhar, o orfao cai na faxina de households de teste.
+    }
+    throw error;
+  }
 }
 
 const row = (description: string, installment: { current: number; total: number } | null) => ({

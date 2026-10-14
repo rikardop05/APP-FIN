@@ -26,10 +26,11 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('categorização manual 
     const [household] = await db.insert(schema.households).values({ name: 'natureza x tipo test' }).returning({ id: schema.households.id });
     if (household === undefined) throw new Error('Household não foi criado.');
     const householdId = household.id;
-    const [account] = await db
-      .insert(schema.accounts)
-      .values({ householdId, name: 'Conta', kind: 'checking', openingDate: '2026-01-01' })
-      .returning({ id: schema.accounts.id });
+    try {
+      const [account] = await db
+        .insert(schema.accounts)
+        .values({ householdId, name: 'Conta', kind: 'checking', openingDate: '2026-01-01' })
+        .returning({ id: schema.accounts.id });
     const category = async (name: string, nature: 'income' | 'essential') => {
       const [row] = await db
         .insert(schema.categories)
@@ -75,10 +76,18 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('categorização manual 
       memberId: null,
       note: null,
     });
-    return {
-      db, schema, queries, CategoryKindMismatchError, householdId, salary, market, seed, categoryOf, draft,
-      cleanup: () => db.delete(schema.households).where(eq(schema.households.id, householdId)),
-    };
+      return {
+        db, schema, queries, CategoryKindMismatchError, householdId, salary, market, seed, categoryOf, draft,
+        cleanup: () => db.delete(schema.households).where(eq(schema.households.id, householdId)),
+      };
+    } catch (error) {
+      try {
+        await db.delete(schema.households).where(eq(schema.households.id, householdId));
+      } catch {
+        // Se a compensação falhar, o órfão cai na faxina de households de teste.
+      }
+      throw error;
+    }
   }
 
   it('lançamento NOVO: despesa em categoria de receita e receita em categoria de despesa são recusadas, e nada é gravado', async () => {

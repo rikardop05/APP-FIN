@@ -108,6 +108,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
         expect(before.commitment).toHaveLength(1);
         expect(before.flow.rows.length).toBeGreaterThan(0);
         expect(before.series.length).toBeGreaterThan(0);
+      } catch (error) {
+        try {
+          await db.delete(households).where(eq(households.id, householdId));
+        } catch {
+          // Se a compensação falhar, o órfão cai na faxina de households de teste.
+        }
+        throw error;
       } finally {
         // `reconciled_by_transaction_id` é RESTRICT: as previsões cumpridas saem antes dos reais.
         await db

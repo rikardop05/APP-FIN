@@ -89,32 +89,35 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('plano de investimento (
   it('criar: plano + 3 cenários com os defaults do DATA-MODEL; um só por household (409)', async () => {
     const m = await modules();
     const householdId = await newHousehold(m, 'T-302 investimento test');
-    const otherId = await newHousehold(m, 'T-302 investimento test (outra casa)');
     try {
-      await m.queries.createInvestmentPlan(householdId, GATE_PLAN, TODAY);
-      const stored = await m.queries.getInvestmentPlan(householdId);
-      expect(stored?.plan).toMatchObject(GATE_PLAN);
-      expect(stored?.scenarios.map(({ label, realReturnBp, withdrawalBp }) => [label, realReturnBp, withdrawalBp])).toEqual([
-        ['conservative', 300, 300],
-        ['moderate', 500, 400],
-        ['optimistic', 700, 500],
-      ]);
+      const otherId = await newHousehold(m, 'T-302 investimento test (outra casa)');
+      try {
+        await m.queries.createInvestmentPlan(householdId, GATE_PLAN, TODAY);
+        const stored = await m.queries.getInvestmentPlan(householdId);
+        expect(stored?.plan).toMatchObject(GATE_PLAN);
+        expect(stored?.scenarios.map(({ label, realReturnBp, withdrawalBp }) => [label, realReturnBp, withdrawalBp])).toEqual([
+          ['conservative', 300, 300],
+          ['moderate', 500, 400],
+          ['optimistic', 700, 500],
+        ]);
 
-      // Segundo plano: recusado, e nada novo gravado.
-      const error = await m.queries.createInvestmentPlan(householdId, GATE_PLAN, TODAY).catch((caught: unknown) => caught);
-      expect(error).toBeInstanceOf(m.queries.InvestmentPlanExistsError);
-      expect(m.domainFailure(error)).toEqual({ status: 409, error: 'Já existe um plano de investimento.' });
-      const plans = await m.db
-        .select({ id: m.schema.investmentPlans.id })
-        .from(m.schema.investmentPlans)
-        .where(eq(m.schema.investmentPlans.householdId, householdId));
-      expect(plans).toHaveLength(1);
+        // Segundo plano: recusado, e nada novo gravado.
+        const error = await m.queries.createInvestmentPlan(householdId, GATE_PLAN, TODAY).catch((caught: unknown) => caught);
+        expect(error).toBeInstanceOf(m.queries.InvestmentPlanExistsError);
+        expect(m.domainFailure(error)).toEqual({ status: 409, error: 'Já existe um plano de investimento.' });
+        const plans = await m.db
+          .select({ id: m.schema.investmentPlans.id })
+          .from(m.schema.investmentPlans)
+          .where(eq(m.schema.investmentPlans.householdId, householdId));
+        expect(plans).toHaveLength(1);
 
-      // Fronteira de household: a outra casa não vê o plano.
-      expect(await m.queries.getInvestmentPlan(otherId)).toBeNull();
+        // Fronteira de household: a outra casa não vê o plano.
+        expect(await m.queries.getInvestmentPlan(otherId)).toBeNull();
+      } finally {
+        await cleanup(m, otherId);
+      }
     } finally {
       await cleanup(m, householdId);
-      await cleanup(m, otherId);
     }
   });
 

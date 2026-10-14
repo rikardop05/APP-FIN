@@ -37,7 +37,8 @@ async function setup(m: Modules, name = 'T-16a manual test') {
   const [household] = await db.insert(schema.households).values({ name }).returning({ id: schema.households.id });
   if (household === undefined) throw new Error('Household de teste não foi criado.');
   const householdId = household.id;
-  await db.insert(schema.householdSettings).values({ householdId, projectionMonths: 6 });
+  try {
+    await db.insert(schema.householdSettings).values({ householdId, projectionMonths: 6 });
   const [card] = await db.insert(schema.creditCards).values({ householdId, name: 'Cartão', closingDay: 25, dueDay: 5 }).returning({ id: schema.creditCards.id });
   const [account] = await db.insert(schema.accounts).values({ householdId, name: 'Conta X', kind: 'checking', openingDate: '2026-01-01' }).returning({ id: schema.accounts.id });
   const [otherAccount] = await db.insert(schema.accounts).values({ householdId, name: 'Conta Y', kind: 'checking', openingDate: '2026-01-01' }).returning({ id: schema.accounts.id });
@@ -100,6 +101,14 @@ async function setup(m: Modules, name = 'T-16a manual test') {
     ...patch,
   });
   return { householdId, cardId: card.id, accountId: account.id, otherAccountId: otherAccount.id, luz: luz.id, agua: agua.id, plannedOf, expenseDraft };
+  } catch (error) {
+    try {
+      await db.delete(schema.households).where(eq(schema.households.id, householdId));
+    } catch {
+      // Se a compensação falhar, o órfão cai na faxina de households de teste.
+    }
+    throw error;
+  }
 }
 
 async function cleanup(m: Modules, householdId: string) {
@@ -172,42 +181,45 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('lançamento manual que 
   it('previsão que não cabe mais (já cumprida, incompatível ou de outra casa): recusa e não grava nada', async () => {
     const m = await modules();
     const s = await setup(m);
-    const other = await setup(m, 'T-16a manual test (outra casa)');
     try {
-      const november = await s.plannedOf('expense', '2026-11');
-      const countReal = async () =>
-        (await m.db.select({ id: m.schema.transactions.id }).from(m.schema.transactions).where(eq(m.schema.transactions.householdId, s.householdId))).filter(
-          Boolean,
-        ).length;
-      const before = await countReal();
+      const other = await setup(m, 'T-16a manual test (outra casa)');
+      try {
+        const november = await s.plannedOf('expense', '2026-11');
+        const countReal = async () =>
+          (await m.db.select({ id: m.schema.transactions.id }).from(m.schema.transactions).where(eq(m.schema.transactions.householdId, s.householdId))).filter(
+            Boolean,
+          ).length;
+        const before = await countReal();
 
-      // Incompatível com o lançamento (outra categoria): não é a previsão que ele cumpre.
-      const wrong = await m.transactions
-        .createManualTransaction(s.householdId, s.expenseDraft({ categoryId: s.agua }), { reconcilePlannedId: november.id })
-        .catch((error: unknown) => error);
-      expect(wrong).toBeInstanceOf(m.manual.PlannedNotReconcilableError);
-      expect((wrong as Error).message).toBe(
-        'Essa previsão não pode mais ser marcada como cumprida por este lançamento (já foi cumprida, mudou ou não combina). Nada foi gravado: lance à parte ou feche e confira a previsão.',
-      );
-      // De outra casa.
-      const foreign = await other.plannedOf('expense', '2026-11');
-      const cross = await m.transactions
-        .createManualTransaction(s.householdId, s.expenseDraft(), { reconcilePlannedId: foreign.id })
-        .catch((error: unknown) => error);
-      expect(cross).toBeInstanceOf(m.manual.PlannedNotReconcilableError);
-      expect(await countReal()).toBe(before);
-      expect((await s.plannedOf('expense', '2026-11')).status).toBe('planned');
+        // Incompatível com o lançamento (outra categoria): não é a previsão que ele cumpre.
+        const wrong = await m.transactions
+          .createManualTransaction(s.householdId, s.expenseDraft({ categoryId: s.agua }), { reconcilePlannedId: november.id })
+          .catch((error: unknown) => error);
+        expect(wrong).toBeInstanceOf(m.manual.PlannedNotReconcilableError);
+        expect((wrong as Error).message).toBe(
+          'Essa previsão não pode mais ser marcada como cumprida por este lançamento (já foi cumprida, mudou ou não combina). Nada foi gravado: lance à parte ou feche e confira a previsão.',
+        );
+        // De outra casa.
+        const foreign = await other.plannedOf('expense', '2026-11');
+        const cross = await m.transactions
+          .createManualTransaction(s.householdId, s.expenseDraft(), { reconcilePlannedId: foreign.id })
+          .catch((error: unknown) => error);
+        expect(cross).toBeInstanceOf(m.manual.PlannedNotReconcilableError);
+        expect(await countReal()).toBe(before);
+        expect((await s.plannedOf('expense', '2026-11')).status).toBe('planned');
 
-      // Já cumprida por outro lançamento: o segundo não a reivindica.
-      await m.transactions.createManualTransaction(s.householdId, s.expenseDraft(), { reconcilePlannedId: november.id });
-      const twice = await m.transactions
-        .createManualTransaction(s.householdId, s.expenseDraft({ occurredOn: '2026-11-07' }), { reconcilePlannedId: november.id })
-        .catch((error: unknown) => error);
-      expect(twice).toBeInstanceOf(m.manual.PlannedNotReconcilableError);
-      expect(await countReal()).toBe(before + 1);
+        // Já cumprida por outro lançamento: o segundo não a reivindica.
+        await m.transactions.createManualTransaction(s.householdId, s.expenseDraft(), { reconcilePlannedId: november.id });
+        const twice = await m.transactions
+          .createManualTransaction(s.householdId, s.expenseDraft({ occurredOn: '2026-11-07' }), { reconcilePlannedId: november.id })
+          .catch((error: unknown) => error);
+        expect(twice).toBeInstanceOf(m.manual.PlannedNotReconcilableError);
+        expect(await countReal()).toBe(before + 1);
+      } finally {
+        await cleanup(m, other.householdId);
+      }
     } finally {
       await cleanup(m, s.householdId);
-      await cleanup(m, other.householdId);
     }
   }, 30_000);
 });

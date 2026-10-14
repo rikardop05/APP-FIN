@@ -54,6 +54,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
         expect(groups).toHaveLength(1);
         expect(groups[0]?.name).toBe('Moradia');
         expect(groups[0]?.leaves.map((leaf) => leaf.name).sort()).toEqual(['Luz', 'Água'].sort());
+      } catch (error) {
+        try {
+          await db.delete(schema.households).where(eq(schema.households.id, household.id));
+        } catch {
+          // Se a compensação falhar, o órfão cai na faxina de households de teste.
+        }
+        throw error;
       } finally {
         await db.delete(schema.households).where(eq(schema.households.id, household.id));
       }

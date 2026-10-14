@@ -37,27 +37,36 @@ async function seed(m: Modules, name = 'D20 card holders test') {
     .returning({ id: schema.households.id });
   if (household === undefined) throw new Error('Household de teste não foi criado.');
   const householdId = household.id;
-  const suffix = crypto.randomUUID();
-  const [ana, bia] = await db
-    .insert(schema.members)
-    .values([
-      { householdId, name: 'Ana', email: `ana-${suffix}@teste.invalid`, color: '#000000' },
-      { householdId, name: 'Bia', email: `bia-${suffix}@teste.invalid`, color: '#ffffff' },
-    ])
-    .returning({ id: schema.members.id });
-  const [card, other] = await db
-    .insert(schema.creditCards)
-    .values([
-      { householdId, name: 'Cartão A', closingDay: 1, dueDay: 10 },
-      { householdId, name: 'Cartão B', closingDay: 5, dueDay: 15 },
-    ])
-    .returning({ id: schema.creditCards.id });
-  const [account] = await db
-    .insert(schema.accounts)
-    .values({ householdId, name: 'Conta', kind: 'checking', openingDate: '2026-01-01' })
-    .returning({ id: schema.accounts.id });
-  if (!ana || !bia || !card || !other || !account) throw new Error('Fixture não foi criada.');
-  return { householdId, ana: ana.id, bia: bia.id, card: card.id, other: other.id, account: account.id };
+  try {
+    const suffix = crypto.randomUUID();
+    const [ana, bia] = await db
+      .insert(schema.members)
+      .values([
+        { householdId, name: 'Ana', email: `ana-${suffix}@teste.invalid`, color: '#000000' },
+        { householdId, name: 'Bia', email: `bia-${suffix}@teste.invalid`, color: '#ffffff' },
+      ])
+      .returning({ id: schema.members.id });
+    const [card, other] = await db
+      .insert(schema.creditCards)
+      .values([
+        { householdId, name: 'Cartão A', closingDay: 1, dueDay: 10 },
+        { householdId, name: 'Cartão B', closingDay: 5, dueDay: 15 },
+      ])
+      .returning({ id: schema.creditCards.id });
+    const [account] = await db
+      .insert(schema.accounts)
+      .values({ householdId, name: 'Conta', kind: 'checking', openingDate: '2026-01-01' })
+      .returning({ id: schema.accounts.id });
+    if (!ana || !bia || !card || !other || !account) throw new Error('Fixture não foi criada.');
+    return { householdId, ana: ana.id, bia: bia.id, card: card.id, other: other.id, account: account.id };
+  } catch (error) {
+    try {
+      await db.delete(schema.households).where(eq(schema.households.id, householdId));
+    } catch {
+      // Se a compensação falhar, o órfão cai na faxina de households de teste.
+    }
+    throw error;
+  }
 }
 
 async function cleanup(m: Modules, householdId: string) {
@@ -123,43 +132,49 @@ describe.skipIf(!process.env.DATABASE_URL)('credit_card_holders (integração)',
   it('cartão de outro household: CardNotFoundError; membro de outro household: InvalidCardHolderError', async () => {
     const m = await modules();
     const s = await seed(m);
-    const o = await seed(m, 'D20 outro household');
     try {
-      await expect(
-        m.holders.upsertCardHolder(s.householdId, o.card, { last4: '1111', memberId: s.ana }),
-      ).rejects.toBeInstanceOf(m.holders.CardNotFoundError);
-      await expect(
-        m.holders.upsertCardHolder(s.householdId, s.card, { last4: '1111', memberId: o.ana }),
-      ).rejects.toBeInstanceOf(m.holders.InvalidCardHolderError);
-      expect((await m.holders.listCardHolders(o.householdId)).size).toBe(0);
+      const o = await seed(m, 'D20 outro household');
+      try {
+        await expect(
+          m.holders.upsertCardHolder(s.householdId, o.card, { last4: '1111', memberId: s.ana }),
+        ).rejects.toBeInstanceOf(m.holders.CardNotFoundError);
+        await expect(
+          m.holders.upsertCardHolder(s.householdId, s.card, { last4: '1111', memberId: o.ana }),
+        ).rejects.toBeInstanceOf(m.holders.InvalidCardHolderError);
+        expect((await m.holders.listCardHolders(o.householdId)).size).toBe(0);
+      } finally {
+        await cleanup(m, o.householdId);
+      }
     } finally {
       await cleanup(m, s.householdId);
-      await cleanup(m, o.householdId);
     }
   });
 
   it('delete exige que o mapeamento seja do cartão e do household', async () => {
     const m = await modules();
     const s = await seed(m);
-    const o = await seed(m, 'D20 outro household');
     try {
-      await m.holders.upsertCardHolder(s.householdId, s.card, { last4: '2387', memberId: s.ana });
-      const [holder] = (await m.holders.listCardHolders(s.householdId)).get(s.card) ?? [];
-      if (!holder) throw new Error('Mapeamento não foi criado.');
+      const o = await seed(m, 'D20 outro household');
+      try {
+        await m.holders.upsertCardHolder(s.householdId, s.card, { last4: '2387', memberId: s.ana });
+        const [holder] = (await m.holders.listCardHolders(s.householdId)).get(s.card) ?? [];
+        if (!holder) throw new Error('Mapeamento não foi criado.');
 
-      await expect(
-        m.holders.deleteCardHolder(s.householdId, s.other, holder.id),
-      ).rejects.toBeInstanceOf(m.holders.CardHolderNotFoundError);
-      await expect(
-        m.holders.deleteCardHolder(o.householdId, s.card, holder.id),
-      ).rejects.toBeInstanceOf(m.holders.CardHolderNotFoundError);
-      expect((await m.holders.listCardHolders(s.householdId)).get(s.card)).toHaveLength(1);
+        await expect(
+          m.holders.deleteCardHolder(s.householdId, s.other, holder.id),
+        ).rejects.toBeInstanceOf(m.holders.CardHolderNotFoundError);
+        await expect(
+          m.holders.deleteCardHolder(o.householdId, s.card, holder.id),
+        ).rejects.toBeInstanceOf(m.holders.CardHolderNotFoundError);
+        expect((await m.holders.listCardHolders(s.householdId)).get(s.card)).toHaveLength(1);
 
-      await m.holders.deleteCardHolder(s.householdId, s.card, holder.id);
-      expect((await m.holders.listCardHolders(s.householdId)).get(s.card)).toBeUndefined();
+        await m.holders.deleteCardHolder(s.householdId, s.card, holder.id);
+        expect((await m.holders.listCardHolders(s.householdId)).get(s.card)).toBeUndefined();
+      } finally {
+        await cleanup(m, o.householdId);
+      }
     } finally {
       await cleanup(m, s.householdId);
-      await cleanup(m, o.householdId);
     }
   });
 

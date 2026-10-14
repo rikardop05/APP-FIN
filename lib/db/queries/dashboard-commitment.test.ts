@@ -23,74 +23,83 @@ async function createFixture(label: string) {
     .returning({ id: schema.households.id });
   if (household === undefined) throw new Error('Household de teste nao foi criado.');
   const householdId = household.id;
-  const [card] = await db
-    .insert(schema.creditCards)
-    .values({
-      householdId,
-      name: 'Cartao',
-      bank: null,
-      brand: 'other',
-      holderMemberId: null,
-      paymentAccountId: null,
-      creditLimitCents: null,
-      closingDay: 1,
-      dueDay: 10,
-      active: true,
-    })
-    .returning({ id: schema.creditCards.id });
-  if (card === undefined) throw new Error('Cartao nao criado.');
-  const cardId = card.id;
-
-  async function statement(period: string, status: 'open' | 'closed' | 'paid') {
-    const [row] = await db
-      .insert(schema.statements)
-      .values({ creditCardId: cardId, period, closingDate: `${period}-01`, dueDate: `${period}-10`, status, source: 'import' })
-      .returning({ id: schema.statements.id });
-    if (row === undefined) throw new Error('Fatura nao criada.');
-    return row.id;
-  }
-
-  async function plan() {
-    const [row] = await db
-      .insert(schema.installmentPlans)
+  try {
+    const [card] = await db
+      .insert(schema.creditCards)
       .values({
         householdId,
-        creditCardId: cardId,
-        description: 'PARCELADO',
-        totalCents: cents(-9000),
-        installmentsCount: 3,
-        firstCompetence: '2026-10',
-        source: 'import',
+        name: 'Cartao',
+        bank: null,
+        brand: 'other',
+        holderMemberId: null,
+        paymentAccountId: null,
+        creditLimitCents: null,
+        closingDay: 1,
+        dueDay: 10,
+        active: true,
       })
-      .returning({ id: schema.installmentPlans.id });
-    if (row === undefined) throw new Error('Plano nao criado.');
-    return row.id;
-  }
+      .returning({ id: schema.creditCards.id });
+    if (card === undefined) throw new Error('Cartao nao criado.');
+    const cardId = card.id;
 
-  async function tx(competence: string, amountCents: number, extra: Partial<typeof schema.transactions.$inferInsert> = {}) {
-    await db.insert(schema.transactions).values({
+    async function statement(period: string, status: 'open' | 'closed' | 'paid') {
+      const [row] = await db
+        .insert(schema.statements)
+        .values({ creditCardId: cardId, period, closingDate: `${period}-01`, dueDate: `${period}-10`, status, source: 'import' })
+        .returning({ id: schema.statements.id });
+      if (row === undefined) throw new Error('Fatura nao criada.');
+      return row.id;
+    }
+
+    async function plan() {
+      const [row] = await db
+        .insert(schema.installmentPlans)
+        .values({
+          householdId,
+          creditCardId: cardId,
+          description: 'PARCELADO',
+          totalCents: cents(-9000),
+          installmentsCount: 3,
+          firstCompetence: '2026-10',
+          source: 'import',
+        })
+        .returning({ id: schema.installmentPlans.id });
+      if (row === undefined) throw new Error('Plano nao criado.');
+      return row.id;
+    }
+
+    async function tx(competence: string, amountCents: number, extra: Partial<typeof schema.transactions.$inferInsert> = {}) {
+      await db.insert(schema.transactions).values({
+        householdId,
+        occurredOn: `${competence}-05`,
+        competence,
+        description: 'x',
+        rawDescription: 'x',
+        amountCents: cents(amountCents),
+        kind: 'expense',
+        creditCardId: cardId,
+        ...extra,
+      });
+    }
+
+    return {
+      db,
+      schema,
       householdId,
-      occurredOn: `${competence}-05`,
-      competence,
-      description: 'x',
-      rawDescription: 'x',
-      amountCents: cents(amountCents),
-      kind: 'expense',
-      creditCardId: cardId,
-      ...extra,
-    });
+      cardId,
+      statement,
+      plan,
+      tx,
+      cleanup: () => db.delete(schema.households).where(eq(schema.households.id, householdId)),
+    };
+  } catch (error) {
+    try {
+      await db.delete(schema.households).where(eq(schema.households.id, householdId));
+    } catch {
+      // Se a compensacao falhar, o orfao cai na faxina de households de teste.
+    }
+    throw error;
   }
-
-  return {
-    db,
-    schema,
-    householdId,
-    cardId,
-    statement,
-    plan,
-    tx,
-    cleanup: () => db.delete(schema.households).where(eq(schema.households.id, householdId)),
-  };
 }
 
 describe.skipIf(process.env.DATABASE_URL === undefined)('comprometido nos cartoes: feed e motor (2026-10-08)', () => {
@@ -142,16 +151,19 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('comprometido nos cartoe
 
   it('fatura paga de OUTRO cartao no mesmo mes nao tira nada', async () => {
     const f = await createFixture('outro-cartao');
-    const outro = await createFixture('outro-cartao-2');
     try {
-      const { listCommitmentTransactions } = await import('./dashboard');
-      await outro.statement('2026-10', 'paid');
-      await f.tx('2026-10', -1000);
-      const rows = await listCommitmentTransactions(f.householdId, '2026-10', 1);
-      expect(rows.map((row) => row.statementPaid)).toEqual([false]);
+      const outro = await createFixture('outro-cartao-2');
+      try {
+        const { listCommitmentTransactions } = await import('./dashboard');
+        await outro.statement('2026-10', 'paid');
+        await f.tx('2026-10', -1000);
+        const rows = await listCommitmentTransactions(f.householdId, '2026-10', 1);
+        expect(rows.map((row) => row.statementPaid)).toEqual([false]);
+      } finally {
+        await outro.cleanup();
+      }
     } finally {
       await f.cleanup();
-      await outro.cleanup();
     }
   });
 
@@ -233,16 +245,19 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('faturas vencidas nao pa
 
   it('fatura aberta de OUTRO cartao no mes antigo nao puxa as linhas deste cartao', async () => {
     const f = await createFixture('vencida-outro');
-    const outro = await createFixture('vencida-outro-2');
     try {
-      const { listCommitmentTransactions } = await import('./dashboard');
-      await outro.statement('2026-07', 'open');
-      await f.tx('2026-07', -1000); // este cartao nao tem fatura em julho
-      const rows = await listCommitmentTransactions(f.householdId, '2026-10', 1);
-      expect(rows).toEqual([]);
+      const outro = await createFixture('vencida-outro-2');
+      try {
+        const { listCommitmentTransactions } = await import('./dashboard');
+        await outro.statement('2026-07', 'open');
+        await f.tx('2026-07', -1000); // este cartao nao tem fatura em julho
+        const rows = await listCommitmentTransactions(f.householdId, '2026-10', 1);
+        expect(rows).toEqual([]);
+      } finally {
+        await outro.cleanup();
+      }
     } finally {
       await f.cleanup();
-      await outro.cleanup();
     }
   });
 });

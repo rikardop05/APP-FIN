@@ -41,12 +41,21 @@ async function seed(m: Modules) {
     .values({ name: 'Parcelamento 2a fatura test' })
     .returning({ id: m.schema.households.id });
   if (household === undefined) throw new Error('Household de teste não foi criado.');
-  const [card] = await m.db
-    .insert(m.schema.creditCards)
-    .values({ householdId: household.id, name: 'Cartão parcelas', closingDay: 10, dueDay: 20 })
-    .returning({ id: m.schema.creditCards.id });
-  if (card === undefined) throw new Error('Cartão de teste não foi criado.');
-  return { householdId: household.id, cardId: card.id };
+  try {
+    const [card] = await m.db
+      .insert(m.schema.creditCards)
+      .values({ householdId: household.id, name: 'Cartão parcelas', closingDay: 10, dueDay: 20 })
+      .returning({ id: m.schema.creditCards.id });
+    if (card === undefined) throw new Error('Cartão de teste não foi criado.');
+    return { householdId: household.id, cardId: card.id };
+  } catch (error) {
+    try {
+      await m.db.delete(m.schema.households).where(eq(m.schema.households.id, household.id));
+    } catch {
+      // Se a compensacao falhar, o orfao cai na faxina de households de teste.
+    }
+    throw error;
+  }
 }
 
 /** Uma fatura com a parcela `current/4` da mesma geladeira, comprada em 2026-08-05. */

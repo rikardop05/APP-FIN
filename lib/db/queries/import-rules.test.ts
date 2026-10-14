@@ -23,66 +23,74 @@ async function createFixture(label: string) {
     .returning({ id: schema.households.id });
   if (household === undefined) throw new Error('Household de teste nao foi criado.');
   const householdId = household.id;
+  try {
+    const [card] = await db
+      .insert(schema.creditCards)
+      .values({
+        householdId,
+        name: `F3 ${label} cartao`,
+        bank: null,
+        brand: 'other',
+        holderMemberId: null,
+        paymentAccountId: null,
+        creditLimitCents: null,
+        closingDay: 10,
+        dueDay: 20,
+        active: true,
+      })
+      .returning({ id: schema.creditCards.id });
+    const [mercado, casa] = await db
+      .insert(schema.categories)
+      .values([
+        { householdId, name: 'Mercado', nature: 'essential' },
+        { householdId, name: 'Casa', nature: 'non_essential' },
+      ])
+      .returning({ id: schema.categories.id });
+    if (card === undefined || mercado === undefined || casa === undefined) {
+      throw new Error('Fixture incompleta.');
+    }
+    const [rule] = await db
+      .insert(schema.categorizationRules)
+      .values({ householdId, pattern: 'irmaos boa', matchType: 'contains', categoryId: mercado.id, priority: 1, hits: 5 })
+      .returning({ id: schema.categorizationRules.id });
+    if (rule === undefined) throw new Error('Regra de teste nao foi criada.');
 
-  const [card] = await db
-    .insert(schema.creditCards)
-    .values({
+    return {
+      db,
+      schema,
       householdId,
-      name: `F3 ${label} cartao`,
-      bank: null,
-      brand: 'other',
-      holderMemberId: null,
-      paymentAccountId: null,
-      creditLimitCents: null,
-      closingDay: 10,
-      dueDay: 20,
-      active: true,
-    })
-    .returning({ id: schema.creditCards.id });
-  const [mercado, casa] = await db
-    .insert(schema.categories)
-    .values([
-      { householdId, name: 'Mercado', nature: 'essential' },
-      { householdId, name: 'Casa', nature: 'non_essential' },
-    ])
-    .returning({ id: schema.categories.id });
-  if (card === undefined || mercado === undefined || casa === undefined) {
-    throw new Error('Fixture incompleta.');
+      cardId: card.id,
+      mercadoId: mercado.id,
+      casaId: casa.id,
+      ruleId: rule.id,
+      hits: async () => {
+        const [row] = await db
+          .select({ hits: schema.categorizationRules.hits })
+          .from(schema.categorizationRules)
+          .where(eq(schema.categorizationRules.id, rule.id));
+        return row?.hits;
+      },
+      transactions: () =>
+        db
+          .select({
+            description: schema.transactions.description,
+            status: schema.transactions.status,
+            categoryId: schema.transactions.categoryId,
+            categoryRuleId: schema.transactions.categoryRuleId,
+          })
+          .from(schema.transactions)
+          .where(eq(schema.transactions.householdId, householdId))
+          .orderBy(schema.transactions.occurredOn, schema.transactions.competence),
+      cleanup: () => db.delete(schema.households).where(eq(schema.households.id, householdId)),
+    };
+  } catch (error) {
+    try {
+      await db.delete(schema.households).where(eq(schema.households.id, householdId));
+    } catch {
+      // Se a compensacao falhar, o orfao cai na faxina de households de teste.
+    }
+    throw error;
   }
-  const [rule] = await db
-    .insert(schema.categorizationRules)
-    .values({ householdId, pattern: 'irmaos boa', matchType: 'contains', categoryId: mercado.id, priority: 1, hits: 5 })
-    .returning({ id: schema.categorizationRules.id });
-  if (rule === undefined) throw new Error('Regra de teste nao foi criada.');
-
-  return {
-    db,
-    schema,
-    householdId,
-    cardId: card.id,
-    mercadoId: mercado.id,
-    casaId: casa.id,
-    ruleId: rule.id,
-    hits: async () => {
-      const [row] = await db
-        .select({ hits: schema.categorizationRules.hits })
-        .from(schema.categorizationRules)
-        .where(eq(schema.categorizationRules.id, rule.id));
-      return row?.hits;
-    },
-    transactions: () =>
-      db
-        .select({
-          description: schema.transactions.description,
-          status: schema.transactions.status,
-          categoryId: schema.transactions.categoryId,
-          categoryRuleId: schema.transactions.categoryRuleId,
-        })
-        .from(schema.transactions)
-        .where(eq(schema.transactions.householdId, householdId))
-        .orderBy(schema.transactions.occurredOn, schema.transactions.competence),
-    cleanup: () => db.delete(schema.households).where(eq(schema.households.id, householdId)),
-  };
 }
 
 type Row = {
@@ -201,23 +209,26 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('importacao grava a regr
 
   it('regra de outro household nao e usada', async () => {
     const f = await createFixture('isolamento');
-    const outro = await createFixture('isolamento-outro');
     try {
-      const { commitImport } = await import('./import');
-      // A categoria e do household `f`; a regra de `outro` casaria o texto.
-      await f.db.delete(f.schema.categorizationRules).where(eq(f.schema.categorizationRules.id, f.ruleId));
-      await commitImport(
-        f.householdId,
-        input(f.cardId, 'f'.repeat(63) + '4', [
-          { index: 0, description: 'IRMAOS BOA', amountCents: cents(-1000), categoryId: f.mercadoId },
-        ]),
-      );
-      const [row] = await f.transactions();
-      expect(row?.categoryRuleId).toBeNull();
-      expect(await outro.hits()).toBe(5);
+      const outro = await createFixture('isolamento-outro');
+      try {
+        const { commitImport } = await import('./import');
+        // A categoria e do household `f`; a regra de `outro` casaria o texto.
+        await f.db.delete(f.schema.categorizationRules).where(eq(f.schema.categorizationRules.id, f.ruleId));
+        await commitImport(
+          f.householdId,
+          input(f.cardId, 'f'.repeat(63) + '4', [
+            { index: 0, description: 'IRMAOS BOA', amountCents: cents(-1000), categoryId: f.mercadoId },
+          ]),
+        );
+        const [row] = await f.transactions();
+        expect(row?.categoryRuleId).toBeNull();
+        expect(await outro.hits()).toBe(5);
+      } finally {
+        await outro.cleanup();
+      }
     } finally {
       await f.cleanup();
-      await outro.cleanup();
     }
   });
 });

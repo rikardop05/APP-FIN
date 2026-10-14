@@ -105,6 +105,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
         const capped = await queries.listOverdueRecurring(householdId, '2026-10-10', 1);
         expect(capped.count).toBe(2);
         expect(capped.items).toHaveLength(1);
+      } catch (error) {
+        try {
+          await db.delete(households).where(eq(households.id, householdId));
+        } catch {
+          // Se a compensação falhar, o órfão cai na faxina de households de teste.
+        }
+        throw error;
       } finally {
         await db.delete(households).where(eq(households.id, householdId));
       }

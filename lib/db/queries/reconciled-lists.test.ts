@@ -99,6 +99,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
         });
 
         expect(await read()).toEqual(before);
+      } catch (error) {
+        try {
+          await db.delete(households).where(eq(households.id, householdId));
+        } catch {
+          // Se a compensação falhar, o órfão cai na faxina de households de teste.
+        }
+        throw error;
       } finally {
         await db
           .delete(transactions)

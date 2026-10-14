@@ -23,124 +23,132 @@ async function createFixture(label: string) {
     .returning({ id: schema.households.id });
   if (household === undefined) throw new Error('Household de teste nao foi criado.');
   const householdId = household.id;
+  try {
+    const [account] = await db
+      .insert(schema.accounts)
+      .values({ householdId, name: 'Conta', kind: 'checking', openingDate: '2026-01-01' })
+      .returning({ id: schema.accounts.id });
+    const [card] = await db
+      .insert(schema.creditCards)
+      .values({
+        householdId,
+        name: 'Cartao',
+        bank: null,
+        brand: 'other',
+        holderMemberId: null,
+        paymentAccountId: null,
+        creditLimitCents: null,
+        closingDay: 10,
+        dueDay: 20,
+        active: true,
+      })
+      .returning({ id: schema.creditCards.id });
+    const [mercado, casa, alimentacao] = await db
+      .insert(schema.categories)
+      .values([
+        { householdId, name: 'Mercado', nature: 'essential' },
+        { householdId, name: 'Casa', nature: 'non_essential' },
+        { householdId, name: 'Alimentacao', nature: 'essential' },
+      ])
+      .returning({ id: schema.categories.id });
+    if (!account || !card || !mercado || !casa || !alimentacao) throw new Error('Fixture incompleta.');
+    // "Alimentacao" vira agrupamento: tem filha, nao e destino de lancamento.
+    await db.insert(schema.categories).values({ householdId, name: 'Delivery', nature: 'non_essential', parentId: alimentacao.id });
+    const accountId = account.id;
+    const cardId = card.id;
 
-  const [account] = await db
-    .insert(schema.accounts)
-    .values({ householdId, name: 'Conta', kind: 'checking', openingDate: '2026-01-01' })
-    .returning({ id: schema.accounts.id });
-  const [card] = await db
-    .insert(schema.creditCards)
-    .values({
+    async function rule(pattern: string, categoryId: string, priority: number) {
+      const [row] = await db
+        .insert(schema.categorizationRules)
+        .values({ householdId, pattern, matchType: 'contains', categoryId, priority, hits: 0 })
+        .returning({ id: schema.categorizationRules.id });
+      if (row === undefined) throw new Error('Regra nao criada.');
+      return row.id;
+    }
+
+    async function tx(description: string, extra: Partial<typeof schema.transactions.$inferInsert> = {}) {
+      const [row] = await db
+        .insert(schema.transactions)
+        .values({
+          householdId,
+          occurredOn: '2026-09-05',
+          competence: '2026-09',
+          description,
+          rawDescription: description,
+          amountCents: cents(-1000),
+          kind: 'expense',
+          accountId,
+          ...extra,
+        })
+        .returning({ id: schema.transactions.id });
+      if (row === undefined) throw new Error('Lancamento nao criado.');
+      return row.id;
+    }
+
+    async function plan(description: string, categoryId: string | null = null) {
+      const [row] = await db
+        .insert(schema.installmentPlans)
+        .values({
+          householdId,
+          creditCardId: cardId,
+          description,
+          totalCents: cents(-2000),
+          installmentsCount: 2,
+          firstCompetence: '2026-09',
+          categoryId,
+          source: 'import',
+        })
+        .returning({ id: schema.installmentPlans.id });
+      if (row === undefined) throw new Error('Plano nao criado.');
+      return row.id;
+    }
+
+    async function read(id: string) {
+      const [row] = await db
+        .select({ categoryId: schema.transactions.categoryId, categoryRuleId: schema.transactions.categoryRuleId })
+        .from(schema.transactions)
+        .where(eq(schema.transactions.id, id));
+      return row;
+    }
+
+    async function rules() {
+      return db
+        .select({
+          id: schema.categorizationRules.id,
+          pattern: schema.categorizationRules.pattern,
+          categoryId: schema.categorizationRules.categoryId,
+          priority: schema.categorizationRules.priority,
+          hits: schema.categorizationRules.hits,
+        })
+        .from(schema.categorizationRules)
+        .where(eq(schema.categorizationRules.householdId, householdId))
+        .orderBy(asc(schema.categorizationRules.priority), asc(schema.categorizationRules.id));
+    }
+
+    return {
+      db,
+      schema,
       householdId,
-      name: 'Cartao',
-      bank: null,
-      brand: 'other',
-      holderMemberId: null,
-      paymentAccountId: null,
-      creditLimitCents: null,
-      closingDay: 10,
-      dueDay: 20,
-      active: true,
-    })
-    .returning({ id: schema.creditCards.id });
-  const [mercado, casa, alimentacao] = await db
-    .insert(schema.categories)
-    .values([
-      { householdId, name: 'Mercado', nature: 'essential' },
-      { householdId, name: 'Casa', nature: 'non_essential' },
-      { householdId, name: 'Alimentacao', nature: 'essential' },
-    ])
-    .returning({ id: schema.categories.id });
-  if (!account || !card || !mercado || !casa || !alimentacao) throw new Error('Fixture incompleta.');
-  // "Alimentacao" vira agrupamento: tem filha, nao e destino de lancamento.
-  await db.insert(schema.categories).values({ householdId, name: 'Delivery', nature: 'non_essential', parentId: alimentacao.id });
-  const accountId = account.id;
-  const cardId = card.id;
-
-  async function rule(pattern: string, categoryId: string, priority: number) {
-    const [row] = await db
-      .insert(schema.categorizationRules)
-      .values({ householdId, pattern, matchType: 'contains', categoryId, priority, hits: 0 })
-      .returning({ id: schema.categorizationRules.id });
-    if (row === undefined) throw new Error('Regra nao criada.');
-    return row.id;
+      cardId,
+      accountId,
+      mercadoId: mercado.id,
+      casaId: casa.id,
+      alimentacaoId: alimentacao.id,
+      rule,
+      tx,
+      plan,
+      read,
+      rules,
+      cleanup: () => db.delete(schema.households).where(eq(schema.households.id, householdId)),
+    };
+  } catch (error) {
+    try {
+      await db.delete(schema.households).where(eq(schema.households.id, householdId));
+    } catch {
+      // Se a compensacao falhar, o orfao cai na faxina de households de teste.
+    }
+    throw error;
   }
-
-  async function tx(description: string, extra: Partial<typeof schema.transactions.$inferInsert> = {}) {
-    const [row] = await db
-      .insert(schema.transactions)
-      .values({
-        householdId,
-        occurredOn: '2026-09-05',
-        competence: '2026-09',
-        description,
-        rawDescription: description,
-        amountCents: cents(-1000),
-        kind: 'expense',
-        accountId,
-        ...extra,
-      })
-      .returning({ id: schema.transactions.id });
-    if (row === undefined) throw new Error('Lancamento nao criado.');
-    return row.id;
-  }
-
-  async function plan(description: string, categoryId: string | null = null) {
-    const [row] = await db
-      .insert(schema.installmentPlans)
-      .values({
-        householdId,
-        creditCardId: cardId,
-        description,
-        totalCents: cents(-2000),
-        installmentsCount: 2,
-        firstCompetence: '2026-09',
-        categoryId,
-        source: 'import',
-      })
-      .returning({ id: schema.installmentPlans.id });
-    if (row === undefined) throw new Error('Plano nao criado.');
-    return row.id;
-  }
-
-  async function read(id: string) {
-    const [row] = await db
-      .select({ categoryId: schema.transactions.categoryId, categoryRuleId: schema.transactions.categoryRuleId })
-      .from(schema.transactions)
-      .where(eq(schema.transactions.id, id));
-    return row;
-  }
-
-  async function rules() {
-    return db
-      .select({
-        id: schema.categorizationRules.id,
-        pattern: schema.categorizationRules.pattern,
-        categoryId: schema.categorizationRules.categoryId,
-        priority: schema.categorizationRules.priority,
-        hits: schema.categorizationRules.hits,
-      })
-      .from(schema.categorizationRules)
-      .where(eq(schema.categorizationRules.householdId, householdId))
-      .orderBy(asc(schema.categorizationRules.priority), asc(schema.categorizationRules.id));
-  }
-
-  return {
-    db,
-    schema,
-    householdId,
-    cardId,
-    accountId,
-    mercadoId: mercado.id,
-    casaId: casa.id,
-    alimentacaoId: alimentacao.id,
-    rule,
-    tx,
-    plan,
-    read,
-    rules,
-    cleanup: () => db.delete(schema.households).where(eq(schema.households.id, householdId)),
-  };
 }
 
 describe.skipIf(process.env.DATABASE_URL === undefined)('listReviewGroups (F4)', () => {
@@ -302,47 +310,53 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('confirmReviewGroup (F4)
 
   it('pula linha ja categorizada, de outro household ou fora da revisao, sem sobrescrever', async () => {
     const f = await createFixture('confirmar-corrida');
-    const outro = await createFixture('confirmar-corrida-outro');
     try {
-      const { confirmReviewGroup } = await import('./review-groups');
-      const categorizada = await f.tx('LOJA', { categoryId: f.casaId });
-      const alheia = await outro.tx('LOJA');
-      const pagamento = await f.tx('LOJA', { kind: 'credit_card_payment' });
-      const boa = await f.tx('LOJA');
+      const outro = await createFixture('confirmar-corrida-outro');
+      try {
+        const { confirmReviewGroup } = await import('./review-groups');
+        const categorizada = await f.tx('LOJA', { categoryId: f.casaId });
+        const alheia = await outro.tx('LOJA');
+        const pagamento = await f.tx('LOJA', { kind: 'credit_card_payment' });
+        const boa = await f.tx('LOJA');
 
-      const result = await confirmReviewGroup(f.householdId, {
-        transactionIds: [categorizada, alheia, pagamento, boa],
-        categoryId: f.mercadoId,
-        newRulePattern: null,
-      });
-      expect(result).toEqual({ categorized: 1, skipped: 3, propagated: 0, ruleId: null });
-      expect(await f.read(categorizada)).toMatchObject({ categoryId: f.casaId });
-      expect(await outro.read(alheia)).toMatchObject({ categoryId: null });
-      expect(await f.read(pagamento)).toMatchObject({ categoryId: null });
+        const result = await confirmReviewGroup(f.householdId, {
+          transactionIds: [categorizada, alheia, pagamento, boa],
+          categoryId: f.mercadoId,
+          newRulePattern: null,
+        });
+        expect(result).toEqual({ categorized: 1, skipped: 3, propagated: 0, ruleId: null });
+        expect(await f.read(categorizada)).toMatchObject({ categoryId: f.casaId });
+        expect(await outro.read(alheia)).toMatchObject({ categoryId: null });
+        expect(await f.read(pagamento)).toMatchObject({ categoryId: null });
+      } finally {
+        await outro.cleanup();
+      }
     } finally {
       await f.cleanup();
-      await outro.cleanup();
     }
   });
 
   it('categoria invalida (de outro household ou agrupamento) e recusada e nada e gravado', async () => {
     const f = await createFixture('confirmar-invalida');
-    const outro = await createFixture('confirmar-invalida-outro');
     try {
-      const { confirmReviewGroup, ReviewCategoryInvalidError } = await import('./review-groups');
-      const a = await f.tx('LOJA');
+      const outro = await createFixture('confirmar-invalida-outro');
+      try {
+        const { confirmReviewGroup, ReviewCategoryInvalidError } = await import('./review-groups');
+        const a = await f.tx('LOJA');
 
-      await expect(
-        confirmReviewGroup(f.householdId, { transactionIds: [a], categoryId: outro.mercadoId, newRulePattern: 'loja' }),
-      ).rejects.toThrow(ReviewCategoryInvalidError);
-      await expect(
-        confirmReviewGroup(f.householdId, { transactionIds: [a], categoryId: f.alimentacaoId, newRulePattern: 'loja' }),
-      ).rejects.toThrow(ReviewCategoryInvalidError);
-      expect(await f.read(a)).toMatchObject({ categoryId: null });
-      expect(await f.rules()).toEqual([]);
+        await expect(
+          confirmReviewGroup(f.householdId, { transactionIds: [a], categoryId: outro.mercadoId, newRulePattern: 'loja' }),
+        ).rejects.toThrow(ReviewCategoryInvalidError);
+        await expect(
+          confirmReviewGroup(f.householdId, { transactionIds: [a], categoryId: f.alimentacaoId, newRulePattern: 'loja' }),
+        ).rejects.toThrow(ReviewCategoryInvalidError);
+        expect(await f.read(a)).toMatchObject({ categoryId: null });
+        expect(await f.rules()).toEqual([]);
+      } finally {
+        await outro.cleanup();
+      }
     } finally {
       await f.cleanup();
-      await outro.cleanup();
     }
   });
 

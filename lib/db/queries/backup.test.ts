@@ -38,12 +38,21 @@ async function newHousehold(m: Modules, name: string) {
   const { db, schema } = m;
   const [household] = await db.insert(schema.households).values({ name }).returning({ id: schema.households.id });
   if (household === undefined) throw new Error('Household de teste não foi criado.');
-  const [member] = await db
-    .insert(schema.members)
-    .values({ householdId: household.id, name: `Pessoa ${name}`, email: `t402-${randomUUID()}@example.test`, color: '#123456' })
-    .returning({ id: schema.members.id, email: schema.members.email });
-  if (member === undefined) throw new Error('Membro de teste não foi criado.');
-  return { householdId: household.id, memberId: member.id, email: member.email };
+  try {
+    const [member] = await db
+      .insert(schema.members)
+      .values({ householdId: household.id, name: `Pessoa ${name}`, email: `t402-${randomUUID()}@example.test`, color: '#123456' })
+      .returning({ id: schema.members.id, email: schema.members.email });
+    if (member === undefined) throw new Error('Membro de teste não foi criado.');
+    return { householdId: household.id, memberId: member.id, email: member.email };
+  } catch (error) {
+    try {
+      await db.delete(schema.households).where(eq(schema.households.id, household.id));
+    } catch {
+      // Se a compensação falhar, o órfão cai na faxina de households de teste.
+    }
+    throw error;
+  }
 }
 
 async function cleanup(m: Modules, householdId: string) {
@@ -146,148 +155,157 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('backup e restauração 
   it('ida e volta: todas as tabelas, ids remapeados (inclusive reconciled e pagamento de fatura), painel igual', async () => {
     const m = await modules();
     const source = await newHousehold(m, 'T-402 backup test (origem)');
-    const target = await newHousehold(m, 'T-402 backup test (destino)');
     try {
-      await seedEverything(m, source.householdId, source.memberId);
-      // O destino tem o que um household recém-criado traz: categoria e regra do seed.
-      const [seedRoot] = await m.db.insert(m.schema.categories).values({ householdId: target.householdId, name: 'Semente', parentId: null, nature: 'essential' }).returning({ id: m.schema.categories.id });
-      await m.db.insert(m.schema.categorizationRules).values({ householdId: target.householdId, pattern: 'SEED', categoryId: seedRoot?.id ?? '' });
+      const target = await newHousehold(m, 'T-402 backup test (destino)');
+      try {
+        await seedEverything(m, source.householdId, source.memberId);
+        // O destino tem o que um household recém-criado traz: categoria e regra do seed.
+        const [seedRoot] = await m.db.insert(m.schema.categories).values({ householdId: target.householdId, name: 'Semente', parentId: null, nature: 'essential' }).returning({ id: m.schema.categories.id });
+        await m.db.insert(m.schema.categorizationRules).values({ householdId: target.householdId, pattern: 'SEED', categoryId: seedRoot?.id ?? '' });
 
-      const first = await m.backup.exportHousehold(source.householdId, EXPORTED_AT);
-      for (const key of m.backup.BACKUP_TABLES) expect(first.tables[key]?.length, `tabela ${key} vazia na fixture`).toBeGreaterThan(0);
-      // Dinheiro como número inteiro; timestamp ISO; nada de household_id.
-      expect(first.tables.transactions?.[0]?.amountCents).toEqual(expect.any(Number));
-      expect(String(first.tables.transactions?.[0]?.createdAt)).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
-      expect(Object.keys(first.tables.accounts?.[0] ?? {})).not.toContain('householdId');
+        const first = await m.backup.exportHousehold(source.householdId, EXPORTED_AT);
+        for (const key of m.backup.BACKUP_TABLES) expect(first.tables[key]?.length, `tabela ${key} vazia na fixture`).toBeGreaterThan(0);
+        // Dinheiro como número inteiro; timestamp ISO; nada de household_id.
+        expect(first.tables.transactions?.[0]?.amountCents).toEqual(expect.any(Number));
+        expect(String(first.tables.transactions?.[0]?.createdAt)).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
+        expect(Object.keys(first.tables.accounts?.[0] ?? {})).not.toContain('householdId');
 
-      // Dry-run: resumo, aviso do membro sem par e das categorias substituídas; destino vazio.
-      const dry = await m.backup.dryRunRestore(target.householdId, JSON.parse(JSON.stringify(first)), target.memberId);
-      expect(dry.tables).toEqual(m.backup.backupCounts(first));
-      expect(dry.targetHasData).toEqual([]);
-      expect(dry.warnings.join(' ')).toContain(source.email);
-      expect(dry.warnings.join(' ')).toContain('serão substituídas');
+        // Dry-run: resumo, aviso do membro sem par e das categorias substituídas; destino vazio.
+        const dry = await m.backup.dryRunRestore(target.householdId, JSON.parse(JSON.stringify(first)), target.memberId);
+        expect(dry.tables).toEqual(m.backup.backupCounts(first));
+        expect(dry.targetHasData).toEqual([]);
+        expect(dry.warnings.join(' ')).toContain(source.email);
+        expect(dry.warnings.join(' ')).toContain('serão substituídas');
 
-      const restored = await m.backup.restoreHousehold(target.householdId, JSON.parse(JSON.stringify(first)), target.memberId);
-      expect(restored.tables).toEqual(m.backup.backupCounts(first));
-      // Ids novos: nenhum id da origem foi reaproveitado.
-      for (const [from, to] of restored.idMap) if (from !== source.memberId) expect(to).not.toBe(from);
+        const restored = await m.backup.restoreHousehold(target.householdId, JSON.parse(JSON.stringify(first)), target.memberId);
+        expect(restored.tables).toEqual(m.backup.backupCounts(first));
+        // Ids novos: nenhum id da origem foi reaproveitado.
+        for (const [from, to] of restored.idMap) if (from !== source.memberId) expect(to).not.toBe(from);
 
-      const second = await m.backup.exportHousehold(target.householdId, EXPORTED_AT);
-      const translated = translate(first, restored.idMap) as typeof first;
-      for (const key of m.backup.BACKUP_TABLES) {
-        expect(byId(second.tables[key] ?? []), `tabela ${key}`).toEqual(byId(translated.tables[key] ?? []));
+        const second = await m.backup.exportHousehold(target.householdId, EXPORTED_AT);
+        const translated = translate(first, restored.idMap) as typeof first;
+        for (const key of m.backup.BACKUP_TABLES) {
+          expect(byId(second.tables[key] ?? []), `tabela ${key}`).toEqual(byId(translated.tables[key] ?? []));
+        }
+        expect(second.settings).toEqual(first.settings);
+        // O seed do destino foi substituído: só as categorias do backup.
+        expect((second.tables.categories ?? []).map((row) => row.name).sort()).toEqual(['Luz', 'Moradia']);
+        // O que era do membro de origem passou para o membro do destino.
+        expect(restored.idMap.get(source.memberId)).toBe(target.memberId);
+
+        const [dashA, dashB] = await Promise.all([
+          m.dashboard.getDashboardData(source.householdId, TODAY, 12),
+          m.dashboard.getDashboardData(target.householdId, TODAY, 12),
+        ]);
+        expect(canonical(dashB)).toEqual(canonical(translate(dashA, restored.idMap)));
+
+        // Destino agora tem dado: restaurar de novo é recusado (409), nada muda.
+        const again = await m.backup.restoreHousehold(target.householdId, JSON.parse(JSON.stringify(first)), target.memberId).catch((error: unknown) => error);
+        expect(again).toBeInstanceOf(m.backup.BackupTargetNotEmptyError);
+        expect(m.domainFailure(again)?.status).toBe(409);
+        const third = await m.backup.exportHousehold(target.householdId, EXPORTED_AT);
+        expect(m.backup.backupCounts(third)).toEqual(m.backup.backupCounts(second));
+      } finally {
+        await cleanup(m, target.householdId);
       }
-      expect(second.settings).toEqual(first.settings);
-      // O seed do destino foi substituído: só as categorias do backup.
-      expect((second.tables.categories ?? []).map((row) => row.name).sort()).toEqual(['Luz', 'Moradia']);
-      // O que era do membro de origem passou para o membro do destino.
-      expect(restored.idMap.get(source.memberId)).toBe(target.memberId);
-
-      const [dashA, dashB] = await Promise.all([
-        m.dashboard.getDashboardData(source.householdId, TODAY, 12),
-        m.dashboard.getDashboardData(target.householdId, TODAY, 12),
-      ]);
-      expect(canonical(dashB)).toEqual(canonical(translate(dashA, restored.idMap)));
-
-      // Destino agora tem dado: restaurar de novo é recusado (409), nada muda.
-      const again = await m.backup.restoreHousehold(target.householdId, JSON.parse(JSON.stringify(first)), target.memberId).catch((error: unknown) => error);
-      expect(again).toBeInstanceOf(m.backup.BackupTargetNotEmptyError);
-      expect(m.domainFailure(again)?.status).toBe(409);
-      const third = await m.backup.exportHousehold(target.householdId, EXPORTED_AT);
-      expect(m.backup.backupCounts(third)).toEqual(m.backup.backupCounts(second));
     } finally {
       await cleanup(m, source.householdId);
-      await cleanup(m, target.householdId);
     }
   }, 60_000);
 
   it('arquivo inválido é recusado inteiro, com o problema dito, e nada é gravado', async () => {
     const m = await modules();
     const source = await newHousehold(m, 'T-402 backup test (origem)');
-    const target = await newHousehold(m, 'T-402 backup test (destino)');
     try {
-      await seedEverything(m, source.householdId, source.memberId);
-      const good = await m.backup.exportHousehold(source.householdId, EXPORTED_AT);
-      const clone = () => JSON.parse(JSON.stringify(good)) as typeof good;
-      const problemsOf = async (file: unknown) => {
-        const error = await m.backup.restoreHousehold(target.householdId, file, target.memberId).catch((caught: unknown) => caught);
-        expect(error).toBeInstanceOf(m.backup.BackupInvalidError);
-        expect(m.domainFailure(error)?.status).toBe(400);
-        return (error as InstanceType<typeof m.backup.BackupInvalidError>).problems.join(' | ');
-      };
+      const target = await newHousehold(m, 'T-402 backup test (destino)');
+      try {
+        await seedEverything(m, source.householdId, source.memberId);
+        const good = await m.backup.exportHousehold(source.householdId, EXPORTED_AT);
+        const clone = () => JSON.parse(JSON.stringify(good)) as typeof good;
+        const problemsOf = async (file: unknown) => {
+          const error = await m.backup.restoreHousehold(target.householdId, file, target.memberId).catch((caught: unknown) => caught);
+          expect(error).toBeInstanceOf(m.backup.BackupInvalidError);
+          expect(m.domainFailure(error)?.status).toBe(400);
+          return (error as InstanceType<typeof m.backup.BackupInvalidError>).problems.join(' | ');
+        };
 
-      expect(await problemsOf({ format: 'outro' })).toContain('format');
-      // Coluna NOT NULL sem default ausente (backup de antes de ela existir): recusado, dizendo qual.
-      const missingRequired = clone();
-      delete (missingRequired.tables.transactions?.[0] as Record<string, unknown>).amountCents;
-      expect(await problemsOf(missingRequired)).toContain(
-        'transactions[0]: falta a coluna obrigatória amountCents (o schema atual não tem valor padrão aceitável para ela)',
-      );
-      // Enum com default também é exigido: `status` ausente não pode virar 'posted' em silêncio.
-      const missingStatus = clone();
-      delete (missingStatus.tables.transactions?.[0] as Record<string, unknown>).status;
-      expect(await problemsOf(missingStatus)).toContain('transactions[0]: falta a coluna obrigatória status');
-      const dangling = clone();
-      (dangling.tables.transactions?.[0] as Record<string, unknown>).categoryId = randomUUID();
-      expect(await problemsOf(dangling)).toContain('categoryId aponta para categories que não está no backup');
-      const badType = clone();
-      (badType.tables.transactions?.[0] as Record<string, unknown>).amountCents = '12,34';
-      expect(await problemsOf(badType)).toContain('transactions[0].amountCents');
-      const twinMembers = clone();
-      const firstMember = twinMembers.members[0];
-      if (firstMember === undefined) throw new Error('Sem membro no backup.');
-      twinMembers.members.push({ ...firstMember, id: randomUUID(), email: firstMember.email.toUpperCase() });
-      expect(await problemsOf(twinMembers)).toContain('members: e-mail repetido');
-      const extraColumn = clone();
-      (extraColumn.tables.accounts?.[0] as Record<string, unknown>).senha = 'x';
-      expect(await problemsOf(extraColumn)).toContain('accounts[0]');
+        expect(await problemsOf({ format: 'outro' })).toContain('format');
+        // Coluna NOT NULL sem default ausente (backup de antes de ela existir): recusado, dizendo qual.
+        const missingRequired = clone();
+        delete (missingRequired.tables.transactions?.[0] as Record<string, unknown>).amountCents;
+        expect(await problemsOf(missingRequired)).toContain(
+          'transactions[0]: falta a coluna obrigatória amountCents (o schema atual não tem valor padrão aceitável para ela)',
+        );
+        // Enum com default também é exigido: `status` ausente não pode virar 'posted' em silêncio.
+        const missingStatus = clone();
+        delete (missingStatus.tables.transactions?.[0] as Record<string, unknown>).status;
+        expect(await problemsOf(missingStatus)).toContain('transactions[0]: falta a coluna obrigatória status');
+        const dangling = clone();
+        (dangling.tables.transactions?.[0] as Record<string, unknown>).categoryId = randomUUID();
+        expect(await problemsOf(dangling)).toContain('categoryId aponta para categories que não está no backup');
+        const badType = clone();
+        (badType.tables.transactions?.[0] as Record<string, unknown>).amountCents = '12,34';
+        expect(await problemsOf(badType)).toContain('transactions[0].amountCents');
+        const twinMembers = clone();
+        const firstMember = twinMembers.members[0];
+        if (firstMember === undefined) throw new Error('Sem membro no backup.');
+        twinMembers.members.push({ ...firstMember, id: randomUUID(), email: firstMember.email.toUpperCase() });
+        expect(await problemsOf(twinMembers)).toContain('members: e-mail repetido');
+        const extraColumn = clone();
+        (extraColumn.tables.accounts?.[0] as Record<string, unknown>).senha = 'x';
+        expect(await problemsOf(extraColumn)).toContain('accounts[0]');
 
-      // Passa na validação mas fere um CHECK do banco (conta E cartão): a transação desfaz tudo.
-      const breaksCheck = clone();
-      const row = (breaksCheck.tables.transactions ?? []).find((item) => item.creditCardId !== null) as Record<string, unknown>;
-      row.accountId = breaksCheck.tables.accounts?.[0]?.id;
-      await expect(m.backup.restoreHousehold(target.householdId, breaksCheck, target.memberId)).rejects.toThrow();
-      expect(await m.backup.nonEmptyDataTables(target.householdId)).toEqual([]);
-      const categoriesLeft = await m.db.select({ id: m.schema.categories.id }).from(m.schema.categories).where(eq(m.schema.categories.householdId, target.householdId));
-      expect(categoriesLeft).toEqual([]);
+        // Passa na validação mas fere um CHECK do banco (conta E cartão): a transação desfaz tudo.
+        const breaksCheck = clone();
+        const row = (breaksCheck.tables.transactions ?? []).find((item) => item.creditCardId !== null) as Record<string, unknown>;
+        row.accountId = breaksCheck.tables.accounts?.[0]?.id;
+        await expect(m.backup.restoreHousehold(target.householdId, breaksCheck, target.memberId)).rejects.toThrow();
+        expect(await m.backup.nonEmptyDataTables(target.householdId)).toEqual([]);
+        const categoriesLeft = await m.db.select({ id: m.schema.categories.id }).from(m.schema.categories).where(eq(m.schema.categories.householdId, target.householdId));
+        expect(categoriesLeft).toEqual([]);
 
-      // Household com dado: 409 já no restore, e o dry-run diz quais tabelas.
-      expect((await m.backup.dryRunRestore(source.householdId, clone(), source.memberId)).targetHasData).toContain('transactions');
+        // Household com dado: 409 já no restore, e o dry-run diz quais tabelas.
+        expect((await m.backup.dryRunRestore(source.householdId, clone(), source.memberId)).targetHasData).toContain('transactions');
+      } finally {
+        await cleanup(m, target.householdId);
+      }
     } finally {
       await cleanup(m, source.householdId);
-      await cleanup(m, target.householdId);
     }
   }, 60_000);
 
   it('compatibilidade de forma: outra migration é aviso; coluna nullable ou com default ausente restaura', async () => {
     const m = await modules();
     const source = await newHousehold(m, 'T-402 backup test (origem)');
-    const target = await newHousehold(m, 'T-402 backup test (destino)');
     try {
-      await seedEverything(m, source.householdId, source.memberId);
-      const file = JSON.parse(JSON.stringify(await m.backup.exportHousehold(source.householdId, EXPORTED_AT))) as Awaited<
-        ReturnType<typeof m.backup.exportHousehold>
-      >;
-      // Simula um backup de antes de `transactions.note` (nullable) e `accounts.active`
-      // (NOT NULL com default) existirem, gerado noutra migration.
-      file.schemaMigration = { tag: '0003_antiga', createdAt: 1 };
-      for (const row of file.tables.transactions ?? []) delete row.note;
-      for (const row of file.tables.accounts ?? []) delete row.active;
+      const target = await newHousehold(m, 'T-402 backup test (destino)');
+      try {
+        await seedEverything(m, source.householdId, source.memberId);
+        const file = JSON.parse(JSON.stringify(await m.backup.exportHousehold(source.householdId, EXPORTED_AT))) as Awaited<
+          ReturnType<typeof m.backup.exportHousehold>
+        >;
+        // Simula um backup de antes de `transactions.note` (nullable) e `accounts.active`
+        // (NOT NULL com default) existirem, gerado noutra migration.
+        file.schemaMigration = { tag: '0003_antiga', createdAt: 1 };
+        for (const row of file.tables.transactions ?? []) delete row.note;
+        for (const row of file.tables.accounts ?? []) delete row.active;
 
-      const dry = await m.backup.dryRunRestore(target.householdId, file, target.memberId);
-      expect(dry.warnings[0]).toMatch(/^O backup foi gerado na versão 0003_antiga; o app está na \S+\./);
-      expect(m.backup.migrationWarning(file, file.schemaMigration)).toBeNull();
+        const dry = await m.backup.dryRunRestore(target.householdId, file, target.memberId);
+        expect(dry.warnings[0]).toMatch(/^O backup foi gerado na versão 0003_antiga; o app está na \S+\./);
+        expect(m.backup.migrationWarning(file, file.schemaMigration)).toBeNull();
 
-      const restored = await m.backup.restoreHousehold(target.householdId, file, target.memberId);
-      expect(restored.warnings[0]).toContain('0003_antiga');
-      const accountsRows = await m.db.select({ active: m.schema.accounts.active }).from(m.schema.accounts).where(eq(m.schema.accounts.householdId, target.householdId));
-      expect(accountsRows.map((row) => row.active)).toEqual([true]);
-      const notes = await m.db.select({ note: m.schema.transactions.note }).from(m.schema.transactions).where(eq(m.schema.transactions.householdId, target.householdId));
-      expect(notes.length).toBe(file.tables.transactions?.length);
-      expect(notes.every((row) => row.note === null)).toBe(true);
+        const restored = await m.backup.restoreHousehold(target.householdId, file, target.memberId);
+        expect(restored.warnings[0]).toContain('0003_antiga');
+        const accountsRows = await m.db.select({ active: m.schema.accounts.active }).from(m.schema.accounts).where(eq(m.schema.accounts.householdId, target.householdId));
+        expect(accountsRows.map((row) => row.active)).toEqual([true]);
+        const notes = await m.db.select({ note: m.schema.transactions.note }).from(m.schema.transactions).where(eq(m.schema.transactions.householdId, target.householdId));
+        expect(notes.length).toBe(file.tables.transactions?.length);
+        expect(notes.every((row) => row.note === null)).toBe(true);
+      } finally {
+        await cleanup(m, target.householdId);
+      }
     } finally {
       await cleanup(m, source.householdId);
-      await cleanup(m, target.householdId);
     }
   }, 60_000);
 });

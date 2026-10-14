@@ -110,6 +110,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
         expect(result.cardRowsWithoutCashDate).toBe(1);
         // Nenhuma linha `planned` de recorrência/receita foi criada neste household.
         expect(result.recurrencePlannedThrough).toBeNull();
+      } catch (error) {
+        try {
+          await db.delete(households).where(eq(households.id, householdId));
+        } catch {
+          // Se a compensação falhar, o órfão cai na faxina de households de teste.
+        }
+        throw error;
       } finally {
         await db.delete(households).where(eq(households.id, householdId));
       }
@@ -159,6 +166,13 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
         expect(result.openingBalanceCents).toBe(750_000);
         const summary = result.rows.map((r) => `${r.cashDate} ${String(r.amountCents)}`).sort();
         expect(summary).toEqual(['2026-10-01 -3000', '2026-10-04 -1000']);
+      } catch (error) {
+        try {
+          await db.delete(households).where(eq(households.id, householdId));
+        } catch {
+          // Se a compensação falhar, o órfão cai na faxina de households de teste.
+        }
+        throw error;
       } finally {
         await db.delete(households).where(eq(households.id, householdId));
       }

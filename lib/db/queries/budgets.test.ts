@@ -37,50 +37,59 @@ async function seed(m: Modules, name = 'T-205 budgets test') {
     .values({ name })
     .returning({ id: schema.households.id });
   if (household === undefined) throw new Error('Household de teste não foi criado.');
-  await db.insert(schema.householdSettings).values({ householdId: household.id });
-  const category = async (
-    categoryName: string,
-    nature: 'essential' | 'non_essential' | 'investment' | 'income',
-    parentId: string | null,
-  ) => {
-    const [row] = await db
-      .insert(schema.categories)
-      .values({ householdId: household.id, name: categoryName, parentId, nature })
-      .returning({ id: schema.categories.id });
-    if (row === undefined) throw new Error('Categoria não foi criada.');
-    return row.id;
-  };
-  const root = await category('Moradia teste', 'essential', null);
-  const mercado = await category('Mercado teste', 'essential', root);
-  const lazer = await category('Lazer teste', 'non_essential', root);
-  const aporte = await category('Aporte teste', 'investment', root);
-  const salario = await category('Salário teste', 'income', root);
-  const [account] = await db
-    .insert(schema.accounts)
-    .values({ householdId: household.id, name: 'Conta teste', kind: 'checking', openingDate: '2026-01-01' })
-    .returning({ id: schema.accounts.id });
-  if (account === undefined) throw new Error('Conta não foi criada.');
+  try {
+    await db.insert(schema.householdSettings).values({ householdId: household.id });
+    const category = async (
+      categoryName: string,
+      nature: 'essential' | 'non_essential' | 'investment' | 'income',
+      parentId: string | null,
+    ) => {
+      const [row] = await db
+        .insert(schema.categories)
+        .values({ householdId: household.id, name: categoryName, parentId, nature })
+        .returning({ id: schema.categories.id });
+      if (row === undefined) throw new Error('Categoria não foi criada.');
+      return row.id;
+    };
+    const root = await category('Moradia teste', 'essential', null);
+    const mercado = await category('Mercado teste', 'essential', root);
+    const lazer = await category('Lazer teste', 'non_essential', root);
+    const aporte = await category('Aporte teste', 'investment', root);
+    const salario = await category('Salário teste', 'income', root);
+    const [account] = await db
+      .insert(schema.accounts)
+      .values({ householdId: household.id, name: 'Conta teste', kind: 'checking', openingDate: '2026-01-01' })
+      .returning({ id: schema.accounts.id });
+    if (account === undefined) throw new Error('Conta não foi criada.');
 
-  const tx = async (
-    competence: string,
-    categoryId: string | null,
-    amountCents: number,
-    options: { status?: 'posted' | 'planned'; kind?: 'expense' | 'transfer' | 'income' } = {},
-  ) => {
-    await db.insert(schema.transactions).values({
-      householdId: household.id,
-      occurredOn: `${competence}-10`,
-      competence,
-      description: 'Teste',
-      rawDescription: 'TESTE',
-      amountCents,
-      kind: options.kind ?? 'expense',
-      status: options.status ?? 'posted',
-      categoryId,
-      accountId: account.id,
-    });
-  };
-  return { householdId: household.id, root, mercado, lazer, aporte, salario, tx };
+    const tx = async (
+      competence: string,
+      categoryId: string | null,
+      amountCents: number,
+      options: { status?: 'posted' | 'planned'; kind?: 'expense' | 'transfer' | 'income' } = {},
+    ) => {
+      await db.insert(schema.transactions).values({
+        householdId: household.id,
+        occurredOn: `${competence}-10`,
+        competence,
+        description: 'Teste',
+        rawDescription: 'TESTE',
+        amountCents,
+        kind: options.kind ?? 'expense',
+        status: options.status ?? 'posted',
+        categoryId,
+        accountId: account.id,
+      });
+    };
+    return { householdId: household.id, root, mercado, lazer, aporte, salario, tx };
+  } catch (error) {
+    try {
+      await db.delete(schema.households).where(eq(schema.households.id, household.id));
+    } catch {
+      // Se a compensação falhar, o órfão cai na faxina de households de teste.
+    }
+    throw error;
+  }
 }
 
 async function cleanup(m: Modules, householdId: string) {
@@ -183,29 +192,32 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('orçamento por categori
   it('recusa raiz, receita, investimento e categoria de outro household, e NADA é gravado (atomicidade)', async () => {
     const m = await modules();
     const s = await seed(m);
-    const other = await seed(m, 'T-205 budgets other');
     try {
-      await m.budgets.replaceBudgets(s.householdId, '2026-10', [
-        { categoryId: s.mercado, plannedCents: cents(100000) },
-      ]);
-      const bad = async (categoryId: string, pattern: RegExp) => {
-        await expect(
-          m.budgets.replaceBudgets(s.householdId, '2026-10', [
-            { categoryId: s.lazer, plannedCents: cents(1) },
-            { categoryId, plannedCents: cents(1) },
-          ]),
-        ).rejects.toThrow(pattern);
-      };
-      await bad(s.root, /subcategoria/);
-      await bad(s.salario, /Receita/);
-      await bad(s.aporte, /Investimento/);
-      await bad(other.mercado, /não encontrada/);
-      // A primeira (válida) NÃO ficou: a transação desfez tudo e o mês segue como estava.
-      const month = await m.budgets.getBudgetMonth(s.householdId, '2026-10');
-      expect(month.rows.map((r) => [r.categoryName, r.plannedCents])).toEqual([['Mercado teste', 100000]]);
+      const other = await seed(m, 'T-205 budgets other');
+      try {
+        await m.budgets.replaceBudgets(s.householdId, '2026-10', [
+          { categoryId: s.mercado, plannedCents: cents(100000) },
+        ]);
+        const bad = async (categoryId: string, pattern: RegExp) => {
+          await expect(
+            m.budgets.replaceBudgets(s.householdId, '2026-10', [
+              { categoryId: s.lazer, plannedCents: cents(1) },
+              { categoryId, plannedCents: cents(1) },
+            ]),
+          ).rejects.toThrow(pattern);
+        };
+        await bad(s.root, /subcategoria/);
+        await bad(s.salario, /Receita/);
+        await bad(s.aporte, /Investimento/);
+        await bad(other.mercado, /não encontrada/);
+        // A primeira (válida) NÃO ficou: a transação desfez tudo e o mês segue como estava.
+        const month = await m.budgets.getBudgetMonth(s.householdId, '2026-10');
+        expect(month.rows.map((r) => [r.categoryName, r.plannedCents])).toEqual([['Mercado teste', 100000]]);
+      } finally {
+        await cleanup(m, other.householdId);
+      }
     } finally {
       await cleanup(m, s.householdId);
-      await cleanup(m, other.householdId);
     }
   });
 
@@ -332,17 +344,20 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('orçamento por categori
   it('isolamento: o orçamento e o realizado de um household não aparecem no outro', async () => {
     const m = await modules();
     const a = await seed(m, 'T-205 budgets A');
-    const b = await seed(m, 'T-205 budgets B');
     try {
-      await m.budgets.replaceBudgets(a.householdId, '2026-10', [
-        { categoryId: a.mercado, plannedCents: cents(1000) },
-      ]);
-      await a.tx('2026-10', a.mercado, -5000);
-      expect((await m.budgets.getBudgetMonth(b.householdId, '2026-10')).rows).toEqual([]);
-      expect(await m.budgets.listOverBudget(b.householdId, '2026-10')).toEqual([]);
+      const b = await seed(m, 'T-205 budgets B');
+      try {
+        await m.budgets.replaceBudgets(a.householdId, '2026-10', [
+          { categoryId: a.mercado, plannedCents: cents(1000) },
+        ]);
+        await a.tx('2026-10', a.mercado, -5000);
+        expect((await m.budgets.getBudgetMonth(b.householdId, '2026-10')).rows).toEqual([]);
+        expect(await m.budgets.listOverBudget(b.householdId, '2026-10')).toEqual([]);
+      } finally {
+        await cleanup(m, b.householdId);
+      }
     } finally {
       await cleanup(m, a.householdId);
-      await cleanup(m, b.householdId);
     }
   });
 });
