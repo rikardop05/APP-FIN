@@ -1,6 +1,25 @@
 # TEAM — distribuição de agentes no Maestri
 
-Estado em **2026-09-16**. Atualizar quando a equipe mudar.
+## Equipe atual (2026-10-14)
+
+Toda a equipe anterior foi dispensada em 2026-10-14. A nova roda **só em OpenCode** (assinatura opencode go, `opencode --auto`, permissão total). **Nenhum terminal Claude Code** além do Orquestrador. Navegador **só pelo portal do Maestri** (`Vitrine`, ligado à Geleira), nunca Chrome/Edge.
+
+| Codinome | Modelo | Role | Posse |
+|---|---|---|---|
+| **Claude Code** | Claude (Orquestrador) | `Orquestrador` | `docs/` e **os commits** |
+| **Sonda** | DeepSeek V4.1 Flash | `Revisor APPFIN` | nenhuma: só revisa, executando |
+| **Geleira** | GLM-5.3-Flash | `Telas APPFIN` | `app/`, `components/`, `lib/db/queries/` (camada visual; portal `Vitrine`) |
+| **Faisca** | Muse Spark 1.3 | `Motor Financeiro APPFIN` | `lib/money/`, `lib/date/`, `lib/finance/` |
+| **Crivo** | Muse Spark 1.3 | `Importacao APPFIN` | `lib/import/` |
+| **Alicerce** | Muse Spark 1.3 | `Infra e Schema APPFIN` | `lib/db/` (menos `queries/`), `drizzle/`, auth |
+
+Escolha dos modelos por teste comparativo (código, revisão com defeitos plantados, visão) em 2026-10-14: Muse Spark 1.3 foi o mais rápido e barato com código do mesmo nível, mas errou 1 de 5 na visão; DeepSeek e GLM acharam um defeito extra na revisão e acertaram toda a visão. Todos os implementadores pedem revisão à Sonda.
+
+---
+
+## Histórico
+
+Estado em **2026-09-16** (equipe dispensada; mantido como registro).
 
 > ⚠️ **A equipe de 2026-09-10 (Bigorna, Prumo, Vigia, Enxada, Garimpo, Vitral) não existe mais.**
 > O canvas foi esvaziado e reconstruído. Se um agente mandar mensagem para um desses nomes, ela não
