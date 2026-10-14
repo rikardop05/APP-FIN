@@ -12,6 +12,7 @@ import {
   type ConfirmedRow,
   type FinalizeInput,
 } from '@/lib/import/pipeline';
+import { parsePastedText } from '@/lib/import/text';
 import type { ParsedRow, ParseResult } from '@/lib/import/types';
 import { cents, type Cents } from '@/lib/money';
 
@@ -808,5 +809,38 @@ describe('attributeRules — rastro da regra (category_rule_id) com natureza x s
         { description: 'NADA CASA', amountCents: cents(-1000), categoryId: 'c-mercado' },
       ]),
     ).toEqual([null, null, null]);
+  });
+});
+
+describe('ponta a ponta — texto colado de fatura (o bug: compra virava receita)', () => {
+  function previewFromText(raw: string, sourceKind: 'credit_card' | 'account') {
+    const parse = parsePastedText(raw, { defaultCompetence: '2026-09', sourceKind });
+    return buildImportPreview({
+      parse,
+      sourceId: SOURCE_ID,
+      sourceKind,
+      cardCycle: CARD,
+      rules: [],
+      existingHashes: new Set<string>(),
+      today: '2026-09-20',
+      statementCompetence: '2026-09',
+    });
+  }
+
+  it('cartao: compra sem sinal chega ao preview como DESPESA (negativa)', () => {
+    const result = previewFromText('10/09/2026 LOJA X 89,90', 'credit_card');
+    // Conferido a mao: 89,90 = 8990 centavos, com sinal de saida.
+    expect(result.rows[0]?.amountCents).toBe(-8990);
+    expect(result.rows[0]?.state).toBe('new');
+  });
+
+  it('cartao: estorno com sinal chega ao preview como ENTRADA (positiva)', () => {
+    const result = previewFromText('10/09/2026 ESTORNO DE IOF -R$ 25,00', 'credit_card');
+    expect(result.rows[0]?.amountCents).toBe(2500);
+  });
+
+  it('conta: compra sem sinal continua positiva no preview (inalterado)', () => {
+    const result = previewFromText('10/09/2026 LOJA X 89,90', 'account');
+    expect(result.rows[0]?.amountCents).toBe(8990);
   });
 });

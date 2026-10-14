@@ -87,7 +87,14 @@ export async function POST(request: Request) {
     );
     const parsedFile = input.inputType === 'text'
       ? {
-          parse: parsePastedText(input.content, { defaultCompetence: input.defaultCompetence }),
+          parse: parsePastedText(input.content, {
+            defaultCompetence: input.defaultCompetence,
+            // O parser de texto e puro e nao adivinha a origem: numa fatura de
+            // cartao o sinal impresso e invertido (compra sem sinal = saida),
+            // a MESMA convencao dos parsers de PDF de cartao. Em conta fica
+            // literal.
+            sourceKind: input.sourceKind,
+          }),
           bankKey: null,
           format: 'text' as const,
         }

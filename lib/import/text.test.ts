@@ -444,6 +444,46 @@ describe('parsePastedText — pureza e reentrancia', () => {
   });
 });
 
+describe('parsePastedText — sinal pela origem (CONVENTIONS §2)', () => {
+  const card: TextParseOptions = { defaultCompetence: '2026-09', sourceKind: 'credit_card' };
+  const account: TextParseOptions = { defaultCompetence: '2026-09', sourceKind: 'account' };
+
+  it('cartao: compra SEM sinal vira SAIDA (negativa), nunca receita', () => {
+    // Conferido a mao: 89,90 = 8990 centavos. A regra que o bug invertia: sem
+    // sinal na fatura e compra, e compra e saida (negativa) no sistema.
+    expect(onlyRow('10/09/2026 LOJA X 89,90', card).amountCents).toBe(-8990);
+  });
+
+  it('cartao: estorno/credito COM sinal vira ENTRADA (positiva)', () => {
+    // Estorno impresso com `-` na fatura: pela convencao do sistema e entrada.
+    expect(onlyRow('10/09/2026 ESTORNO DE IOF -R$ 25,00', card).amountCents).toBe(2500);
+    expect(onlyRow('10/09/2026 ESTORNO DE IOF -25,00', card).amountCents).toBe(2500);
+    // Sinal a direita (normalizado por parseBRL) tambem inverte.
+    expect(onlyRow('10/09/2026 ESTORNO DE IOF 25,00-', card).amountCents).toBe(2500);
+  });
+
+  it('conta: compra sem sinal continua POSITIVA (comportamento inalterado)', () => {
+    expect(onlyRow('10/09/2026 LOJA X 89,90', account).amountCents).toBe(8990);
+  });
+
+  it('conta: saida com sinal continua NEGATIVA (comportamento inalterado)', () => {
+    expect(onlyRow('10/09/2026 PAGAMENTO -R$ 50,00', account).amountCents).toBe(-5000);
+  });
+
+  it('sem sourceKind o sinal permanece literal (compatibilidade)', () => {
+    expect(onlyRow('10/09/2026 LOJA X 89,90').amountCents).toBe(8990);
+    expect(onlyRow('10/09/2026 PAGAMENTO -R$ 50,00').amountCents).toBe(-5000);
+  });
+
+  it('cartao: R$ 0,00 continua zero, e nao vira sinal', () => {
+    expect(onlyRow('10/09/2026 ANUIDADE R$ 0,00', card).amountCents).toBe(cents(0));
+  });
+
+  it('cartao: valor nao lido continua null, nunca zero', () => {
+    expect(onlyRow('10/09/2026 LOJA X', card).amountCents).toBeNull();
+  });
+});
+
 describe('parsePastedText — linha de valor zero e informativa (decisao 8)', () => {
   it('marca R$ 0,00 como informativa', () => {
     expect(onlyRow('10/09/2026 ANUIDADE DIFERENCIADA R$ 0,00').informational).toBe(true);

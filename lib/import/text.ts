@@ -53,12 +53,23 @@
  *
  * ## Sinal do valor
  *
- * O sinal e **literal**, como `parseBRL` o le (CONVENTIONS §2 preserva o sinal
- * recebido). O parser de texto nao tem como saber se a origem e fatura (compra
- * positiva) ou extrato (saida negativa) — `TextParseOptions` nao traz
- * `sourceKind`, e por isso nao ha inversao automatica. Sinais em posicao
- * incomum sao normalizados: `-R$ 1.234,56`, `R$ -1.234,56` e `1.234,56-`
- * (sinal a direita) resultam todos em centavos negativos.
+ * `parseBRL` devolve o sinal **literal** (CONVENTIONS §2 preserva o sinal
+ * recebido), e o parser o inverte quando a origem e CARTAO DE CREDITO: na
+ * fatura a compra vem impressa sem sinal (`LOJA X 89,90`) e o estorno/credito
+ * com `-`, mas pela convencao do sistema a compra e saida (negativa) e o
+ * estorno e entrada (positiva). E a MESMA convencao dos parsers de PDF de
+ * cartao (`invertPrintedSign` em `nubank.ts`/`santander.ts`/`mercadopago.ts`),
+ * aqui aplicada a partir de `TextParseOptions.sourceKind` — o parser puro nao
+ * tem como adivinhar a origem, entao quem chama a informa.
+ *
+ * Numa origem de CONTA bancaria (`'account'`) o sinal continua **literal**,
+ * como sempre: o extrato ja imprime saida negativa, e inverter trocaria o
+ * defeito de lado. `sourceKind` ausente tambem mantem o sinal literal
+ * (compatibilidade).
+ *
+ * Sinais em posicao incomum sao normalizados ANTES disso: `-R$ 1.234,56`,
+ * `R$ -1.234,56` e `1.234,56-` (sinal a direita) resultam todos em centavos
+ * negativos.
  *
  * ## Linha corrompida vira `diagnostic`
  *
@@ -92,7 +103,7 @@
 
 import { clampDayToMonth, competenceStart } from '@/lib/date';
 import type { Competence, IsoDate } from '@/lib/date';
-import { parseBRL } from '@/lib/money';
+import { cents, parseBRL } from '@/lib/money';
 import type { Cents } from '@/lib/money';
 import { detectInstallment } from '@/lib/import/installments';
 import {
@@ -110,6 +121,14 @@ export interface TextParseOptions {
   defaultCompetence?: Competence;
   /** Ordem dos grupos do formato numerico. Default `'dmy'` (pt-BR). */
   dateOrder?: 'dmy' | 'mdy' | 'ymd';
+  /**
+   * Origem do texto colado. **`'credit_card'` inverte o sinal do valor lido**,
+   * igual aos parsers de PDF de cartao (ver "Sinal do valor" no topo): compra
+   * sem sinal vira saida (negativa), estorno/credito com `-` vira entrada
+   * (positiva). `'account'` ou ausente mantem o sinal **literal** — o extrato
+   * ja imprime a saida negativa, e inverter trocaria o defeito de lado.
+   */
+  sourceKind?: 'credit_card' | 'account';
 }
 
 /** Uma linha colada, com o que o parser conseguiu e o que faltou. */
@@ -503,6 +522,16 @@ function normalizeValueToken(token: string): string {
 }
 
 /**
+ * Aplica a convencao de sinal do sistema (CONVENTIONS §2) ao valor lido. Numa
+ * fatura de cartao o sinal impresso e invertido — a compra vem sem sinal e e
+ * SAIDA —, igual `invertPrintedSign` dos parsers de PDF de cartao. Na conta (ou
+ * sem origem informada) o sinal e literal.
+ */
+function applySourceSign(amount: Cents, sourceKind: TextParseOptions['sourceKind']): Cents {
+  return sourceKind === 'credit_card' ? cents(-amount) : amount;
+}
+
+/**
  * Le o valor da linha: o ultimo numero que `parseBRL` aceita. Candidatos que
  * fazem parte de uma parcela — colados a uma barra (`03/10`) ou ao par por
  * extenso (`3 de 10`) — sao ignorados: sao numeros de parcelamento, nao valor.
@@ -640,6 +669,12 @@ export function parsePastedText(
 
     const installment = detectInstallment(parsed.description);
 
+    // Sinal pela origem (ver "Sinal do valor" no topo): em cartao o valor lido e
+    // invertido; em conta (ou sem origem) fica literal. `null` (nao lido) nao
+    // vira zero: continua campo a completar na confirmacao.
+    const amountCents =
+      parsed.amount === null ? null : applySourceSign(parsed.amount.value, opts?.sourceKind);
+
     // RF-CC-04: a descricao parece o pagamento da fatura anterior. E uma
     // **observacao de texto**, verdadeira independente da origem do arquivo: em
     // fatura de cartao a linha nao pertence ali e chega desmarcada na tela de
@@ -655,7 +690,7 @@ export function parsePastedText(
       // `cents(0)` seria ambíguo com uma compra de R$ 0,00 real.
       occurredOn: parsed.date?.iso ?? null,
       rawDescription: parsed.description,
-      amountCents: parsed.amount?.value ?? null,
+      amountCents,
       installment:
         installment === null
           ? null
@@ -665,9 +700,7 @@ export function parsePastedText(
       missing,
       ...(creditCardPayment ? { creditCardPayment: true } : {}),
       // Decisao 8: R$ 0,00 LIDO e informativo; valor nao lido (`null`) nao e.
-      ...(isInformationalAmount(parsed.amount?.value ?? null)
-        ? { informational: true }
-        : {}),
+      ...(isInformationalAmount(amountCents) ? { informational: true } : {}),
     });
   }
 
