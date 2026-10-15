@@ -10,7 +10,7 @@ Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATI
 ## Pronto para produção (2026-10-14, HEAD e2973bc)
 
 - **Build de produção passa** (`npm run build` numa cópia separada em `E:/APPFIN-build`; nunca rode build na pasta principal com o dev ligado). 1908 testes verdes, detector do impeccable sem achados.
-- **Deploy:** siga `docs/DEPLOY.md` (Vercel, região gru1, Neon pooled, Resend para o link mágico, 7 variáveis). Deploy e segredos são do Ricardo.
+- **Deploy:** siga `docs/DEPLOY.md` (Vercel, região gru1, Neon pooled, Gmail com senha de app para o link mágico, 7 variáveis). Deploy e segredos são do Ricardo.
 - **Crítica do impeccable:** 22 → 27 → 26 → 31 → 28 → **35/40** (avaliadores variam; a última foi uma avaliadora independente). Relatórios em `.impeccable/critique/`.
 - **Decisões tomadas pelo Orquestrador a confirmar:** `docs/DECISOES-PENDENTES.md`.
 - **Equipe:** `docs/TEAM.md` (OpenCode: Sonda revisora, Geleira e Lume telas, Faisca motor, Crivo importação, Alicerce infra). Navegador só pelo portal `Vitrine` do Maestri.
