@@ -34,7 +34,12 @@ export const metadata: Metadata = {
   description: 'Controle financeiro domestico',
   // PWA (T-403): instalavel no celular, leitura offline do ultimo estado carregado.
   manifest: '/manifest.webmanifest',
-  icons: { apple: '/icons/apple-touch-icon.png' },
+  // Marca: o canhoto.png (favicon dos navegadores antigos) e o apple touch; o SVG do
+  // canhoto (app/icon.svg) é servido e anunciado pelo próprio Next como <link rel="icon">.
+  icons: {
+    icon: [{ url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' }],
+    apple: '/icons/apple-touch-icon.png',
+  },
   appleWebApp: { capable: true, title: 'APPFIN', statusBarStyle: 'default' },
 };
 
