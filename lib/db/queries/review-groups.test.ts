@@ -151,7 +151,7 @@ async function createFixture(label: string) {
   }
 }
 
-describe.skipIf(process.env.DATABASE_URL === undefined)('listReviewGroups (F4)', () => {
+describe.skipIf(process.env.DATABASE_URL === undefined)('listReviewGroups', () => {
   it('agrupa os revisaveis por loja, maior valor primeiro, com amostra e categoria sugerida', async () => {
     const f = await createFixture('listar');
     try {
@@ -234,7 +234,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('listReviewGroups (F4)',
   });
 });
 
-describe.skipIf(process.env.DATABASE_URL === undefined)('confirmReviewGroup (F4)', () => {
+describe.skipIf(process.env.DATABASE_URL === undefined)('confirmReviewGroup', () => {
   it('com regra nova: cria a regra no topo, categoriza o grupo, grava rastro e hits', async () => {
     const f = await createFixture('confirmar-regra');
     try {

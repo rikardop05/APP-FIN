@@ -9,7 +9,7 @@ import {
 import { listTransactionFilterOptions } from '@/lib/db/queries/transactions';
 import { reviewGroupConfirmationSchema } from '../schemas';
 
-/** Grupos da tela "Revisar sem categoria" (F4) e as categorias para escolher. */
+/** Grupos da tela "Revisar sem categoria" e as categorias para escolher. */
 export async function GET() {
   try {
     const { householdId } = await requireSession();

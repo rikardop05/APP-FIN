@@ -405,10 +405,21 @@ export async function deleteTransaction(
     const plan = await planDeletion(tx, householdId, id, scope);
 
     // `paid_transaction_id` não tem cascata: sem anular, o DELETE violaria a FK.
+    // `statements` não tem `household_id`: só a fatura de cartão do household
+    // pode ser tocada, mesmo que o id do lançamento apareça em outra fatura.
+    const householdCards = tx
+      .select({ id: creditCards.id })
+      .from(creditCards)
+      .where(eq(creditCards.householdId, householdId));
     await tx
       .update(statements)
       .set({ paidTransactionId: null })
-      .where(inArray(statements.paidTransactionId, plan.ids));
+      .where(
+        and(
+          inArray(statements.paidTransactionId, plan.ids),
+          inArray(statements.creditCardId, householdCards),
+        ),
+      );
 
     // Reabre as previsões que estas linhas cumpriam (uma UPDATE só: status e
     // coluna mudam juntos, que é o que o CHECK exige).

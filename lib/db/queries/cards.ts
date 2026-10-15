@@ -72,6 +72,22 @@ export class InvalidCardReferenceError extends Error {
   }
 }
 
+/** Conta inexistente ou de outro household. */
+export class AccountNotFoundError extends Error {
+  constructor() {
+    super('Conta não encontrada.');
+    this.name = 'AccountNotFoundError';
+  }
+}
+
+/** Cartão inexistente ou de outro household. */
+export class CardNotFoundError extends Error {
+  constructor() {
+    super('Cartão não encontrado.');
+    this.name = 'CardNotFoundError';
+  }
+}
+
 async function ensureCardReferencesBelongToHousehold(
   householdId: string,
   input: CardMutation,
@@ -233,17 +249,22 @@ export async function updateAccount(
   id: string,
   input: AccountMutation,
 ): Promise<void> {
-  await db
+  // Sem linha afetada o id não é do household: 404, nunca 200 silencioso.
+  const updated = await db
     .update(accounts)
     .set(input)
-    .where(and(eq(accounts.id, id), eq(accounts.householdId, householdId)));
+    .where(and(eq(accounts.id, id), eq(accounts.householdId, householdId)))
+    .returning({ id: accounts.id });
+  if (updated.length === 0) throw new AccountNotFoundError();
 }
 
 export async function deactivateAccount(householdId: string, id: string): Promise<void> {
-  await db
+  const updated = await db
     .update(accounts)
     .set({ active: false })
-    .where(and(eq(accounts.id, id), eq(accounts.householdId, householdId)));
+    .where(and(eq(accounts.id, id), eq(accounts.householdId, householdId)))
+    .returning({ id: accounts.id });
+  if (updated.length === 0) throw new AccountNotFoundError();
 }
 
 export async function createCard(householdId: string, input: CardMutation): Promise<void> {
@@ -257,15 +278,19 @@ export async function updateCard(
   input: CardMutation,
 ): Promise<void> {
   await ensureCardReferencesBelongToHousehold(householdId, input);
-  await db
+  const updated = await db
     .update(creditCards)
     .set(input)
-    .where(and(eq(creditCards.id, id), eq(creditCards.householdId, householdId)));
+    .where(and(eq(creditCards.id, id), eq(creditCards.householdId, householdId)))
+    .returning({ id: creditCards.id });
+  if (updated.length === 0) throw new CardNotFoundError();
 }
 
 export async function deactivateCard(householdId: string, id: string): Promise<void> {
-  await db
+  const updated = await db
     .update(creditCards)
     .set({ active: false })
-    .where(and(eq(creditCards.id, id), eq(creditCards.householdId, householdId)));
+    .where(and(eq(creditCards.id, id), eq(creditCards.householdId, householdId)))
+    .returning({ id: creditCards.id });
+  if (updated.length === 0) throw new CardNotFoundError();
 }

@@ -8,7 +8,7 @@ import {
 } from '@/lib/db/schema';
 
 /**
- * Escrita da categorizacao automatica (F2) — o lado de banco do motor puro de
+ * Escrita da categorizacao automatica — o lado de banco do motor puro de
  * `lib/finance/categorization.ts`.
  *
  * As duas funcoes aceitam o executor de quem chama: a importacao roda numa

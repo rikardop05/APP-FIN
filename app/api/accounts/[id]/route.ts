@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
 import {
+  AccountNotFoundError,
   deactivateAccount,
   listAccounts,
   updateAccount,
@@ -32,6 +33,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (error instanceof SessionMissingError) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
     }
+    if (error instanceof AccountNotFoundError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
     return NextResponse.json({ error: 'Não foi possível atualizar a conta.' }, { status: 500 });
   }
 }
@@ -45,6 +49,9 @@ export async function DELETE(_request: Request, context: RouteContext) {
   } catch (error) {
     if (error instanceof SessionMissingError) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
+    }
+    if (error instanceof AccountNotFoundError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
     }
     return NextResponse.json({ error: 'Não foi possível desativar a conta.' }, { status: 500 });
   }

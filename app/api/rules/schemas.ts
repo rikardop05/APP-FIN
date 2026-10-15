@@ -62,7 +62,7 @@ export const ruleOrderSchema = z.object({
 export const ruleIdSchema = z.string().uuid();
 
 /**
- * Aplicar regras aos lancamentos existentes (F3), em dois passos:
+ * Aplicar regras aos lancamentos existentes, em dois passos:
  * `dryRun: true` devolve a previa (`ruleId` null = todas as regras);
  * `dryRun: false` grava EXATAMENTE os itens confirmados da previa. A
  * categoria vai no item: se a regra foi editada desde a previa, o item e pulado.
@@ -91,7 +91,7 @@ export type RuleOrder = z.infer<typeof ruleOrderSchema>;
 export type ApplyRulesBody = z.infer<typeof applyRulesSchema>;
 
 /**
- * Oferta de regra depois de categorizar a mao (F5): `dryRun: true` devolve a
+ * Oferta de regra depois de categorizar a mao: `dryRun: true` devolve a
  * oferta para as linhas recem-categorizadas; `dryRun: false` aceita, criando a
  * regra e gravando EXATAMENTE `matchingIds` da oferta.
  */

@@ -10,7 +10,7 @@ import {
 import { ruleOfferSchema } from '../schemas';
 
 /**
- * Oferta de regra depois de categorizar a mao (F5). `dryRun: true` so le;
+ * Oferta de regra depois de categorizar a mao. `dryRun: true` so le;
  * `dryRun: false` cria a regra e categoriza as linhas da oferta.
  */
 export async function POST(request: Request) {

@@ -114,7 +114,7 @@ export type TransactionFiltersInput = z.infer<typeof transactionFiltersSchema>;
 export type TransactionUpdateInput = z.infer<typeof transactionUpdateSchema>;
 export type ManualTransactionBody = z.infer<typeof manualTransactionBodySchema>;
 /**
- * Confirmar um grupo da revisao (F4). O grupo pode passar das 100 linhas do
+ * Confirmar um grupo da revisao. O grupo pode passar das 100 linhas do
  * lote manual (uma compra parcelada em 12x de varios meses), entao o teto e o
  * mesmo da aplicacao de regras. `newRulePattern` null = so categorizar.
  */

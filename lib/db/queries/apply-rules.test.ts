@@ -182,7 +182,7 @@ async function createFixture(label: string) {
   }
 }
 
-describe.skipIf(process.env.DATABASE_URL === undefined)('previewRuleApplication (F3)', () => {
+describe.skipIf(process.env.DATABASE_URL === undefined)('previewRuleApplication', () => {
   it('todas as regras: cada linha revisavel vai para a primeira regra por prioridade', async () => {
     const f = await createFixture('previa-todas');
     try {
@@ -316,7 +316,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('previewRuleApplication 
   });
 });
 
-describe.skipIf(process.env.DATABASE_URL === undefined)('applyRuleProposals (F3)', () => {
+describe.skipIf(process.env.DATABASE_URL === undefined)('applyRuleProposals', () => {
   it('grava exatamente os itens confirmados, com rastro da regra, membro sugerido e hits', async () => {
     const f = await createFixture('gravar');
     try {

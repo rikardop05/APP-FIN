@@ -29,6 +29,32 @@ export function isPublicPath(pathname: string): boolean {
   );
 }
 
+/** Metodos que mudam estado e pedem origem same-origin. */
+const MUTATING_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'] as const;
+
+/** Prefixos de API com CSRF proprio, fora da checagem de Origin. */
+const CSRF_EXEMPT_PREFIXES = ['/api/auth'] as const;
+
+/**
+ * Mutacao cross-site (ou sem origem) em rota de dominio: o navegador sempre
+ * manda `Origin` em `fetch` same-origin e em POST de formulario, entao
+ * mutacao sem `Origin` igual ao do app nao vem do app. Rotas do proprio
+ * Auth.js tem o CSRF dele e ficam de fora.
+ */
+export function isCrossSiteMutation(input: {
+  method: string;
+  pathname: string;
+  origin: string | null;
+  appOrigin: string;
+}): boolean {
+  if (!(MUTATING_METHODS as readonly string[]).includes(input.method)) return false;
+  if (!input.pathname.startsWith('/api/')) return false;
+  if (CSRF_EXEMPT_PREFIXES.some((prefix) => input.pathname === prefix || input.pathname.startsWith(`${prefix}/`))) {
+    return false;
+  }
+  return input.origin !== input.appOrigin;
+}
+
 /** Decisao do middleware, isolada para ser testavel sem servidor. */
 export type RouteAccess = 'allow' | 'redirect-login' | 'redirect-home';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { LOGIN_PATH, isPublicPath, resolveRouteAccess } from './route-access';
+import { LOGIN_PATH, isCrossSiteMutation, isPublicPath, resolveRouteAccess } from './route-access';
 
 /**
  * A regra do middleware e **nega por padrao**: uma rota nova de dominio tem de
@@ -85,5 +85,43 @@ describe('resolveRouteAccess', () => {
     expect(resolveRouteAccess({ pathname: LOGIN_PATH, hasSession: true })).toBe(
       'redirect-home',
     );
+  });
+});
+
+/**
+ * CSRF: mutacao em /api/** exige Origin igual ao do app; o Auth.js tem
+ * CSRF proprio e fica de fora. Pura, sem servidor.
+ */
+describe('isCrossSiteMutation', () => {
+  const app = (method: string, pathname: string, origin: string | null) =>
+    isCrossSiteMutation({ method, pathname, origin, appOrigin: 'https://appfin.vercel.app' });
+
+  it('barra mutacao sem Origin ou com Origin estranha em rota de dominio', () => {
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      expect(app(method, '/api/transactions', null), method).toBe(true);
+      expect(app(method, '/api/transactions', 'https://evil.example'), method).toBe(true);
+    }
+  });
+
+  it('libera mutacao com Origin do proprio app', () => {
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      expect(app(method, '/api/transactions', 'https://appfin.vercel.app'), method).toBe(false);
+    }
+  });
+
+  it('ignora leitura e caminho fora de /api', () => {
+    expect(app('GET', '/api/transactions', null)).toBe(false);
+    expect(app('POST', '/lancamentos', null)).toBe(false);
+    expect(app('POST', '/', 'https://evil.example')).toBe(false);
+  });
+
+  it('isenta o Auth.js (CSRF proprio)', () => {
+    expect(app('POST', '/api/auth/signin/nodemailer', null)).toBe(false);
+    expect(app('POST', '/api/auth/callback/nodemailer', 'https://evil.example')).toBe(false);
+    expect(app('POST', '/api/auth/session', null)).toBe(false);
+  });
+
+  it('nao confunde /api/authentic com /api/auth', () => {
+    expect(app('POST', '/api/authentic', null)).toBe(true);
   });
 });

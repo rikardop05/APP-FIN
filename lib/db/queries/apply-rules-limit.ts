@@ -1,5 +1,5 @@
 /**
- * Maximo de linhas por previa e por gravacao de "aplicar regras" (F3). Acima
+ * Maximo de linhas por previa e por gravacao de "aplicar regras". Acima
  * disso, o usuario aplica e repete.
  *
  * Mora sozinho, sem importar `db`: o schema da rota (`app/api/rules/schemas.ts`)

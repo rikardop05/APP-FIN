@@ -362,6 +362,63 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('exclusão de lançament
     }
   });
 
+  it('ponteiro cruzado entre households: a fatura alheia não é anulada', async () => {
+    // stB aponta para o lançamento de A (referência cruzada — o FK
+    // statements.paid_transaction_id é global, sem household). Sem o filtro
+    // pelo cartão, o UPDATE anulava as duas faturas; com ele, a alheia fica
+    // intacta e a exclusão falha alto na FK em vez de cruzar households em
+    // silêncio (rollback: nada é anulado nem apagado).
+    const m = await modules();
+    const a = await seed(m);
+    const b = await seed(m, 'T-delete outro household');
+    let stB = '';
+    try {
+      const payA = await a.insertTx({ competence: '2026-10', kind: 'credit_card_payment', description: 'Pagamento A' });
+      const insertStatement = async (s: typeof a, payment: string) => {
+        const [statement] = await m.db
+          .insert(m.schema.statements)
+          .values({
+            creditCardId: s.cardId,
+            period: '2026-09',
+            closingDate: '2026-09-25',
+            dueDate: '2026-10-05',
+            source: 'import',
+            status: 'paid',
+            paidTransactionId: payment,
+          })
+          .returning({ id: m.schema.statements.id });
+        if (statement === undefined) throw new Error('Fatura não foi criada.');
+        return statement.id;
+      };
+      const stA = await insertStatement(a, payA);
+      stB = await insertStatement(b, payA);
+
+      await expect(m.del.deleteTransaction(a.householdId, payA, 'only')).rejects.toThrow();
+      expect(await a.exists(payA)).toBe(true);
+      const [afterA] = await m.db
+        .select({ paid: m.schema.statements.paidTransactionId })
+        .from(m.schema.statements)
+        .where(eq(m.schema.statements.id, stA));
+      const [afterB] = await m.db
+        .select({ paid: m.schema.statements.paidTransactionId })
+        .from(m.schema.statements)
+        .where(eq(m.schema.statements.id, stB));
+      expect(afterA?.paid).toBe(payA);
+      expect(afterB?.paid).toBe(payA);
+    } finally {
+      // Desfaz o ponteiro cruzado antes da limpeza: sem isso o delete em
+      // cascata do household A esbarraria na FK vinda da fatura de B.
+      if (stB !== '') {
+        await m.db
+          .update(m.schema.statements)
+          .set({ paidTransactionId: null })
+          .where(eq(m.schema.statements.id, stB));
+      }
+      await cleanup(m, a.householdId);
+      await cleanup(m, b.householdId);
+    }
+  });
+
   it('veio de importação: avisa que volta na reimportação (SÓ com hash) e decrementa rows_imported sem passar de 0', async () => {
     const m = await modules();
     const s = await seed(m);

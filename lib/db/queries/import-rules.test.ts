@@ -126,7 +126,7 @@ function input(cardId: string, fileHash: string, rows: Row[]) {
   };
 }
 
-describe.skipIf(process.env.DATABASE_URL === undefined)('importacao grava a regra e os hits (F3)', () => {
+describe.skipIf(process.env.DATABASE_URL === undefined)('importacao grava a regra e os hits', () => {
   it('categoria aceita da regra leva category_rule_id; trocada a mao ou vazia nao leva', async () => {
     const f = await createFixture('atribuicao');
     try {

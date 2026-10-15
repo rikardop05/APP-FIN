@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
 import {
+  CardNotFoundError,
   deactivateCard,
   InvalidCardReferenceError,
   listCards,
@@ -42,6 +43,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (error instanceof SessionMissingError) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
     }
+    if (error instanceof CardNotFoundError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
     if (error instanceof InvalidCardReferenceError) {
       return NextResponse.json({ error: 'Referência de conta ou responsável inválida.' }, { status: 400 });
     }
@@ -58,6 +62,9 @@ export async function DELETE(_request: Request, context: RouteContext) {
   } catch (error) {
     if (error instanceof SessionMissingError) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
+    }
+    if (error instanceof CardNotFoundError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
     }
     return NextResponse.json({ error: 'Não foi possível desativar o cartão.' }, { status: 500 });
   }

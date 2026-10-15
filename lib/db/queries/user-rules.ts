@@ -14,7 +14,7 @@ import {
 } from './apply-rules';
 
 /**
- * Regras criadas pelo usuario fora da tela de regras (F5): na revisao em
+ * Regras criadas pelo usuario fora da tela de regras: na revisao em
  * grupos, em "criar regra a partir do lancamento" e na oferta depois de
  * categorizar a mao.
  *

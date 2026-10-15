@@ -213,7 +213,7 @@ export async function previewRuleApplication(
 /**
  * Leva a categoria ao parcelamento SEM categoria e as parcelas dele que estao
  * SEM categoria. Nao usa `setInstallmentPlanCategory` de proposito: aquela
- * regra (F2) tambem move parcelas com rastro de regra, e aqui a previa mostrou
+ * regra tambem move parcelas com rastro de regra, e aqui a previa mostrou
  * so as linhas marcadas — parcela que ja tem categoria, de regra ou a mao, nao
  * pode mudar sem aparecer na previa (achado do Corvo).
  *

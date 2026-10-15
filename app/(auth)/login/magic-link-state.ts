@@ -4,7 +4,7 @@
  * constante nao sao.
  */
 export type MagicLinkState = {
-  status: 'idle' | 'sent' | 'denied' | 'error';
+  status: 'idle' | 'sent' | 'error';
 };
 
 export const INITIAL_MAGIC_LINK_STATE: MagicLinkState = { status: 'idle' };
@@ -13,9 +13,7 @@ export const INITIAL_MAGIC_LINK_STATE: MagicLinkState = { status: 'idle' };
 export function messageForStatus(state: MagicLinkState): string | null {
   switch (state.status) {
     case 'sent':
-      return 'Link enviado. Abra o e-mail neste aparelho para entrar.';
-    case 'denied':
-      return 'Este endereco nao tem acesso ao APPFIN.';
+      return 'Se este e-mail tiver acesso, enviamos um link. Abra o e-mail neste aparelho.';
     case 'error':
       return 'Nao foi possivel enviar o link agora. Tente de novo em instantes.';
     case 'idle':

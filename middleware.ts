@@ -2,7 +2,7 @@ import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
 
 import { authConfig } from '@/lib/auth/config';
-import { LOGIN_PATH, resolveRouteAccess } from '@/lib/auth/route-access';
+import { LOGIN_PATH, isCrossSiteMutation, resolveRouteAccess } from '@/lib/auth/route-access';
 
 /**
  * Porteiro do app (BUILD-PLAN T-004). Constroi uma instancia **edge-safe** do
@@ -17,6 +17,19 @@ const { auth } = NextAuth(authConfig);
 
 export default auth((request) => {
   const { nextUrl } = request;
+
+  // Mutacao sem origem do proprio app nao vem do app: 403 antes de qualquer
+  // outra decisao. Server actions nao passam por aqui (outro caminho).
+  if (
+    isCrossSiteMutation({
+      method: request.method,
+      pathname: nextUrl.pathname,
+      origin: request.headers.get('origin'),
+      appOrigin: nextUrl.origin,
+    })
+  ) {
+    return NextResponse.json({ error: 'Origem inválida.' }, { status: 403 });
+  }
 
   const access = resolveRouteAccess({
     pathname: nextUrl.pathname,

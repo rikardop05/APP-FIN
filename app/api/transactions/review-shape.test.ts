@@ -1,5 +1,5 @@
 /**
- * Fronteira da revisao em grupos (F4): o tipo REAL do servidor passa pelo schema
+ * Fronteira da revisao em grupos: o tipo REAL do servidor passa pelo schema
  * da tela, e o corpo do POST e validado como a rota valida.
  */
 import { describe, expect, it } from 'vitest';

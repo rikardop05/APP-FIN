@@ -21,7 +21,7 @@ export function LoginForm() {
   );
 
   const message = messageForStatus(state);
-  const isError = state.status === 'denied' || state.status === 'error';
+  const isError = state.status === 'error';
 
   return (
     <form action={formAction} className="flex flex-col gap-4">

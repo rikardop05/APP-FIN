@@ -119,7 +119,7 @@ async function createFixture(label: string) {
   }
 }
 
-describe.skipIf(process.env.DATABASE_URL === undefined)('createUserRule (F5)', () => {
+describe.skipIf(process.env.DATABASE_URL === undefined)('createUserRule', () => {
   it('entra no TOPO da ordem: prioridade = menor - 1', async () => {
     const f = await createFixture('topo');
     try {
@@ -168,7 +168,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('createUserRule (F5)', (
   });
 });
 
-describe.skipIf(process.env.DATABASE_URL === undefined)('getRuleOffer / acceptRuleOffer (F5)', () => {
+describe.skipIf(process.env.DATABASE_URL === undefined)('getRuleOffer / acceptRuleOffer', () => {
   it('oferta: padrao, categoria e as outras sem categoria que a regra pegaria', async () => {
     const f = await createFixture('oferta');
     try {
@@ -305,7 +305,7 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('getRuleOffer / acceptRu
   });
 });
 
-describe.skipIf(process.env.DATABASE_URL === undefined)('confirmReviewGroup: rastro respeita natureza x tipo (F5)', () => {
+describe.skipIf(process.env.DATABASE_URL === undefined)('confirmReviewGroup: rastro respeita natureza x tipo', () => {
   it('regra de receita mais prioritaria nao rouba o rastro de uma despesa', async () => {
     const f = await createFixture('rastro-natureza');
     try {

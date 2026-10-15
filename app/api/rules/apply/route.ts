@@ -8,7 +8,7 @@ import {
 import { applyRulesSchema } from '../schemas';
 
 /**
- * Aplicar regras aos lancamentos sem categoria (F3). `dryRun: true` so le e
+ * Aplicar regras aos lancamentos sem categoria. `dryRun: true` so le e
  * devolve a previa; `dryRun: false` grava os itens confirmados nela.
  */
 export async function POST(request: Request) {
