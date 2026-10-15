@@ -10,7 +10,7 @@ Guia para publicar o APPFIN em produção hoje. Deploy não toca no banco (só l
 | 2 | Repo no GitHub | `rikardop05/APP-FIN`, branch `main` atualizada |
 | 3 | URL **pooled** do Neon | Console do Neon → Connection string com `-pooler-` no host (região `sa-east-1`, São Paulo) |
 | 4 | URL **direta** do Neon (só para migrations, na sua máquina) | Mesma tela, opção sem pooler |
-| 5 | Conta Resend (gratuita, 100 e-mails/dia) | resend.com → API Keys → `smtp://resend:SUA_CHAVE@smtp.resend.com:587` |
+| 5 | **Senha de app do Gmail** (sem domínio próprio; 500 e-mails/dia) | Conta Google com verificação em 2 etapas ligada → myaccount.google.com/apppasswords → criar "APPFIN" → copie os 16 caracteres sem espaços |
 | 6 | `AUTH_SECRET` novo de produção | `npx auth secret` na sua máquina (nunca reuse o de dev) |
 
 Nada acima entra em arquivo versionado. Segredo mora só na Vercel (produção) e no `.env.local` (dev).
@@ -32,10 +32,12 @@ Nada acima entra em arquivo versionado. Segredo mora só na Vercel (produção) 
 | `AUTH_SECRET` | gerado agora (§0 item 6) |
 | `AUTH_URL` | `https://<seu-projeto>.vercel.app` (a URL que a Vercel der; sem ela o Auth.js recusa subir) |
 | `AUTH_ALLOWED_EMAILS` | os 2 e-mails do household, separados por vírgula (os mesmos do dev) |
-| `EMAIL_SERVER` | `smtp://resend:SUA_CHAVE@smtp.resend.com:587` |
-| `EMAIL_FROM` | `APPFIN <onboarding@resend.dev>` para o teste de hoje (troque pelo seu domínio depois) |
+| `EMAIL_SERVER` | `smtp://SEU_USUARIO%40gmail.com:SENHA_DE_APP@smtp.gmail.com:587` (o `@` do usuário vira `%40`) |
+| `EMAIL_FROM` | `APPFIN <SEU_USUARIO@gmail.com>` (o mesmo Gmail; o Gmail reescreve outro remetente) |
 
-> **Atenção ao remetente de teste do Resend:** `onboarding@resend.dev` só entrega para o **e-mail dono da conta Resend**. Para os 2 e-mails do household receberem o link, verifique um domínio no Resend (DNS) e use `EMAIL_FROM=APPFIN <login@seu-dominio>`. Para o teste de hoje, entre com o e-mail dono da conta Resend.
+> **Por que Gmail e não Resend:** sem domínio próprio, o remetente de teste do Resend (`onboarding@resend.dev`) só entrega ao **dono da conta Resend**, e o segundo e-mail do household não recebe o link. O Gmail com senha de app entrega para qualquer endereço. Se um dia houver domínio próprio, o Resend volta a ser opção: `smtp://resend:CHAVE@smtp.resend.com:587` e `EMAIL_FROM=APPFIN <login@seu-dominio>`.
+>
+> O primeiro e-mail pode cair no spam de quem recebe; marque "Não é spam" uma vez.
 
 Sem `EMAIL_SERVER` o app **se recusa a iniciar** (guarda de boot, de propósito). Sem `AUTH_URL` dá `UntrustedHost`. As duas falhas são altas e claras no log do deploy — é assim que se descobre variável faltando.
 
@@ -80,7 +82,7 @@ Sem isso, abrir `/fluxo` no dev completa previsão (`topUpPlanned`) **no banco d
 
 ## 8. Pendente (não bloqueia o teste de hoje)
 
-- Domínio próprio + `EMAIL_FROM` com esse domínio (hoje: `onboarding@resend.dev`).
+- Opcional: domínio próprio + Resend, se o Gmail um dia limitar ou cair no spam (hoje: Gmail com senha de app).
 - Branch `dev` do Neon (§6).
 - `maxDuration` na rota de upload se alguma fatura grande estourar o timeout padrão.
 - (Feito em 2026-10-14: os 264 households de teste órfãos foram apagados; o banco tem só a Casa.)
