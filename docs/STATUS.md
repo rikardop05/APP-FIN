@@ -7,6 +7,10 @@ Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATI
 
 **2026-10-14:** texto colado em cartão agora inverte o sinal como os PDFs (compra sem sinal = despesa). Carregar o Fluxo grava as previstas das recorrências **de propósito** (RF-ORC-02), de forma idempotente. As regras de categorização mostram "0 usos" porque não retroagem sobre importações antigas: use "Aplicar regras aos não categorizados". **Resolvido em 2026-10-14:** 264 households de teste órfãos apagados (`scripts/cleanup-test-households.ts`); o banco tem só a "Casa". O vazamento nos testes de banco foi fechado (seed autocontido).
 
+## Em produção desde 2026-10-14
+
+- **No ar:** https://app-fin-smoky.vercel.app (Vercel, funções em gru1). Login do Ricardo testado e funcionando. `app-fin.vercel.app` é de outro projeto: não usar.
+
 ## Pronto para produção (2026-10-14, HEAD e2973bc)
 
 - **Build de produção passa** (`npm run build` numa cópia separada em `E:/APPFIN-build`; nunca rode build na pasta principal com o dev ligado). 1908 testes verdes, detector do impeccable sem achados.

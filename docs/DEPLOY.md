@@ -39,6 +39,8 @@ Nada acima entra em arquivo versionado. Segredo mora só na Vercel (produção) 
 >
 > O primeiro e-mail pode cair no spam de quem recebe; marque "Não é spam" uma vez.
 
+> **Lições do primeiro deploy:** (1) trocar variável na Vercel só vale depois de **Redeploy**; (2) `AUTH_URL` precisa ser a URL completa, sem espaço, aspas nem barra final, senão todas as páginas dão `MIDDLEWARE_INVOCATION_FAILED`; (3) o nome `app-fin.vercel.app` era de outro projeto, a nossa URL é `app-fin-smoky.vercel.app` (Settings → Domains); (4) o `.npmrc` com `legacy-peer-deps` é necessário (peer do `next-auth` beta com `nodemailer` 10).
+
 Sem `EMAIL_SERVER` o app **se recusa a iniciar** (guarda de boot, de propósito). Sem `AUTH_URL` dá `UntrustedHost`. As duas falhas são altas e claras no log do deploy — é assim que se descobre variável faltando.
 
 ## 3. Migrations (da sua máquina, não na Vercel)
