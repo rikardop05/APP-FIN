@@ -112,4 +112,87 @@ describe('P1b: com o placar divergindo, Confirmar vira contorno e a ação prim�
   it('em CONFERE nada muda: o rótulo continua Confirmar importação', () => {
     expect(confirmation).toContain(": 'Confirmar importação';");
   });
+
+  it('aplicar em lote limpa a selecao, volta os selects para Manter e anuncia o resultado', () => {
+    const apply = confirmation.slice(confirmation.indexOf('function applyToSelected'), confirmation.indexOf('async function commit'));
+    expect(apply).toContain('setSelected(new Set())');
+    expect(apply).toContain('setBulkCategory(KEEP)');
+    expect(apply).toContain('setBulkMember(KEEP)');
+    expect(apply).toContain('bulkAppliedMessage');
+    expect(apply).toContain('setAnnouncement');
+  });
+
+  it('a categoria de cada linha abre um seletor proprio, sem tocar a selecao', () => {
+    expect(confirmation).toContain('<RowCategoryPicker');
+    expect(confirmation).toContain('updateDraft(draft.index, { suggestedCategoryId: categoryId })');
+  });
+});
+
+describe('seletor de categoria da linha: teclado e foco', () => {
+  const picker = read('components/import/row-category-picker.tsx');
+
+  it('gatilho e um botao (Enter/Espaco abrem), Esc fecha e devolve o foco ao gatilho', () => {
+    expect(picker).toContain('<button');
+    expect(picker).toContain("event.key === 'Escape'");
+    expect(picker).toContain('triggerRef.current?.focus()');
+    expect(picker).toContain('selectRef.current?.focus()');
+  });
+
+  it('escolher aplica na hora e fecha; sem categoria tem destaque', () => {
+    expect(picker).toContain('onChange(event.target.value || null)');
+    expect(picker).toContain('value === null && ');
+  });
+
+  it('o campo Valor do cartao usa a mesma regra de sinal da linha', () => {
+    expect(confirmation).toContain('parseAmountText(sourceKind, draft.amountText');
+    expect(confirmation).toContain('amountTextFor(sourceKind, row.amountCents)');
+  });
+});
+
+describe('rodada 2: ligacoes', () => {
+  const picker = read('components/import/row-category-picker.tsx');
+
+  it('7: aplicar sem selecao nao faz nada e o botao fica desabilitado', () => {
+    expect(confirmation).toContain('if (selected.size === 0) return;');
+    expect(confirmation).toContain('disabled={selected.size === 0 ||');
+  });
+
+  it('5: o seletor usa showPicker e so grava em escolha explicita', () => {
+    expect(picker).toContain('showPicker');
+    expect(picker).toContain('shouldApplyPickerChange(viaKeyboard.current)');
+    expect(picker).toContain("event.key === 'Enter'");
+  });
+
+  it('8: depois de trocar a categoria, o foco nao cai no body quando o filtro esconde a linha', () => {
+    expect(confirmation).toContain('focusTargetAfterRemoval');
+    expect(confirmation).toContain("getElementById('filtro-atencao')");
+    expect(confirmation).toContain('id="filtro-atencao"');
+  });
+
+  it('6: o sentido original da linha entra na leitura do valor', () => {
+    expect(confirmation).toContain('parseAmountText(sourceKind, draft.amountText, draft.amountCents)');
+  });
+});
+
+describe('rodada 3: ligacoes do seletor', () => {
+  const picker = read('components/import/row-category-picker.tsx');
+
+  it('10: o select mostra o valor pendente (estado local) e Enter grava esse valor', () => {
+    expect(picker).toContain('value={shown}');
+    expect(picker).toContain('setShown(event.target.value)');
+    expect(picker).toContain('pickerEnterChoice(shown, value)');
+    expect(picker).not.toContain('pending.current');
+  });
+
+  it('11: zera a navegacao por teclado ao abrir e no blur', () => {
+    const opening = picker.slice(picker.indexOf('if (open) {'), picker.indexOf('} else if (restoreFocus'));
+    expect(opening).toContain('viaKeyboard.current = false');
+    const blur = picker.slice(picker.indexOf('onBlur='), picker.indexOf('<option value="">'));
+    expect(blur).toContain('viaKeyboard.current = false');
+  });
+
+  it('12: mesma categoria nao arma a ref de foco', () => {
+    expect(confirmation).toContain('if (categoryId === draft.suggestedCategoryId)');
+    expect(confirmation).toContain('focusAfterChange.current = null;');
+  });
 });

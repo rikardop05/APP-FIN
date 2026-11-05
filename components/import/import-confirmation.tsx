@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { formatDateBR } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { dataTalao, HelpNote, SeloLegend, ShortcutLegend } from '@/components/ui-kit';
-import { formatBRL, parseBRL } from '@/lib/money';
+import { formatBRL } from '@/lib/money';
 import type { Cents } from '@/lib/money';
 import type { RecalculateBody } from '@/app/api/import/recalculate/schema';
 import { competenceLong } from '@/components/cashflow/labels';
@@ -25,6 +25,7 @@ import {
 } from '@/components/ui-kit';
 import { CompetenceWarningBanner } from './competence-warning-banner';
 import { BatchCover } from './batch-cover';
+import { RowCategoryPicker } from './row-category-picker';
 import { StillHeldColumn } from './still-held-column';
 import { esperarDestacar } from './destacar';
 import { defaultInclude, includedByDefaultCount } from './preview-state';
@@ -39,6 +40,10 @@ import {
   type AnnounceState,
   flaggedIndexes,
   placarFigures,
+  amountTextFor,
+  focusTargetAfterRemoval,
+  bulkAppliedMessage,
+  parseAmountText,
   rowAmountSign,
   rowFieldLabel,
   rowFlags,
@@ -145,7 +150,7 @@ function flattenCategories(
   ]);
 }
 
-function initialDrafts(rows: ImportPreviewRow[]): DraftRow[] {
+function initialDrafts(rows: ImportPreviewRow[], sourceKind: SourceKind): DraftRow[] {
   return rows.map((row) => ({
     ...row,
     // Linha de pagamento da fatura anterior entra DESMARCADA por padrão
@@ -155,7 +160,7 @@ function initialDrafts(rows: ImportPreviewRow[]): DraftRow[] {
     include: defaultInclude(row.state),
     forceDuplicate: false,
     occurredOnText: row.occurredOn ?? '',
-    amountText: row.amountCents === null ? '' : formatBRL(row.amountCents),
+    amountText: row.amountCents === null ? '' : amountTextFor(sourceKind, row.amountCents),
     installmentEnabled: row.installment !== null,
     installmentCurrentText: row.installment === null ? '' : String(row.installment.current),
     installmentTotalText: row.installment === null ? '' : String(row.installment.total),
@@ -179,10 +184,10 @@ function parseInstallment(draft: DraftRow): { current: number; total: number } |
   return { current, total };
 }
 
-function toConfirmedRow(draft: DraftRow): ConfirmedRow | null {
+function toConfirmedRow(draft: DraftRow, sourceKind: SourceKind): ConfirmedRow | null {
   if (!draft.include) {
     const occurredOn = isoDateSchema.safeParse(draft.occurredOnText);
-    const amountCents = parseBRL(draft.amountText);
+    const amountCents = parseAmountText(sourceKind, draft.amountText, draft.amountCents);
     const installment = parseInstallment(draft);
     if (!occurredOn.success || amountCents === null || installment === undefined) return null;
     return {
@@ -200,7 +205,7 @@ function toConfirmedRow(draft: DraftRow): ConfirmedRow | null {
   }
 
   const occurredOn = isoDateSchema.safeParse(draft.occurredOnText);
-  const amountCents = parseBRL(draft.amountText);
+  const amountCents = parseAmountText(sourceKind, draft.amountText, draft.amountCents);
   const installment = parseInstallment(draft);
   if (
     !occurredOn.success ||
@@ -273,7 +278,7 @@ export function ImportConfirmation({
   // aviso E o `recalculate` (que recebe o ciclo do cliente): o commit lê o ciclo do
   // banco, então a prévia tem de usar o mesmo.
   const [cardCycle, setCardCycle] = useState(preview.cardCycle);
-  const [drafts, setDrafts] = useState<DraftRow[]>(() => initialDrafts(preview.preview.rows));
+  const [drafts, setDrafts] = useState<DraftRow[]>(() => initialDrafts(preview.preview.rows, sourceKind));
   const [busy, setBusy] = useState(false);
   const [settling, setSettling] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -282,7 +287,7 @@ export function ImportConfirmation({
   const [opened, setOpened] = useState<Set<number>>(
     () =>
       new Set(
-        initialDrafts(preview.preview.rows)
+        initialDrafts(preview.preview.rows, sourceKind)
           .filter((row) => row.lowConfidence)
           .map((row) => row.index),
       ),
@@ -314,8 +319,8 @@ export function ImportConfirmation({
   }));
 
   const invalidIncluded = useMemo(
-    () => drafts.filter((draft) => draft.include && toConfirmedRow(draft) === null),
-    [drafts],
+    () => drafts.filter((draft) => draft.include && toConfirmedRow(draft, sourceKind) === null),
+    [drafts, sourceKind],
   );
   const invalidSet = useMemo(() => new Set(invalidIncluded.map((draft) => draft.index)), [invalidIncluded]);
 
@@ -360,7 +365,7 @@ export function ImportConfirmation({
 
   useEffect(() => {
     const confirmedRows = drafts
-      .map(toConfirmedRow)
+      .map((draft) => toConfirmedRow(draft, sourceKind))
       .filter((row): row is ConfirmedRow => row !== null);
     const controller = new AbortController();
     setRecalculating(true);
@@ -415,6 +420,10 @@ export function ImportConfirmation({
 
     return () => controller.abort();
   }, [drafts, cardCycle, sourceId, sourceKind, defaultCompetence]);
+
+  // Linha cuja categoria foi trocada pelo seletor da linha: se o filtro a esconder em
+  // seguida, o foco vai para a vizinha (ou para o filtro), nunca para o body.
+  const focusAfterChange = useRef<{ from: number; neighbor: number | null } | null>(null);
 
   function updateDraft(index: number, update: Partial<DraftRow>) {
     setDrafts((current) =>
@@ -481,10 +490,20 @@ export function ImportConfirmation({
     visibleDrafts.length > 0 && visibleDrafts.every((draft) => selected.has(draft.index));
 
   function applyToSelected() {
+    // Nada selecionado: nao anuncia nem zera os selects de lote.
+    if (selected.size === 0) return;
     const change: { categoryId?: string | null; memberId?: string | null } = {};
     if (bulkCategory !== KEEP) change.categoryId = bulkCategory === NONE ? null : bulkCategory;
     if (bulkMember !== KEEP) change.memberId = bulkMember === NONE ? null : bulkMember;
     setDrafts((current) => applyBulk(current, selected, change));
+    // A selecao some depois de aplicar: nao fica linha esquecida marcada para a
+    // proxima edicao em lote. O anuncio diz o que mudou, ja que a selecao nao esta mais la.
+    const message = bulkAppliedMessage(selected.size, {
+      category: change.categoryId !== undefined,
+      member: change.memberId !== undefined,
+    });
+    setAnnouncement((previous) => (previous === message ? `${message} ` : message));
+    setSelected(new Set());
     setBulkCategory(KEEP);
     setBulkMember(KEEP);
     setError(null);
@@ -496,7 +515,7 @@ export function ImportConfirmation({
       return;
     }
     const confirmedRows = drafts
-      .map(toConfirmedRow)
+      .map((draft) => toConfirmedRow(draft, sourceKind))
       .filter((row): row is ConfirmedRow => row !== null);
     if (confirmedRows.every((row) => !row.include)) {
       setError('Inclua pelo menos uma linha para confirmar a importação.');
@@ -572,6 +591,17 @@ export function ImportConfirmation({
 
   // Anúncio para leitor de tela: só quando algo relevante muda (placar, linha inválida, lote
   // confirmado). Editar sem mudar de estado não repete nada.
+  useEffect(() => {
+    const pending = focusAfterChange.current;
+    if (pending === null) return;
+    focusAfterChange.current = null;
+    if (visibleDrafts.some((item) => item.index === pending.from)) return;
+    const target =
+      pending.neighbor !== null ? document.getElementById(`linha-${pending.neighbor}-abrir`) : null;
+    (target ?? document.getElementById('filtro-atencao'))?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reage so a mudanca das linhas
+  }, [drafts]);
+
   const announceKey = JSON.stringify([invalidIncluded.length, figures.tone, settling]);
   const [announcement, setAnnouncement] = useState('');
   const lastAnnounced = useRef<AnnounceState | null>(null);
@@ -685,6 +715,7 @@ export function ImportConfirmation({
                 }
               />
               <Checkbox
+                id="filtro-atencao"
                 label={`Só o que precisa de atenção (${flagged.length})`}
                 checked={onlyFlagged}
                 onChange={(event) => setOnlyFlagged(event.target.checked)}
@@ -741,7 +772,7 @@ export function ImportConfirmation({
                 <Button
                   variant="outline"
                   onClick={applyToSelected}
-                  disabled={bulkCategory === KEEP && bulkMember === KEEP}
+                  disabled={selected.size === 0 || (bulkCategory === KEEP && bulkMember === KEEP)}
                 >
                   Aplicar às selecionadas
                 </Button>
@@ -787,7 +818,7 @@ export function ImportConfirmation({
               const isDuplicate = draft.state === 'duplicate';
               const isPayment = draft.state === 'credit_card_payment';
               const isInformational = draft.state === 'informational';
-              const amount = parseBRL(draft.amountText);
+              const amount = parseAmountText(sourceKind, draft.amountText, draft.amountCents);
               const installment = parseInstallment(draft);
               const note = NOTE[draft.state];
               const editorId = `linha-${draft.index}-editor`;
@@ -1016,9 +1047,29 @@ export function ImportConfirmation({
                         label="Incluir"
                       />
                     </div>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {installment ? `${stubDate(draft.occurredOnText)} · ` : ''}
-                      {draft.suggestedCategoryId ? (categoryName.get(draft.suggestedCategoryId) ?? 'Categoria') : 'Sem categoria'}
+                      <RowCategoryPicker
+                        value={draft.suggestedCategoryId}
+                        name={draft.suggestedCategoryId ? (categoryName.get(draft.suggestedCategoryId) ?? 'Categoria') : 'Sem categoria'}
+                        options={categoryOptions}
+                        rowContext={`linha ${rowNumber}, ${label || 'sem descrição'}`}
+                        onChange={(categoryId) => {
+                          // Mesma categoria: nada muda, entao nada de foco a armar.
+                          if (categoryId === draft.suggestedCategoryId) {
+                            focusAfterChange.current = null;
+                            return;
+                          }
+                          focusAfterChange.current = {
+                            from: draft.index,
+                            neighbor: focusTargetAfterRemoval(
+                              visibleDrafts.map((item) => item.index),
+                              draft.index,
+                            ),
+                          };
+                          updateDraft(draft.index, { suggestedCategoryId: categoryId });
+                        }}
+                      />
                       {' · '}
                       {draft.suggestedMemberId ? (memberName.get(draft.suggestedMemberId) ?? 'Responsável') : 'Família'}
                       {competence !== null ? ` · ${competenceLong(competence)}` : ''}

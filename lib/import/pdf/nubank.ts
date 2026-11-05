@@ -514,7 +514,7 @@ export function parseNubankPdf(
   const diagnostics: ParseDiagnostic[] = [];
   const { documentDate, reference } = documentReference(rows);
   const fallbackYear = validYear(opts?.defaultYear);
-  let reportedTotalCents: Cents | null = null;
+  const totalCandidates: Cents[] = [];
   let previous: ParsedRow | null = null;
   let currentPage: number | null = null;
 
@@ -530,11 +530,11 @@ export function parseNubankPdf(
     }
 
     if (NUBANK_LAYOUT.totalMarkers.some((marker) => lower.includes(marker))) {
-      // Primeira linha que e so "<rotulo> R$ X" vence; as demais (opcoes de
-      // parcelamento, notas de IOF) nao sobrescrevem.
-      if (reportedTotalCents === null && isPrintedTotalRow(lower)) {
+      // So conta como candidata a linha "<rotulo> R$ X" (opcoes de parcelamento e
+      // notas de IOF ficam de fora). Ver a decisao depois do loop.
+      if (isPrintedTotalRow(lower)) {
         const total = rowAmount(row);
-        if (total !== null) reportedTotalCents = toSystemAmount(total);
+        if (total !== null) totalCandidates.push(toSystemAmount(total));
       }
       previous = null;
       return;
@@ -612,6 +612,14 @@ export function parseNubankPdf(
     parsedRows.push(parsed);
     previous = parsed;
   });
+
+  // Total impresso: so se as candidatas concordam. Duas linhas "<rotulo> R$ X" com
+  // valores diferentes (layout novo, resumo + rodape) nao tem como ser decididas
+  // aqui; chutar a primeira ou a ultima erra em silencio. `null` e tratado pela
+  // tela ("nao impresso", sem conferencia) — melhor que um total errado.
+  const distinctTotals = new Set(totalCandidates);
+  const reportedTotalCents: Cents | null =
+    distinctTotals.size === 1 ? (totalCandidates[0] ?? null) : null;
 
   return { rows: parsedRows, diagnostics, reportedTotalCents, documentDate };
 }
