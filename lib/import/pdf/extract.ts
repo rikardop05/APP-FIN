@@ -45,11 +45,61 @@
  *    run por palavra e runs de espaco entre elas; um run de espaco nao tem
  *    glifo e so poluiria as celulas de `groupIntoRows`, que ja une por espaco.
  *
+ * 7. **Na Vercel o worker e o polyfill precisam ir junto (2026-11).** O
+ *    `pdfjs-dist` carrega `pdf.worker.mjs` por `import(workerSrc)` dinamico e
+ *    `@napi-rs/canvas` por `createRequire` — o rastreador de arquivos (nft) nao
+ *    segue nenhum dos dois, entao a lambda subia sem eles ("Setting up fake
+ *    worker failed" / "DOMMatrix is not defined") e a rota morria com 500 sem
+ *    JSON. Correcao: (a) o worker e importado de forma **estatica e literal**
+ *    (`import('pdfjs-dist/legacy/build/pdf.worker.mjs')`), que o nft rastreia, e
+ *    registrado em `globalThis.pdfjsWorker`, onde o pdfjs o procura antes de
+ *    tentar `workerSrc`; (b) em vez de depender de binario nativo
+ *    (`@napi-rs/canvas`, ~30 MB, por plataforma), instalamos um polyfill minimo
+ *    de `DOMMatrix`/`Path2D`/`ImageData` so quando faltam. So extraimos texto,
+ *    nunca renderizamos: esses tres so sao tocados em caminhos de imagem/clip,
+ *    que `getTextContent` nao executa. O pdfjs e importado dentro da funcao para
+ *    que falha de carga caia no try/catch da rota (JSON + log), nao no modulo.
+ *
  * Modulo puro (CONVENTIONS §5): nao importa `lib/db`, `next/*`, `fs`, `fetch`
  * nem le `process.env`. Recebe bytes e devolve dados.
  */
 
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+type PdfJs = typeof import('pdfjs-dist/legacy/build/pdf.mjs');
+
+let pdfJsPromise: Promise<PdfJs> | undefined;
+
+/** Stub sem comportamento: o pdfjs so precisa que o nome exista ao carregar. */
+class StubGeometry {
+  constructor(..._args: unknown[]) {}
+  addPath(): void {}
+}
+
+/** Instala `DOMMatrix`/`Path2D`/`ImageData` minimos se o runtime nao os tem. */
+function installNodeShims(): void {
+  const g = globalThis as Record<string, unknown>;
+  for (const name of ['DOMMatrix', 'Path2D', 'ImageData']) {
+    if (g[name] === undefined) g[name] = StubGeometry;
+  }
+}
+
+/**
+ * Carrega o pdfjs uma vez: shims, worker registrado em `globalThis.pdfjsWorker`
+ * (import literal => rastreado pelo nft) e so entao o modulo principal.
+ */
+function loadPdfJs(): Promise<PdfJs> {
+  pdfJsPromise ??= (async () => {
+    installNodeShims();
+    const g = globalThis as { pdfjsWorker?: unknown };
+    if (g.pdfjsWorker === undefined) {
+      g.pdfjsWorker = await import('pdfjs-dist/legacy/build/pdf.worker.mjs');
+    }
+    return import('pdfjs-dist/legacy/build/pdf.mjs');
+  })().catch((error: unknown) => {
+    pdfJsPromise = undefined;
+    throw error;
+  });
+  return pdfJsPromise;
+}
 
 /**
  * Um run de texto posicionado na pagina, como o PDF o emite.
@@ -142,6 +192,7 @@ export async function extractPdfTextItems(
   bytes: Uint8Array,
   opts?: PdfExtractOptions,
 ): Promise<PdfTextItem[]> {
+  const { getDocument } = await loadPdfJs();
   const loadingTask = getDocument({
     data: bytes,
     password: opts?.password,

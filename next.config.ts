@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
   // Mantido externo, o pacote e exigido direto de `node_modules` e o worker
   // resolve. Os testes nunca pegaram isso porque o Vitest nao empacota.
   serverExternalPackages: ['pdfjs-dist'],
+  // Externo, o pacote so e copiado para a lambda se o rastreador (nft) o achar.
+  // `lib/import/pdf/extract.ts` importa o worker com caminho literal, o que o
+  // nft segue; esta linha e o cinto de seguranca caso isso mude.
+  outputFileTracingIncludes: {
+    '/api/import/upload': ['./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'],
+  },
   // Erro de tipo ou de lint nao passa no build (CONVENTIONS §6).
   typescript: {
     ignoreBuildErrors: false,

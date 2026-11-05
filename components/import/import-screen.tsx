@@ -10,6 +10,7 @@ import {
 import Link from 'next/link';
 import { detectSource, type DetectedSource } from '@/lib/import/detect';
 import { Button, Faixa, Input, LoadingBlock, MonthPicker, PageHeader, Picote, Select } from '@/components/ui-kit';
+import { describeApiError } from './api-error';
 import { DropZone } from './drop-zone';
 import { successMessage } from './review-model';
 import {
@@ -52,7 +53,7 @@ function isCompetence(value: string): boolean {
 async function readApiError(response: Response, fallback: string): Promise<string> {
   const body: unknown = await response.json().catch(() => null);
   const parsed = apiErrorSchema.safeParse(body);
-  return parsed.success ? parsed.data.error : fallback;
+  return describeApiError(parsed.success ? parsed.data.error : null, response.status, fallback);
 }
 
 function SourceFields({
