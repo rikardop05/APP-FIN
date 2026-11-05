@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { cents } from '@/lib/money';
 import {
+  amountTextFor,
+  focusTargetAfterRemoval,
+  pickerEnterChoice,
+  shouldApplyPickerChange,
   applyBulk,
+  bulkAppliedMessage,
+  parseAmountText,
   bankLabel,
   confirmBlockReason,
   firstInvalidIndex,
@@ -218,5 +224,84 @@ describe('rowAmountSign', () => {
   it('conta bancaria mantem o sinal automatico', () => {
     expect(rowAmountSign('account', -500)).toBe('auto');
     expect(rowAmountSign('account', 500)).toBe('auto');
+  });
+});
+
+describe('campo Valor da linha', () => {
+  it('cartao: compra sem sinal, entrada com +, e volta ao sinal do sistema', () => {
+    expect(amountTextFor('credit_card', cents(-10952))).toBe('R$ 109,52');
+    expect(amountTextFor('credit_card', cents(61384))).toBe('+R$ 613,84');
+    expect(parseAmountText('credit_card', 'R$ 109,52')).toBe(-10952);
+    expect(parseAmountText('credit_card', '109,52')).toBe(-10952);
+    expect(parseAmountText('credit_card', '+R$ 613,84')).toBe(61384);
+    expect(parseAmountText('credit_card', '-R$ 10,00')).toBe(-1000);
+    expect(parseAmountText('credit_card', 'R$ 0,00')).toBe(0);
+    expect(parseAmountText('credit_card', 'abc')).toBeNull();
+  });
+
+  it('ida e volta e estavel em cartao', () => {
+    for (const value of [-10952, 61384, -1, 1]) {
+      expect(parseAmountText('credit_card', amountTextFor('credit_card', cents(value)))).toBe(value);
+    }
+  });
+
+  it('conta bancaria le o sinal literalmente', () => {
+    expect(amountTextFor('account', cents(-500))).toBe('-R$ 5,00');
+    expect(parseAmountText('account', '-R$ 5,00')).toBe(-500);
+    expect(parseAmountText('account', '5,00')).toBe(500);
+  });
+});
+
+describe('bulkAppliedMessage', () => {
+  it('anuncia o que foi aplicado e a quantas linhas', () => {
+    expect(bulkAppliedMessage(3, { category: true, member: false })).toBe('Categoria aplicada a 3 linhas');
+    expect(bulkAppliedMessage(1, { category: true, member: false })).toBe('Categoria aplicada a 1 linha');
+    expect(bulkAppliedMessage(2, { category: false, member: true })).toBe('Responsável aplicado a 2 linhas');
+    expect(bulkAppliedMessage(2, { category: true, member: true })).toBe('Categoria e responsável aplicados a 2 linhas');
+  });
+});
+
+describe('rodada 2: valor, seta e foco', () => {
+  it('9: R$ +10,00 e entrada; +R$ e R$ - tambem', () => {
+    expect(parseAmountText('credit_card', 'R$ +10,00')).toBe(1000);
+    expect(parseAmountText('credit_card', 'R$ + 10,00')).toBe(1000);
+    expect(parseAmountText('credit_card', '+R$ 10,00')).toBe(1000);
+    expect(parseAmountText('credit_card', 'R$ -10,00')).toBe(-1000);
+  });
+
+  it('6: texto sem sinal preserva o sentido original da linha', () => {
+    expect(parseAmountText('credit_card', '613,84', cents(61384))).toBe(61384);
+    expect(parseAmountText('credit_card', '100,00', cents(61384))).toBe(10000);
+    expect(parseAmountText('credit_card', '109,52', cents(-10952))).toBe(-10952);
+    expect(parseAmountText('credit_card', '109,52', null)).toBe(-10952);
+    expect(parseAmountText('credit_card', '109,52')).toBe(-10952);
+    // Sinal explicito vence o sentido original.
+    expect(parseAmountText('credit_card', '-50,00', cents(61384))).toBe(-5000);
+    expect(parseAmountText('credit_card', '+50,00', cents(-10952))).toBe(5000);
+  });
+
+  it('5: mudanca por teclado de navegacao nao grava; clique grava', () => {
+    expect(shouldApplyPickerChange(true)).toBe(false);
+    expect(shouldApplyPickerChange(false)).toBe(true);
+  });
+
+  it('8: foco vai para a vizinha seguinte, a anterior na ultima, null se vazio', () => {
+    expect(focusTargetAfterRemoval([1, 4, 7], 4)).toBe(7);
+    expect(focusTargetAfterRemoval([1, 4, 7], 7)).toBe(4);
+    expect(focusTargetAfterRemoval([4], 4)).toBeNull();
+    expect(focusTargetAfterRemoval([1, 2], 9)).toBeNull();
+  });
+});
+
+describe('rodada 3: Enter grava o que o select mostra', () => {
+  it('10: aplica o valor mostrado quando difere da categoria atual', () => {
+    expect(pickerEnterChoice('cat-b', 'cat-a')).toEqual({ apply: true, categoryId: 'cat-b' });
+    expect(pickerEnterChoice('', 'cat-a')).toEqual({ apply: true, categoryId: null });
+    expect(pickerEnterChoice('cat-a', null)).toEqual({ apply: true, categoryId: 'cat-a' });
+  });
+
+  it('10: igual a atual nao grava nada', () => {
+    expect(pickerEnterChoice('cat-a', 'cat-a')).toEqual({ apply: false, categoryId: 'cat-a' });
+    expect(pickerEnterChoice('', null).apply).toBe(false);
   });
 });

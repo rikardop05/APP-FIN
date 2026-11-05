@@ -327,6 +327,37 @@ describe('parseNubankPdf — bordas', () => {
 
     expect(result.reportedTotalCents).toBe(-79455);
   });
+
+  it('duas linhas de total com valores diferentes: total null em vez de chutar', () => {
+    const result = parseNubankPdf([
+      makeRow(782, [{ x: 327, y: 782, text: 'Fatura 15 SET 2026' }]),
+      makeRow(700, [
+        { x: DESC_X, y: 700, text: 'Total a pagar' },
+        { x: valueX('R$ 794,55'), y: 700, text: 'R$ 794,55' },
+      ]),
+      makeRow(600, [
+        { x: DESC_X, y: 600, text: 'Total a pagar' },
+        { x: valueX('R$ 900,00'), y: 600, text: 'R$ 900,00' },
+      ]),
+    ]);
+
+    expect(result.reportedTotalCents).toBeNull();
+  });
+
+  it('a mesma linha de total repetida (resumo e rodape) com o mesmo valor segue valendo', () => {
+    const labelRow = (y: number) =>
+      makeRow(y, [
+        { x: DESC_X, y, text: 'Total a pagar' },
+        { x: valueX('R$ 794,55'), y, text: 'R$ 794,55' },
+      ]);
+    const result = parseNubankPdf([
+      makeRow(782, [{ x: 327, y: 782, text: 'Fatura 15 SET 2026' }]),
+      labelRow(700),
+      labelRow(600),
+    ]);
+
+    expect(result.reportedTotalCents).toBe(-79455);
+  });
 });
 
 describe('parseNubankPdf — ponta a ponta sobre fixture com a geometria medida', () => {

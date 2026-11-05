@@ -1,4 +1,4 @@
-import { addCents, cents, type Cents } from '@/lib/money';
+import { addCents, cents, formatBRL, parseBRL, type Cents } from '@/lib/money';
 import type { PlacarTone, SeloTone } from '@/components/ui-kit/carne';
 import { placarTone } from '@/components/ui-kit/carne';
 
@@ -129,6 +129,85 @@ export function placarFigures(input: { reportedTotalCents: Cents | null; totalCe
 export function rowAmountSign(sourceKind: 'credit_card' | 'account', amountCents: number): 'auto' | 'never' | 'always' {
   if (sourceKind !== 'credit_card') return 'auto';
   return amountCents < 0 ? 'never' : 'always';
+}
+
+/**
+ * Texto do campo "Valor" da linha. Em cartao, a saida aparece sem "-" e a entrada
+ * com "+" (mesma regra de `rowAmountSign`); em conta, o sinal do sistema.
+ */
+export function amountTextFor(sourceKind: 'credit_card' | 'account', amountCents: Cents): string {
+  return formatBRL(amountCents, { sign: rowAmountSign(sourceKind, amountCents) });
+}
+
+/**
+ * Le o campo "Valor" de volta para o sistema (saida negativa). Em conta, o sinal e
+ * lido literalmente. Em cartao:
+ * - "+" (antes ou depois do "R$") marca entrada; "-" explicito marca saida;
+ * - texto SEM sinal preserva o sentido original da linha (`originalCents`): linha
+ *   que era entrada (pagamento, estorno) continua entrada, o resto e compra.
+ *   O teclado numerico do celular (`inputMode=decimal`) nao tem "+" nem "-", entao
+ *   editar so o numero nao pode inverter a linha em silencio. Escolhido em vez de
+ *   um controle entrada/saida por ser o menor desvio da tela atual.
+ */
+export function parseAmountText(
+  sourceKind: 'credit_card' | 'account',
+  text: string,
+  originalCents?: Cents | null,
+): Cents | null {
+  if (sourceKind !== 'credit_card') return parseBRL(text);
+  const trimmed = text.trim();
+  const plus = /^(R\$\s*)?\+\s*/.exec(trimmed);
+  if (plus) {
+    const parsed = parseBRL(trimmed.slice(plus[0].length));
+    return parsed === null ? null : cents(Math.abs(parsed));
+  }
+  const parsed = parseBRL(trimmed);
+  if (parsed === null) return null;
+  const hasExplicitMinus = /^[-‐‑–−－]|^R\$\s*[-‐‑–−－]/.test(trimmed);
+  if (hasExplicitMinus || parsed === 0) return parsed;
+  const wasInflow = originalCents !== undefined && originalCents !== null && originalCents > 0;
+  return cents(wasInflow ? Math.abs(parsed) : -Math.abs(parsed));
+}
+
+/**
+ * O seletor de categoria da linha so grava em escolha explicita. No Windows, seta
+ * para cima/baixo num select FECHADO dispara `change` e trocaria a categoria sem
+ * o usuario confirmar. Mudanca vinda de navegacao por teclado fica pendente ate
+ * Enter; clique do mouse aplica na hora.
+ */
+export function shouldApplyPickerChange(viaKeyboardNavigation: boolean): boolean {
+  return !viaKeyboardNavigation;
+}
+
+/**
+ * Enter no seletor da linha grava EXATAMENTE o valor que o select mostra (o
+ * pendente), e so se difere da categoria atual. Sem showPicker o select nao
+ * abre a lista, entao o que a tela exibe depois de uma seta e o que vale.
+ */
+export function pickerEnterChoice(shown: string, current: string | null): { apply: boolean; categoryId: string | null } {
+  return { apply: shown !== (current ?? ''), categoryId: shown === '' ? null : shown };
+}
+
+/** Teclas de navegacao que, num select, mudam o valor sem confirmar. */
+export const PICKER_NAVIGATION_KEYS: readonly string[] = ['ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'];
+
+/**
+ * Para onde o foco vai quando a linha sob o cursor some da lista filtrada: a
+ * vizinha seguinte, ou a anterior se era a ultima; `null` = lista ficou vazia
+ * (a tela leva o foco ao filtro).
+ */
+export function focusTargetAfterRemoval(visibleIndexes: readonly number[], removedIndex: number): number | null {
+  const position = visibleIndexes.indexOf(removedIndex);
+  if (position === -1) return null;
+  return visibleIndexes[position + 1] ?? visibleIndexes[position - 1] ?? null;
+}
+
+/** Frase do anuncio (leitor de tela) depois de aplicar categoria/responsavel em lote. */
+export function bulkAppliedMessage(count: number, change: { category: boolean; member: boolean }): string {
+  const lines = count === 1 ? '1 linha' : `${count} linhas`;
+  if (change.category && change.member) return `Categoria e responsável aplicados a ${lines}`;
+  if (change.member) return `Responsável aplicado a ${lines}`;
+  return `Categoria aplicada a ${lines}`;
 }
 
 type BulkRow = { index: number; suggestedCategoryId: string | null; suggestedMemberId: string | null };
