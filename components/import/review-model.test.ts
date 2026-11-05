@@ -8,6 +8,7 @@ import {
   flaggedIndexes,
   placarFigures,
   rowFieldLabel,
+  rowAmountSign,
   rowFlags,
   stepFlagged,
 } from './review-model';
@@ -205,5 +206,17 @@ describe('P1b: o que pode explicar a diferença do placar', () => {
 
   it('o rótulo do Confirmar leva o valor da diferença', () => {
     expect(confirmWithDifferenceLabel('R$ 30,00')).toBe('Confirmar com diferença de R$ 30,00');
+  });
+});
+
+describe('rowAmountSign', () => {
+  it('fatura de cartao: compra sem sinal, entrada com +', () => {
+    expect(rowAmountSign('credit_card', -10952)).toBe('never');
+    expect(rowAmountSign('credit_card', 61384)).toBe('always');
+  });
+
+  it('conta bancaria mantem o sinal automatico', () => {
+    expect(rowAmountSign('account', -500)).toBe('auto');
+    expect(rowAmountSign('account', 500)).toBe('auto');
   });
 });
