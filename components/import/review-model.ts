@@ -120,6 +120,17 @@ export function placarFigures(input: { reportedTotalCents: Cents | null; totalCe
   };
 }
 
+/**
+ * Sinal exibido no valor de uma linha da previa. O dado segue a convencao do
+ * sistema (saida negativa, CONVENTIONS §2); so a apresentacao muda. Fatura de
+ * cartao imprime a compra sem sinal e o credito/estorno como entrada, entao a
+ * previa mostra a saida sem "-" e a entrada com "+". Conta bancaria mantem o "-".
+ */
+export function rowAmountSign(sourceKind: 'credit_card' | 'account', amountCents: number): 'auto' | 'never' | 'always' {
+  if (sourceKind !== 'credit_card') return 'auto';
+  return amountCents < 0 ? 'never' : 'always';
+}
+
 type BulkRow = { index: number; suggestedCategoryId: string | null; suggestedMemberId: string | null };
 
 /**

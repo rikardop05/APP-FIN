@@ -304,6 +304,29 @@ describe('parseNubankPdf — bordas', () => {
 
     expect(result.reportedTotalCents).toBe(-2000);
   });
+
+  it('o total impresso nao e sobrescrito por outras linhas com o rotulo (regressao 794,55 vs 0,28)', () => {
+    const labelRow = (y: number, cells: string[]) =>
+      makeRow(y, [
+        { x: DESC_X, y, text: 'Total a pagar' },
+        ...cells.map((text, i) => ({ x: 395 + i * 83, y, text })),
+      ]);
+    const result = parseNubankPdf([
+      makeRow(782, [{ x: 327, y: 782, text: 'Fatura 15 SET 2026' }]),
+      // Tabela de opcoes de parcelamento: dois valores, antes do total.
+      labelRow(700, ['R$ 954,07', 'R$ 1.088,02']),
+      labelRow(600, ['R$ 794,55']),
+      // Notas de compra internacional, depois do total: rotulo com dois-pontos e IOF.
+      makeRow(500, [
+        { x: DESC_X, y: 500, text: 'Total a pagar: R$ 45,29 (valor da transacao de R$ 40,00 + R$ 0,28 de IOF +' },
+      ]),
+      makeRow(400, [
+        { x: DESC_X, y: 400, text: 'Total a pagar: R$ 27,84 (valor da transacao de R$ 25,00 + R$ 0,16 de IOF +' },
+      ]),
+    ]);
+
+    expect(result.reportedTotalCents).toBe(-79455);
+  });
 });
 
 describe('parseNubankPdf — ponta a ponta sobre fixture com a geometria medida', () => {

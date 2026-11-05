@@ -39,6 +39,7 @@ import {
   type AnnounceState,
   flaggedIndexes,
   placarFigures,
+  rowAmountSign,
   rowFieldLabel,
   rowFlags,
   stepFlagged,
@@ -824,7 +825,7 @@ export function ImportConfirmation({
                       amount === null ? (
                         <span className="text-muted-foreground">—</span>
                       ) : (
-                        <Money value={amount} />
+                        <Money value={amount} sign={rowAmountSign(sourceKind, amount)} />
                       )
                     }
                     footer={

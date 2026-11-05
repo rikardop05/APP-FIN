@@ -458,6 +458,24 @@ function validYear(value: number | undefined): number | null {
   return Number.isInteger(value) && value >= 1000 && value <= 9999 ? value : null;
 }
 
+const PRINTED_AMOUNT_GLOBAL = /[−-]?\s*R\$\s*\d{1,3}(?:\.\d{3})*,\d{2}/gi;
+
+/**
+ * A linha e o **total impresso** da fatura? So quando e "<rotulo> R$ X": o rotulo
+ * do marcador e exatamente um valor, sem mais nada. Rejeita as linhas que apenas
+ * contem o rotulo — "Total a pagar R$ 954,07 R$ 1.088,02" (tabela de opcoes de
+ * parcelamento, dois valores) e "Total a pagar: R$ 45,29 (valor da transacao de
+ * R$ 40,00 + R$ 0,28 de IOF ...)" (nota de compra internacional). Antes, a ultima
+ * linha com o rotulo vencia e o total saia 0,28 em vez de 794,55.
+ */
+function isPrintedTotalRow(lower: string): boolean {
+  const amounts = lower.match(PRINTED_AMOUNT_GLOBAL) ?? [];
+  if (amounts.length !== 1) return false;
+  let rest = lower.replace(PRINTED_AMOUNT_GLOBAL, ' ');
+  for (const marker of NUBANK_LAYOUT.totalMarkers) rest = rest.replace(marker, ' ');
+  return /^[\s:]*$/.test(rest);
+}
+
 /** Valor da linha de total, lido da coluna de valor (ou da linha inteira). */
 function rowAmount(row: PdfTextRow): Cents | null {
   const fromBand = joinCells(cellsIn(row, NUBANK_LAYOUT.columns.value));
@@ -512,8 +530,12 @@ export function parseNubankPdf(
     }
 
     if (NUBANK_LAYOUT.totalMarkers.some((marker) => lower.includes(marker))) {
-      const total = rowAmount(row);
-      if (total !== null) reportedTotalCents = toSystemAmount(total);
+      // Primeira linha que e so "<rotulo> R$ X" vence; as demais (opcoes de
+      // parcelamento, notas de IOF) nao sobrescrevem.
+      if (reportedTotalCents === null && isPrintedTotalRow(lower)) {
+        const total = rowAmount(row);
+        if (total !== null) reportedTotalCents = toSystemAmount(total);
+      }
       previous = null;
       return;
     }
