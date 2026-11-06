@@ -36,7 +36,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: '/', label: 'Painel', icon: LayoutDashboard, mobile: 'primary', group: 'mes' },
   { href: '/lancamentos', label: 'Lançamentos', icon: ListChecks, mobile: 'primary', group: 'mes' },
   { href: '/importar', label: 'Importar', icon: Upload, mobile: 'more', group: 'mes' },
-  { href: '/cartoes', label: 'Cartões', icon: CreditCard, mobile: 'primary', group: 'mes' },
+  { href: '/cartoes', label: 'Cartões e contas', short: 'Cartões', icon: CreditCard, mobile: 'primary', group: 'mes' },
   { href: '/fluxo', label: 'Fluxo de caixa', short: 'Fluxo', icon: LineChart, mobile: 'primary', group: 'adiante' },
   { href: '/orcamento', label: 'Orçamento', icon: Wallet, mobile: 'more', group: 'adiante' },
   {
