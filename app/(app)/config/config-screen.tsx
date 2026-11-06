@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { z } from 'zod';
+import { ColorDot } from '@/components/category/color-dot';
 import {
   ChevronDown,
   ChevronUp,
@@ -412,7 +413,10 @@ export function ConfigScreen() {
                   <li key={root.id} className="border border-border bg-card p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h3 className="truncate font-medium">{root.name}</h3>
+                        <h3 className="flex items-center gap-2 font-medium">
+                          <ColorDot color={root.color} />
+                          <span className="truncate">{root.name}</span>
+                        </h3>
                         {/* A natureza da raiz nao e exibida: ela e um default do
                             servidor, nao classificacao real (a natureza pertence
                             a folha). */}

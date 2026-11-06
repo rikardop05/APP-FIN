@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { Button, Input, Select } from '@/components/ui-kit';
+import { ColorPicker } from '@/components/category/color-picker';
 import { Field } from './form-fields';
 import { categoryFormSchema, type CategoryFormValues, type Nature } from './schemas';
 import { natureLabel } from './labels';
@@ -93,15 +94,19 @@ export function CategoryForm({ mode, initial, busy = false, onCancel, onSubmit }
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Cor (opcional)" htmlFor="category-color" error={errors.color} hint="#RRGGBB">
-          <Input
-            id="category-color"
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <span className="text-sm font-medium text-foreground">Cor (opcional)</span>
+          <ColorPicker
             value={values.color}
-            onChange={(event) => update('color', event.target.value)}
-            placeholder="#2e8c7a"
-            autoComplete="off"
+            initialValue={initial?.color ?? ''}
+            onChange={(color) => update('color', color)}
           />
-        </Field>
+          {errors.color ? (
+            <p className="text-xs text-destructive" role="alert">
+              {errors.color}
+            </p>
+          ) : null}
+        </div>
         <Field label="Ordem" htmlFor="category-order" error={errors.sortOrder}>
           <Input
             id="category-order"
