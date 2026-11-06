@@ -76,6 +76,12 @@ const LAUNCH_MIN_X = 0;
 const LAUNCH_MAX_X = 250;
 const SUMMARY_MIN_X = 320;
 const SUMMARY_MAX_X = 595;
+/**
+ * MEDIDO (fatura real nov/2026): na tabela da metade direita o cabecalho `R$`
+ * fica em `x~512` e `US$` em `x~534`; valores em R$ comecam em `x~495-508` e os
+ * em US$ em `x>=530`. Abaixo deste limite e coluna R$; acima, US$ (ignorado).
+ */
+const RIGHT_BRL_MAX_X = 520;
 
 /** Faixas de `x` do Santander, na forma que `GroupIntoRowsOptions.xBands` espera. */
 export const SANTANDER_X_BANDS: readonly (readonly [number, number])[] = [
@@ -113,6 +119,8 @@ export const SANTANDER_LAYOUT = {
   /** MEDIDO (§8): limites das tabelas, iguais a `SANTANDER_X_BANDS`. */
   launchMaxX: LAUNCH_MAX_X,
   summaryMinX: SUMMARY_MIN_X,
+  /** Limite da coluna R$ na tabela da direita; a coluna US$ comeca depois. */
+  rightBrlMaxX: RIGHT_BRL_MAX_X,
 
   /**
    * MEDIDO (§8.2): o ano vem da primeira data completa `dd/MM/aaaa` fora da area
@@ -132,16 +140,14 @@ export const SANTANDER_LAYOUT = {
   moneyToken: PDF_MONEY_TOKEN,
 
   /**
-   * MEDIDO (§8): a linha de resumo com prefixo `(=)`. Os demais literais sao
-   * SUPOSICAO — a medicao so garantiu o `(=)`; que ele carregue o total impresso
-   * e inferencia, a ajustar se a fatura real disser outra coisa.
+   * MEDIDO (fatura real, nov/2026): o total impresso e a linha `(=) Saldo Desta
+   * Fatura` do quadro-resumo (`x>=320`), com o valor em celula propria. Os
+   * rotulos "total a pagar" / "valor total" / "total da fatura" NAO servem: casam
+   * com a tabela de parcelamento da fatura (`Total a Pagar R$ 4.470,55`), com os
+   * subtotais por cartao (`VALOR TOTAL 591,57`) e com o texto juridico do rodape
+   * (`... 62,25% a.a. ...`, que virou o total errado).
    */
-  totalMarkers: [
-    '(=)',
-    'total a pagar',
-    'valor total',
-    'total da fatura',
-  ] as readonly string[],
+  totalMarkers: ['(=)'] as readonly string[],
 
   /**
    * SUPOSICAO: blocos institucionais a ignorar alem dos que o gate de data ja
@@ -189,17 +195,6 @@ function joinCells(cells: readonly { text: string }[]): string {
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-/** Ultimo valor monetario de um texto, ou `null`. */
-function lastAmount(text: string): Cents | null {
-  let found: Cents | null = null;
-  // `matchAll` clona o regex; o `lastIndex` do modulo nao e tocado.
-  for (const match of text.matchAll(SANTANDER_LAYOUT.moneyToken)) {
-    const parsed = parseBRL(match[0]);
-    if (parsed !== null) found = parsed;
-  }
-  return found;
 }
 
 /**
@@ -302,6 +297,54 @@ function toSystemAmount(printed: Cents): Cents {
   return SANTANDER_LAYOUT.invertPrintedSign ? cents(-printed) : printed;
 }
 
+/** Celulas da coluna direita da pagina (`x >= summaryMinX`), inclusive a coluna US$. */
+function rightColumnCells(row: PdfTextRow) {
+  return row.cells.filter((cell) => cell.x >= SANTANDER_LAYOUT.summaryMinX);
+}
+
+/** Celulas da coluna direita restritas a faixa R$ (exclui US$). */
+function rightBrlCells(row: PdfTextRow) {
+  return rightColumnCells(row).filter(
+    (cell) => cell.x < SANTANDER_LAYOUT.rightBrlMaxX,
+  );
+}
+
+/** Valor R$ da tabela direita: nunca le a coluna US$. */
+function rightBrlAmount(row: PdfTextRow): Cents | null {
+  return rightmostPureMoney(rightBrlCells(row).slice(1));
+}
+
+/** Parcela em celula propria da tabela direita (entre a descricao e o valor). */
+function rightInstallment(row: PdfTextRow): string {
+  return joinCells(
+    rightBrlCells(row)
+      .slice(1)
+      .filter((cell) => parseBRL(cell.text.trim()) === null),
+  );
+}
+
+/**
+ * MEDIDO (fatura real nov/2026): a tabela de lancamentos de um cartao pode ser
+ * impressa na METADE DIREITA da pagina (data+descricao em `x~327`, valor em
+ * `x~500`), no mesmo `x` do quadro-resumo. Antes essas linhas (7, R$ 497,48) eram
+ * ignoradas e o "Incluido" ficava abaixo do total. Linha do resumo nunca comeca
+ * com `dd/MM` (`Saldo Anterior`, `(+) ...`, `VALOR TOTAL`), entao o gate de data
+ * continua separando lancamento de resumo.
+ */
+function matchRightColumnDate(row: PdfTextRow): FusedDateMatch | null {
+  const first = rightColumnCells(row)[0];
+  if (first === undefined) return null;
+  // Na coluna direita ha texto corrido e tabelas de parcelamento: so e lancamento
+  // com valor em celula propria na mesma linha.
+  if (rightBrlAmount(row) === null) return null;
+  const match = SANTANDER_LAYOUT.fusedDatePattern.exec(first.text.trim());
+  if (match === null) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  if (day < 1 || day > 31 || month < 1 || month > 12) return null;
+  return { day, month, description: (match[3] ?? '').trim() };
+}
+
 /**
  * Le o run fundido `dd/MM + descricao` a partir das celulas da faixa de data.
  * `null` quando a linha nao comeca com uma data `dd/MM` — cabecalho, propaganda,
@@ -311,7 +354,7 @@ function matchFusedDate(row: PdfTextRow): FusedDateMatch | null {
   const match = SANTANDER_LAYOUT.fusedDatePattern.exec(
     joinCells(cellsIn(row, SANTANDER_LAYOUT.columns.date)),
   );
-  if (match === null) return null;
+  if (match === null) return matchRightColumnDate(row);
 
   const day = Number(match[1]);
   const month = Number(match[2]);
@@ -326,7 +369,10 @@ function matchFusedDate(row: PdfTextRow): FusedDateMatch | null {
  * Uma linha vira lancamento quando a faixa de data comeca com `dd/MM` seguido de
  * descricao. O `x` da faixa de valor e o das colunas medidas (§8); a tabela de
  * resumo (`x > 320`) e ignorada, exceto pela linha `(=)`, que traz o total
- * impresso (`SUPOSICAO`).
+ * impresso (MEDIDO: `(=) Saldo Desta Fatura`) e pelas linhas de lancamento
+ * impressas na metade direita (data em `x~327`, valor na coluna R$, nunca US$).
+ * Fatura com saldo credor traz o `(=)` negativo; o sinal e invertido como nos
+ * lancamentos.
  *
  * `defaultYear` e a fonte de ano de reserva, usada quando o documento nao traz
  * `dd/MM/aaaa`; sem nenhuma das duas, `occurredOn` volta `null`. Linha candidata
@@ -364,17 +410,21 @@ export function parseSantanderPdf(
     // de data. O valor sai de qualquer celula da linha (a tabela e a da direita).
     if (
       dateMatch === null &&
-      SANTANDER_LAYOUT.totalMarkers.some((marker) => lower.includes(marker))
+      SANTANDER_LAYOUT.totalMarkers.some((marker) => lower.trimStart().startsWith(marker))
     ) {
-      const total = lastAmount(joinCells(row.cells));
-      if (total !== null) reportedTotalCents = toSystemAmount(total);
+      // So a primeira linha `(=)` com valor em celula propria; nada de varrer
+      // texto corrido atras de um numero.
+      if (reportedTotalCents === null) {
+        const total = rightBrlAmount(row);
+        if (total !== null) reportedTotalCents = toSystemAmount(total);
+      }
       continue;
     }
 
     // Sem data: cabecalho, propaganda, quadro-resumo, data auxiliar solta.
     if (dateMatch === null) continue;
 
-    const amount = amountFrom(row);
+    const amount = amountFrom(row) ?? rightBrlAmount(row);
     const rowYear = yearForDateWithoutYear({
       month: dateMatch.month,
       day: dateMatch.day,
@@ -390,6 +440,7 @@ export function parseSantanderPdf(
     // com dia > mes, e recusado).
     const detected =
       detectInstallment(installmentFor(row)) ??
+      detectInstallment(rightInstallment(row)) ??
       detectInstallment(dateMatch.description);
     // Pagamento da fatura anterior (RF-CC-04).
     const creditCardPayment = isCreditCardPaymentDescription(dateMatch.description);
