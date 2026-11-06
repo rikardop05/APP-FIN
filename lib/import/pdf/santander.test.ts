@@ -593,3 +593,123 @@ describe('parseSantanderPdf — linha de valor zero e informativa (decisao 8)', 
     expect(result.skipped).toEqual([{ index: 0, reason: 'informational' }]);
   });
 });
+
+describe('parseSantanderPdf — total impresso e coluna direita (fatura real nov/2026)', () => {
+  const summaryTotal = makeRow(500, [
+    { x: 326, y: 500, text: '(=) Saldo Desta Fatura' },
+    { x: 495, y: 500, text: '2.980,48' },
+  ]);
+
+  it('so a linha (=) do resumo vale: texto juridico, parcelamento e VALOR TOTAL nao sobrescrevem', () => {
+    const result = parseSantanderPdf(
+      [
+        makeRow(700, [{ x: 9, y: 700, text: 'Parcele: Total a Pagar R$ 4.470,55 em 12x' }]),
+        makeRow(690, [{ x: 328, y: 690, text: 'VALOR TOTAL' }, { x: 501, y: 690, text: '591,57' }]),
+        summaryTotal,
+        makeRow(400, [
+          { x: 9, y: 400, text: 'Valor total do CET: 62,25% a.a. em media, valor total devido' },
+        ]),
+      ],
+      { defaultYear: 2026 },
+    );
+    expect(result.reportedTotalCents).toBe(-298048);
+  });
+
+  it('linha (=) sem valor em celula propria nao vira total', () => {
+    const result = parseSantanderPdf(
+      [makeRow(500, [{ x: 326, y: 500, text: '(=) Saldo Desta Fatura 62,25% a.a.' }])],
+      { defaultYear: 2026 },
+    );
+    expect(result.reportedTotalCents).toBeNull();
+  });
+
+  it('le lancamentos impressos na metade direita da pagina', () => {
+    const result = parseSantanderPdf(
+      [
+        makeRow(520, [
+          { x: 327, y: 520, text: '09/10 LOJA TESTE' },
+          { x: 503, y: 520, text: '69,99' },
+        ]),
+        makeRow(508, [
+          { x: 327, y: 508, text: '15/10 OUTRA LOJA 2/3' },
+          { x: 501, y: 508, text: '225,00' },
+        ]),
+        // tabela de parcelamento da fatura: data sem valor na linha -> nao e lancamento
+        makeRow(480, [{ x: 327, y: 480, text: '07/11 vencimento' }]),
+        summaryTotal,
+      ],
+      { defaultYear: 2026 },
+    );
+    expect(result.rows.map((r) => [r.occurredOn, r.amountCents])).toEqual([
+      ['2026-10-09', cents(-6999)],
+      ['2026-10-15', cents(-22500)],
+    ]);
+    expect(result.rows.map((r) => r.installment)).toEqual([
+      null,
+      { current: 2, total: 3 },
+    ]);
+    expect(result.reportedTotalCents).toBe(-298048);
+  });
+
+  it('coluna direita: parcela em celula propria e lida', () => {
+    const result = parseSantanderPdf(
+      [
+        makeRow(520, [
+          { x: 327, y: 520, text: '09/10 LOJA TESTE' },
+          { x: 450, y: 520, text: '03/10' },
+          { x: 503, y: 520, text: '69,99' },
+        ]),
+      ],
+      { defaultYear: 2026 },
+    );
+    expect(result.rows[0]?.installment).toEqual({ current: 3, total: 10 });
+    expect(result.rows[0]?.amountCents).toBe(cents(-6999));
+  });
+
+  it('coluna direita: compra no exterior le R$, nunca a coluna US$', () => {
+    const result = parseSantanderPdf(
+      [
+        makeRow(520, [
+          { x: 327, y: 520, text: '09/10 LOJA EXTERIOR' },
+          { x: 503, y: 520, text: '69,99' },
+          { x: 534, y: 520, text: '12,34' },
+        ]),
+        // so US$ preenchido (R$ vazio): nao ha valor em R$ -> nao e lancamento
+        makeRow(500, [
+          { x: 327, y: 500, text: '10/10 SO DOLAR' },
+          { x: 534, y: 500, text: '12,34' },
+        ]),
+      ],
+      { defaultYear: 2026 },
+    );
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]?.amountCents).toBe(cents(-6999));
+  });
+
+  it('(=) com US$ na mesma linha le o total em R$', () => {
+    const result = parseSantanderPdf(
+      [
+        makeRow(500, [
+          { x: 326, y: 500, text: '(=) Saldo Desta Fatura' },
+          { x: 495, y: 500, text: '2.980,48' },
+          { x: 541, y: 500, text: '50,00' },
+        ]),
+      ],
+      { defaultYear: 2026 },
+    );
+    expect(result.reportedTotalCents).toBe(-298048);
+  });
+
+  it('(=) com saldo credor (negativo) volta positivo no sinal do sistema', () => {
+    const result = parseSantanderPdf(
+      [
+        makeRow(500, [
+          { x: 326, y: 500, text: '(=) Saldo Desta Fatura' },
+          { x: 492, y: 500, text: '-150,00' },
+        ]),
+      ],
+      { defaultYear: 2026 },
+    );
+    expect(result.reportedTotalCents).toBe(15000);
+  });
+});
