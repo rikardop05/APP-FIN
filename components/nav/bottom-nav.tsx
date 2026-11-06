@@ -170,6 +170,7 @@ export function BottomNav({ theme }: { theme: Theme }) {
             <Link
               key={item.href}
               href={item.href}
+              aria-label={item.label}
               aria-current={active ? 'page' : undefined}
               className={cn(TAB_CLASS, active ? 'text-primary' : 'text-muted-foreground')}
             >

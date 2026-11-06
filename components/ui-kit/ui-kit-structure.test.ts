@@ -72,6 +72,15 @@ describe('estrutura do ui-kit e do shell', () => {
     expect(NAV_ITEMS).toHaveLength(10);
   });
 
+  it('Cartões e contas: rótulo completo na lateral, curto na barra inferior, nome acessível completo', () => {
+    const item = NAV_ITEMS.find((entry) => entry.href === '/cartoes');
+    expect(item?.label).toBe('Cartões e contas');
+    expect(item?.short).toBe('Cartões');
+    const bottom = readFileSync(join(process.cwd(), 'components/nav/bottom-nav.tsx'), 'utf8');
+    expect(bottom).toContain('aria-label={item.label}');
+    expect(bottom).toContain('{item.short ?? item.label}');
+  });
+
   it('o menu é agrupado em três seções rotuladas, com entrada direta para as fixas', () => {
     const groups = navGroups();
     const hrefs = (key: 'mes' | 'adiante' | 'config') =>
