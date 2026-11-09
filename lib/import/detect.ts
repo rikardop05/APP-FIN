@@ -9,7 +9,7 @@
  * Decisoes desta funcao, todas com consequencia visivel:
  *
  * 1. **A v1 aceita um formato: PDF.** `'unsupported'` cobre `.ofx`, `.csv`,
- *    `.xls` e `.xlsx` — o OFX porque nenhum dos tres bancos da familia o
+ *    `.xls` e `.xlsx` — o OFX porque nenhum dos bancos da familia o
  *    oferece (T-106 adiado), a planilha e o CSV porque a maquinaria de
  *    mapeamento de coluna foi adiada para a Fase 4 (T-105, T-118).
  *    `IMPORT-SOURCES.md` §3.1. `'unsupported'` **nao** e beco sem saida: vem
@@ -108,7 +108,7 @@ const HINT_PDF_BROKEN = `Este arquivo tem extensão .pdf, mas não traz o cabeç
  * normalizado em tokens; `contentTokens`, contra os bytes.
  *
  * Todos apontam para `_card` porque o PDF, na v1, existe so para fatura de
- * cartao nos tres bancos (`IMPORT-SOURCES.md` §1) — extrato de conta nao tem
+ * cartao nos bancos com PDF de fatura — extrato de conta nao tem
  * caminho de PDF, entao nao ha o que desambiguar entre cartao e conta.
  *
  * `mp` so vale no nome do arquivo (`Fatura_MP_20260720.pdf`), e so como token
@@ -133,6 +133,13 @@ const BANK_MARKERS: readonly {
     bankKey: 'mercadopago_card',
     fileNameTokens: ['mercadopago', 'mercado pago', 'mp'],
     contentTokens: ['mercadopago', 'mercado pago'],
+  },
+  {
+    bankKey: 'itau_card',
+    fileNameTokens: ['itau', 'itaucard'],
+    // O banco pode ser citado no texto de outras faturas; usar a razão social
+    // impressa no próprio documento, não a palavra "Itaú" isolada.
+    contentTokens: ['itau unibanco holding'],
   },
 ];
 
@@ -210,7 +217,11 @@ function extensionOf(fileName: string): string {
  */
 function tokenizeFileName(fileName: string): string {
   const cut = Math.max(fileName.lastIndexOf('/'), fileName.lastIndexOf('\\'));
-  const base = fileName.slice(cut + 1).toLowerCase();
+  const base = fileName
+    .slice(cut + 1)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
   return ` ${base.replace(/[^a-z0-9]+/g, ' ').trim()} `;
 }
 

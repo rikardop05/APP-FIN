@@ -147,6 +147,7 @@ describe('bankLabel', () => {
     expect(bankLabel('nubank_card')).toBe('Nubank');
     expect(bankLabel('inter_card')).toBe('Inter');
     expect(bankLabel('santander')).toBe('Santander');
+    expect(bankLabel('itau_card')).toBe('Itaú');
     expect(bankLabel(null)).toBe('Emissor não identificado');
   });
 });

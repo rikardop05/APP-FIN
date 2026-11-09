@@ -176,6 +176,18 @@ describe('detectSource — palpite de banco', () => {
     expect(
       detectSource({ fileName: 'Fatura_MP_20260720.pdf', content: PDF_PLAIN }).bankKey,
     ).toBe('mercadopago_card');
+    expect(
+      detectSource({ fileName: 'itau.pdf', content: '%PDF-1.7 ITAU UNIBANCO HOLDING' }).bankKey,
+    ).toBe('itau_card');
+    expect(detectSource({ fileName: 'Fatura_Itaú.pdf', content: '%PDF-1.7' }).bankKey).toBe(
+      'itau_card',
+    );
+    expect(detectSource({ fileName: 'ItauCard.pdf', content: '%PDF-1.7' }).bankKey).toBe(
+      'itau_card',
+    );
+    expect(
+      detectSource({ fileName: 'fatura.pdf', content: '%PDF-1.7 Pague no Itaú' }).bankKey,
+    ).toBeNull();
   });
 
   it('reconhece pelo conteudo quando o nome nao diz nada', () => {
