@@ -34,10 +34,12 @@ export type CompetenceMismatch = {
    * vencimento a oferecer. É o dia impresso, e só é oferecido se, com ele no lugar
    * do cadastrado (e o `closingDay` intocado — o documento não o diz e não se
    * inventa), o vencimento esperado da competência declarada passaria a ser
-   * exatamente o impresso. Se não passa (ex.: o dia impresso fica antes do
-   * fechamento e empurraria o vencimento para o mês seguinte), o fechamento
-   * provavelmente também está errado, e oferecer "corrigir" um número que não
-   * resolve seria pior que não oferecer: `null`, e a tela só manda conferir.
+   * exatamente o impresso E o vencimento ficar do mesmo lado do fechamento
+   * (`dueDay <= closingDay` igual nos dois). Se o dia impresso atravessa o
+   * fechamento (cadastrado 20 com fechamento 15, impresso 12), a correção moveria
+   * o fechamento de mês na regra "competência = mês do vencimento" e o fechamento
+   * provavelmente também está errado: oferecer "corrigir" um número que muda a
+   * janela inteira seria pior que não oferecer: `null`, e a tela só manda conferir.
    */
   fix: { dueDay: number } | null;
 };
@@ -52,10 +54,10 @@ const SEARCH_RADIUS_MONTHS = 12;
  *
  * Compara DATAS, nunca meses de competência: `esperado = statementWindow(declarada,
  * ciclo).dueDate`, e há divergência quando `esperado !== documentDate.date`.
- * Comparar o mês da competência com o mês do vencimento gritaria em toda
- * importação correta de um cartão cujo vencimento cai no mês seguinte ao
- * fechamento (fechamento 25, vencimento 5: a fatura de competência 09 vence em
- * OUTUBRO), e quem recebe aviso falso para de ler.
+ * Desde a decisão de 2026-11-09 a competência É o mês do vencimento, então o
+ * vencimento esperado cai sempre no mês declarado; comparar datas segue sendo o
+ * que separa "dia errado no cadastro" de "competência errada", sem depender de
+ * como a regra de ciclo evoluir. Aviso falso faz quem o recebe parar de ler.
  *
  * Divergindo, classifica a causa (ver `CompetenceMismatch`): se o vencimento
  * impresso é exatamente o esperado de outra competência até ±12 meses, o erro é da
@@ -108,8 +110,11 @@ export function competenceMismatch(input: {
   if (printedDueDate.slice(0, 7) === expectedDueDate.slice(0, 7)) {
     const printedDay = Number(printedDueDate.slice(8, 10));
     const candidate = { closingDay: cardCycle.closingDay, dueDay: printedDay };
+    const sameSideOfClosing =
+      (printedDay <= cardCycle.closingDay) === (cardCycle.dueDay <= cardCycle.closingDay);
     const sustained =
       printedDay !== cardCycle.dueDay &&
+      sameSideOfClosing &&
       statementWindow(declaredCompetence, candidate).dueDate === printedDueDate;
     return { kind: 'registration', ...base, fix: sustained ? { dueDay: printedDay } : null };
   }

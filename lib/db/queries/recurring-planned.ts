@@ -45,10 +45,11 @@
  *   esperando para acontecer. Se alguém inverter esta premissa, a despesa cai
  *   na fatura errada com um número plausível.
  * - **Competência**: em conta, o mês da ocorrência. Em cartão, a da FATURA
- *   (`billingPeriodFor(date, ciclo).competence`) e `cashDate` = vencimento dela.
+ *   (`billingPeriodFor(date, ciclo).competence`, o mês do VENCIMENTO desde a
+ *   decisão de 2026-11-09) e `cashDate` = vencimento dela.
  * - **Duas ocorrências na mesma competência lançam.** Com dia 31 e fechamento
- *   >= 28, janeiro (dia 31) cai na fatura de fevereiro e fevereiro (dia 28,
- *   ajustado) também. O índice parcial único rejeitaria a segunda, e o
+ *   >= 28, janeiro (dia 31) e fevereiro (dia 28, ajustado) caem na MESMA fatura
+ *   (a que fecha em 28/02). O índice parcial único rejeitaria a segunda, e o
  *   `ON CONFLICT DO NOTHING` a descartaria em silêncio. Falha alta.
  */
 

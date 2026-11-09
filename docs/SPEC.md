@@ -155,7 +155,7 @@ Requisitos:
 ### 5.3 Cartões de crédito e parcelas futuras
 
 - **RF-CC-01** Cadastro de cartão com dia de fechamento e vencimento.
-- **RF-CC-02** Dado a data da compra, calcular a competência da fatura: se o dia da compra > `closing_day`, cai na fatura do mês seguinte.
+- **RF-CC-02** Dado a data da compra, calcular a competência da fatura: se o dia da compra > `closing_day`, cai na fatura que fecha no mês seguinte. A competência da fatura é o **mês do vencimento** (decisão de 2026-11-09): fecha 30/10 e vence 07/11 = fatura de novembro; quando `due_day <= closing_day` o vencimento é no mês seguinte ao fechamento.
 - **RF-CC-03** Visão **"Comprometimento futuro"**: tabela dos próximos 24 meses com o total já contratado por cartão (soma das parcelas futuras), gráfico de barras decrescente e o mês em que o comprometimento zera.
 - **RF-CC-04** Registrar pagamento de fatura como `transaction` de `kind = 'credit_card_payment'` na conta bancária — sem contar duas vezes na despesa (o gasto já foi contado nos itens da fatura).
 - **RF-CC-05** Alerta de limite: % do limite comprometido por cartão.

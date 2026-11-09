@@ -47,36 +47,41 @@ describe('billingPeriodFor', () => {
   it('fechamento dia 31 em fevereiro de ano comum usa o ultimo dia (28)', () => {
     // 2026 nao e bissexto. Fechamento 31 ancorado em fevereiro = 28/02.
     // Compra em 28/02 <= 28/02 -> fatura de fevereiro.
+    // Vence dia 10 (<= 31): vence em 10/03, e a competencia e o mes do vencimento.
     const r = billingPeriodFor('2026-02-28', { closingDay: 31, dueDay: 10 });
-    expect(r.competence).toBe('2026-02');
+    expect(r.competence).toBe('2026-03');
     expect(r.closingDate).toBe('2026-02-28');
+    expect(r.dueDate).toBe('2026-03-10');
   });
 
   it('fechamento dia 31 em fevereiro de ano bissexto usa o dia 29', () => {
     // 2024 e bissexto: o fechamento cai em 29/02, e a compra de 29/02 entra.
     const r = billingPeriodFor('2024-02-29', { closingDay: 31, dueDay: 10 });
-    expect(r.competence).toBe('2024-02');
+    expect(r.competence).toBe('2024-03');
     expect(r.closingDate).toBe('2024-02-29');
+    expect(r.dueDate).toBe('2024-03-10');
   });
 
   it('fechamento dia 31 em mes de 30 dias usa o dia 30', () => {
     // Abril tem 30 dias: fechamento 31 -> 30/04. Compra em 30/04 entra.
     const dentro = billingPeriodFor('2026-04-30', { closingDay: 31, dueDay: 10 });
-    expect(dentro.competence).toBe('2026-04');
+    expect(dentro.competence).toBe('2026-05');
     expect(dentro.closingDate).toBe('2026-04-30');
+    expect(dentro.dueDate).toBe('2026-05-10');
   });
 
   it('com fechamento 31, compra no dia 31 de mes de 31 dias entra no proprio mes', () => {
     // Marco tem 31 dias: fechamento = 31/03 e a compra de 31/03 e <= ele.
     const r = billingPeriodFor('2026-03-31', { closingDay: 31, dueDay: 10 });
-    expect(r.competence).toBe('2026-03');
+    expect(r.competence).toBe('2026-04');
     expect(r.closingDate).toBe('2026-03-31');
   });
 
   it('dueDay <= closingDay joga o vencimento para o mes seguinte ao fechamento', () => {
-    // Fecha 28/03, vence dia 5. Como 5 <= 28, o vencimento e 05/04.
+    // Fecha 28/03, vence dia 5. Como 5 <= 28, o vencimento e 05/04 e a
+    // competencia e abril (o mes do vencimento).
     const r = billingPeriodFor('2026-03-20', FECHA_28_VENCE_05);
-    expect(r.competence).toBe('2026-03');
+    expect(r.competence).toBe('2026-04');
     expect(r.closingDate).toBe('2026-03-28');
     expect(r.dueDate).toBe('2026-04-05');
   });
@@ -90,7 +95,8 @@ describe('billingPeriodFor', () => {
   it('vencimento no mes seguinte cruza a virada de ano', () => {
     // Fecha 28/12/2026, vence dia 5 -> 05/01/2027.
     const r = billingPeriodFor('2026-12-01', FECHA_28_VENCE_05);
-    expect(r.competence).toBe('2026-12');
+    expect(r.competence).toBe('2027-01');
+    expect(r.closingDate).toBe('2026-12-28');
     expect(r.dueDate).toBe('2027-01-05');
   });
 
@@ -119,6 +125,73 @@ describe('billingPeriodFor', () => {
   });
 });
 
+describe('competencia = mes do VENCIMENTO (decisao de 2026-11-09)', () => {
+  /** Itau Click: fecha dia 30, vence dia 7. */
+  const ITAU = { closingDay: 30, dueDay: 7 };
+
+  it('fecha 30/10 e vence 07/11: a fatura e de novembro', () => {
+    const r = billingPeriodFor('2026-10-15', ITAU);
+    expect(r.competence).toBe('2026-11');
+    expect(r.closingDate).toBe('2026-10-30');
+    expect(r.dueDate).toBe('2026-11-07');
+  });
+
+  it('statementWindow de novembro: fecha 30/10, vence 07/11, comeca em 01/10', () => {
+    const w = statementWindow('2026-11', ITAU);
+    expect(w.closingDate).toBe('2026-10-30');
+    expect(w.dueDate).toBe('2026-11-07');
+    expect(w.from).toBe('2026-10-01');
+    expect(w.to).toBe('2026-10-30');
+  });
+
+  it('compra 31/10 (um dia depois do fechamento) cai em dezembro', () => {
+    expect(billingPeriodFor('2026-10-31', ITAU).competence).toBe('2026-12');
+  });
+
+  it('dueDay == closingDay vence no mes seguinte e a competencia e o mes seguinte', () => {
+    const r = billingPeriodFor('2026-03-05', { closingDay: 10, dueDay: 10 });
+    expect(r.closingDate).toBe('2026-03-10');
+    expect(r.dueDate).toBe('2026-04-10');
+    expect(r.competence).toBe('2026-04');
+  });
+
+  it('fecha 31 e vence 31: janeiro vence 28/02 e a competencia e fevereiro', () => {
+    const r = billingPeriodFor('2026-01-15', { closingDay: 31, dueDay: 31 });
+    expect(r.competence).toBe('2026-02');
+    expect(r.dueDate).toBe('2026-02-28');
+  });
+
+  it('dueDay > closingDay: mesmo mes; fevereiro pode igualar fechamento e vencimento', () => {
+    const cfg = { closingDay: 28, dueDay: 31 };
+    const r = billingPeriodFor('2026-02-10', cfg);
+    expect(r.competence).toBe('2026-02');
+    expect(r.closingDate).toBe('2026-02-28');
+    expect(r.dueDate).toBe('2026-02-28');
+  });
+
+  it('o vencimento cai SEMPRE no mes da competencia, em qualquer ciclo', () => {
+    const ciclos = [
+      { closingDay: 10, dueDay: 20 },
+      { closingDay: 28, dueDay: 5 },
+      { closingDay: 30, dueDay: 7 },
+      { closingDay: 31, dueDay: 31 },
+      { closingDay: 10, dueDay: 10 },
+      { closingDay: 1, dueDay: 9 },
+    ];
+    for (const cfg of ciclos) {
+      for (const dia of ['2026-01-01', '2026-02-28', '2026-03-31', '2026-12-31']) {
+        const r = billingPeriodFor(dia, cfg);
+        expect(r.dueDate.slice(0, 7)).toBe(r.competence);
+        const w = statementWindow(r.competence, cfg);
+        // Ida e volta: a competencia devolve as mesmas datas.
+        expect(w.closingDate).toBe(r.closingDate);
+        expect(w.dueDate).toBe(r.dueDate);
+        expect(dia >= w.from && dia <= w.to).toBe(true);
+      }
+    }
+  });
+});
+
 describe('statementWindow', () => {
   it('vai do dia seguinte ao fechamento anterior ate o fechamento', () => {
     // Fecha dia 10. Fatura de marco/2026: fechamento anterior 10/02, entao a
@@ -140,14 +213,15 @@ describe('statementWindow', () => {
   it('quando o fechamento anterior e o ultimo dia do mes, from e o dia 1', () => {
     // Fechamento 31 em fevereiro/2026 = 28/02, que E o ultimo dia do mes.
     // O dia seguinte e 01/03, nao "29/02".
-    const w = statementWindow('2026-03', { closingDay: 31, dueDay: 10 });
+    // Competencia 2026-04 (vence 10/04): fecha em 31/03, anterior 28/02.
+    const w = statementWindow('2026-04', { closingDay: 31, dueDay: 10 });
     expect(w.from).toBe('2026-03-01');
     expect(w.to).toBe('2026-03-31');
   });
 
   it('em ano bissexto o dia seguinte a 29/02 e 01/03', () => {
     // Fechamento 31 em fevereiro/2024 = 29/02 (bissexto), ultimo dia do mes.
-    const w = statementWindow('2024-03', { closingDay: 31, dueDay: 10 });
+    const w = statementWindow('2024-04', { closingDay: 31, dueDay: 10 });
     expect(w.from).toBe('2024-03-01');
     expect(w.to).toBe('2024-03-31');
   });
@@ -155,9 +229,11 @@ describe('statementWindow', () => {
   it('janela de fevereiro com fechamento 31 termina em 28/02', () => {
     // Fechamento anterior: 31/01/2026 (janeiro tem 31 dias, e o ultimo dia)
     // -> from 01/02. Fechamento de fevereiro: 28/02.
-    const w = statementWindow('2026-02', { closingDay: 31, dueDay: 10 });
+    // Competencia 2026-03 (vence 10/03): fecha em 28/02, anterior 31/01.
+    const w = statementWindow('2026-03', { closingDay: 31, dueDay: 10 });
     expect(w.from).toBe('2026-02-01');
     expect(w.to).toBe('2026-02-28');
+    expect(w.dueDate).toBe('2026-03-10');
   });
 
   it('faturas consecutivas nao se sobrepoem nem deixam buraco', () => {

@@ -183,12 +183,12 @@ describe.skipIf(process.env.DATABASE_URL === undefined)(
           .from(m.schema.transactions)
           .where(eq(m.schema.transactions.recurringExpenseId, id));
         const byCompetence = Object.fromEntries(rows.map((row) => [row.competence, row]));
-        // 28/10 > fechamento 25/10 → fatura de nov, que vence 05/12.
-        expect(Object.keys(byCompetence).sort()).toEqual(['2026-11', '2026-12', '2027-01']);
-        expect(byCompetence['2026-11']?.occurredOn).toBe('2026-10-28');
-        expect(byCompetence['2026-11']?.cashDate).toBe('2026-12-05');
-        expect(byCompetence['2026-11']?.creditCardId).toBe(card.id);
-        expect(byCompetence['2026-11']?.accountId).toBeNull();
+        // 28/10 > fechamento 25/10 → fatura que fecha em 25/11 e vence 05/12: competência = mês do vencimento (dez).
+        expect(Object.keys(byCompetence).sort()).toEqual(['2026-12', '2027-01', '2027-02']);
+        expect(byCompetence['2026-12']?.occurredOn).toBe('2026-10-28');
+        expect(byCompetence['2026-12']?.cashDate).toBe('2026-12-05');
+        expect(byCompetence['2026-12']?.creditCardId).toBe(card.id);
+        expect(byCompetence['2026-12']?.accountId).toBeNull();
       } finally {
         await cleanup(m, householdId);
       }

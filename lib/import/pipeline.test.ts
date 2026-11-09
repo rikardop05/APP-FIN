@@ -546,6 +546,55 @@ describe('competencia da fatura e projecao de parcelas (decisao do Ricardo)', ()
   });
 });
 
+describe('cartao com vencimento no mes seguinte ao fechamento (competencia = mes do vencimento)', () => {
+  // Itau Click: fecha 30, vence 7. Fatura que fecha 30/10 vence 07/11 e e de NOVEMBRO.
+  const ITAU: CardCycleConfig = { closingDay: 30, dueDay: 7 };
+
+  it('sem competencia declarada, a compra de 15/10 deriva competencia 2026-11', () => {
+    const result = preview(
+      [parsed({ occurredOn: '2026-10-15', rawDescription: 'LOJA', amountCents: cents(-1000) })],
+      { cardCycle: ITAU },
+    );
+    expect(result.rows[0]?.competence).toBe('2026-11');
+  });
+
+  it('cashDate da linha confirmada e o vencimento do MES da competencia (07/11), nao 07/12', () => {
+    const result = finalize(
+      [
+        confirmed({
+          occurredOn: '2026-10-15',
+          description: 'LOJA',
+          rawDescription: 'LOJA',
+          amountCents: cents(-1000),
+        }),
+      ],
+      { statementCompetence: '2026-11', cardCycle: ITAU },
+    );
+    expect(result.transactions[0]).toMatchObject({ competence: '2026-11', cashDate: '2026-11-07' });
+  });
+
+  it('parcelas projetadas vencem no dia 7 do mes da PROPRIA competencia', () => {
+    const result = finalize(
+      [
+        confirmed({
+          occurredOn: '2026-08-15',
+          description: 'LOJA',
+          rawDescription: 'LOJA Parcela 3/5',
+          amountCents: cents(-500),
+          installment: { current: 3, total: 5 },
+        }),
+      ],
+      { statementCompetence: '2026-11', cardCycle: ITAU },
+    );
+    const byNumber = new Map(
+      result.transactions.map((t) => [t.installmentNumber, [t.competence, t.cashDate]]),
+    );
+    expect(byNumber.get(3)).toEqual(['2026-11', '2026-11-07']);
+    expect(byNumber.get(4)).toEqual(['2026-12', '2026-12-07']);
+    expect(byNumber.get(5)).toEqual(['2027-01', '2027-01-07']);
+  });
+});
+
 describe('buildImportPreview — data do documento (base do aviso da tela)', () => {
   it('carrega documentDate do parser ate o preview, com o kind', () => {
     const result = buildImportPreview({
