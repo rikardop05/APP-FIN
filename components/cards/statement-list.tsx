@@ -182,6 +182,11 @@ function StatementCanhoto({
           <Money value={statement.computedTotalCents} sign="never" />
         </p>
       ) : null}
+      {paymentKind(statement) === 'none' && statement.pendingCents > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Pendente <Money value={statement.pendingCents} sign="never" />
+        </p>
+      ) : null}
       {overdue ? <p className="text-sm text-muted-foreground">{OVERDUE_UNPAID_HINT}</p> : null}
       {mismatch ? (
         <p className="text-sm text-destructive">

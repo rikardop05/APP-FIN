@@ -5,7 +5,7 @@ import {
   createManualTransaction,
   InvalidTransactionReferenceError,
   listTransactionFilterOptions,
-  listTransactions,
+  listTransactionsWithSettlement,
   type ManualTransactionMutation,
 } from '@/lib/db/queries/transactions';
 import { PlannedNotReconcilableError } from '@/lib/db/queries/manual-reconcile';
@@ -35,11 +35,11 @@ export async function GET(request: Request) {
     if (!filters.success) {
       return NextResponse.json({ error: 'Filtros inválidos.' }, { status: 400 });
     }
-    const [transactions, options] = await Promise.all([
-      listTransactions(householdId, filters.data),
+    const [{ items: transactions, settlement }, options] = await Promise.all([
+      listTransactionsWithSettlement(householdId, filters.data),
       listTransactionFilterOptions(householdId),
     ]);
-    return NextResponse.json({ transactions, options });
+    return NextResponse.json({ transactions, options, settlement });
   } catch (error) {
     if (error instanceof SessionMissingError) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });

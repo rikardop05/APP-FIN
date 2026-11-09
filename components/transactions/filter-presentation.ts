@@ -1,4 +1,5 @@
 import { formatDateBR } from '@/lib/date';
+import type { SettlementFilter } from './payment-situation';
 
 /**
  * Filtros da lista de lançamentos (impeccable distill): ficam recolhidos atrás de um botão que diz
@@ -15,6 +16,8 @@ export type TransactionFilterValues = {
   memberId: string;
   search: string;
   uncategorized: boolean;
+  /** Situação de pagamento: filtro só da tela (não vai para a consulta). */
+  settlement: SettlementFilter;
 };
 
 export const EMPTY_FILTERS: TransactionFilterValues = {
@@ -26,6 +29,7 @@ export const EMPTY_FILTERS: TransactionFilterValues = {
   memberId: '',
   search: '',
   uncategorized: false,
+  settlement: '',
 };
 
 type NamedOptions = {
@@ -45,6 +49,7 @@ export function activeFilterCount(filters: TransactionFilterValues): number {
     filters.memberId !== '',
     filters.search.trim() !== '',
     filters.uncategorized,
+    filters.settlement !== '',
   ].filter(Boolean).length;
 }
 
@@ -72,6 +77,8 @@ export function activeFilterLabels(filters: TransactionFilterValues, options: Na
   if (filters.memberId !== '') labels.push(`Responsável: ${nameOf(options.members, filters.memberId)}`);
   if (filters.search.trim() !== '') labels.push(`Texto: “${filters.search.trim()}”`);
   if (filters.uncategorized) labels.push('Só não categorizados');
+  if (filters.settlement === 'paid') labels.push('Situação: pagos');
+  if (filters.settlement === 'pending') labels.push('Situação: pendentes');
   return labels;
 }
 
@@ -84,4 +91,9 @@ export const SEARCH_DEBOUNCE_MS = 350;
  */
 export function applyDelayMs(applied: TransactionFilterValues, next: TransactionFilterValues): number {
   return applied.search.trim() === next.search.trim() ? 0 : SEARCH_DEBOUNCE_MS;
+}
+
+/** Ha algum filtro ativo (inclui Situacao, que e so da tela)? Decide "Nenhum lançamento encontrado" x "ainda". */
+export function hasActiveFilters(filters: TransactionFilterValues): boolean {
+  return activeFilterCount(filters) > 0;
 }
