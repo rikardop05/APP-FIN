@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Check, Pencil, Tags, Trash2 } from 'lucide-react';
-import { competenceLong } from '@/components/cashflow/labels';
+import { competenceLong, competenceShort } from '@/components/cashflow/labels';
 import { cn } from '@/lib/utils';
 import { cents, formatBRL, parseBRL } from '@/lib/money';
 import {
@@ -18,8 +18,10 @@ import {
   Select,
   Selo,
 } from '@/components/ui-kit';
+import type { SeloTone } from '@/components/ui-kit';
 import type { Transaction, TransactionOptions } from './schemas';
 import { amountForInput, signedAmountCents } from './manual-sign';
+import { paymentSituation } from './payment-situation';
 import { commonMarks, groupByCompetence, installmentLabel, isBankText, isIncompleteDescription, rowMarkLabels, rowMarkTone, stripInstallmentSuffix } from './list-presentation';
 
 const kindLabel: Record<Transaction['kind'], string> = {
@@ -32,6 +34,10 @@ const kindLabel: Record<Transaction['kind'], string> = {
 
 type TransactionListProps = {
   rows: Transaction[];
+  /** Hoje (YYYY-MM-DD): decide "vencida" e "a vencer" no selo da fatura. */
+  today: string;
+  /** Pago e pendente das faturas de cartão por competência, já calculados pela query. */
+  settlement: { competence: string; paidCents: number; pendingCents: number }[];
   options: TransactionOptions;
   selectedIds: string[];
   onToggle: (id: string) => void;
@@ -200,6 +206,8 @@ function RowActions({
 
 export function TransactionList({
   rows,
+  today,
+  settlement,
   options,
   selectedIds,
   onToggle,
@@ -269,20 +277,35 @@ export function TransactionList({
                 </span>
               ))}
             </div>
-            <span className="flex items-baseline gap-2 font-normal text-muted-foreground">
+            <span className="flex flex-wrap items-baseline gap-x-2 font-normal text-muted-foreground">
               {group.rows.length} {group.rows.length === 1 ? 'lançamento' : 'lançamentos'} · receitas − despesas{' '}
               <Money value={cents(group.totalCents)} className="font-semibold text-foreground" />
             </span>
           </div>
+          {(() => {
+            const faturas = settlement.find((item) => item.competence === group.competence);
+            if (faturas === undefined || faturas.paidCents === 0 && faturas.pendingCents === 0) return null;
+            return (
+              <p className="flex flex-wrap items-baseline gap-x-3 text-xs text-muted-foreground">
+                <span>Todas as faturas de {competenceShort(group.competence)}:</span>
+                <span>Pago <Money value={cents(faturas.paidCents)} sign="never" className="font-semibold text-foreground" /></span>
+                <span aria-hidden="true">·</span>
+                <span>Pendente <Money value={cents(faturas.pendingCents)} sign="never" className="font-semibold text-foreground" /></span>
+              </p>
+            );
+          })()}
           <ul className="flex flex-col gap-1.5">
             {group.rows.map((row) => {
               const title = rowTitle(row);
               const editing = editingId === row.id;
               const selected = selectedIds.includes(row.id);
               // Selo na linha só quando ela difere do grupo (o que é comum a todas sobe para o cabeçalho do mês).
-              const marcas = rowMarkLabels(row)
+              const marcas: { label: string; tone: SeloTone; letter?: string }[] = rowMarkLabels(row)
                 .filter((label) => !shared.some((item) => item.label === label))
                 .map((label) => ({ label, tone: rowMarkTone(label) }));
+              // Situação da fatura do lançamento de cartão: texto + letra do selo (nunca só cor).
+              const pagamento = paymentSituation(row, today);
+              if (pagamento !== null) marcas.push({ label: pagamento.label, tone: pagamento.tone, letter: pagamento.letter });
               return (
                 <li key={row.id}>
                   <Canhoto

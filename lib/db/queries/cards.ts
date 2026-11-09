@@ -5,6 +5,7 @@ import type { AccountKind, CardBrand } from '@/lib/db';
 import { accounts, creditCards, members, statements, transactions } from '@/lib/db/schema';
 import type { Cents } from '@/lib/money';
 import { listCardHolders, type CardHolderItem } from './card-holders';
+import { settleStatement } from './statement-settlement';
 
 export type AccountMutation = {
   name: string;
@@ -43,6 +44,15 @@ export type StatementListItem = {
   reportedTotalCents: Cents | null;
   computedTotalCents: Cents;
   differenceCents: Cents | null;
+  /** Valor pago quando o pagamento foi parcial ou a maior; null = integral (ou nao paga). */
+  paidAmountCents: Cents | null;
+  /** Pago e pendente da fatura (`settleStatement`): o que os resumos mostram. */
+  paidCents: Cents;
+  pendingCents: Cents;
+  /** Parcial: total - pago, em modulo, o que resta da fatura. null nos demais casos. */
+  remainingCents: Cents | null;
+  /** Pagou a mais: pago - total, em modulo. null nos demais casos. */
+  overpaidCents: Cents | null;
   status: 'open' | 'closed' | 'paid';
   source: 'import' | 'manual' | 'generated';
 };
@@ -183,6 +193,7 @@ export async function listCards(householdId: string): Promise<CardListItem[]> {
         reportedTotalCents: statements.reportedTotalCents,
         computedTotalCents: sql<string>`coalesce(sum(${transactions.amountCents}), 0)`,
         status: statements.status,
+        paidAmountCents: statements.paidAmountCents,
         source: statements.source,
       })
       .from(statements)
@@ -205,6 +216,7 @@ export async function listCards(householdId: string): Promise<CardListItem[]> {
         statements.dueDate,
         statements.reportedTotalCents,
         statements.status,
+        statements.paidAmountCents,
         statements.source,
       )
       .orderBy(desc(statements.period)),
@@ -217,6 +229,9 @@ export async function listCards(householdId: string): Promise<CardListItem[]> {
     const reportedTotalCents = row.reportedTotalCents === null ? null : safeCents(row.reportedTotalCents);
     const differenceCents =
       reportedTotalCents === null ? null : safeCents(computedTotalCents - reportedTotalCents);
+    const paidAmountCents = row.status === 'paid' && row.paidAmountCents !== null ? safeCents(row.paidAmountCents) : null;
+    const settlement = settleStatement({ status: row.status, computedTotalCents, paidAmountCents });
+    const { remainingCents, overpaidCents } = settlement;
     const list = statementsByCard.get(row.creditCardId) ?? [];
     list.push({
       id: row.id,
@@ -226,6 +241,11 @@ export async function listCards(householdId: string): Promise<CardListItem[]> {
       reportedTotalCents,
       computedTotalCents,
       differenceCents,
+      paidAmountCents,
+      paidCents: settlement.paidCents,
+      pendingCents: settlement.pendingCents,
+      remainingCents,
+      overpaidCents,
       status: row.status,
       source: row.source,
     });

@@ -16,6 +16,7 @@ import type { ProjectedState } from '@/components/dashboard/projected-balance';
 import { type DivergentStatementItem, type UncategorizedItem } from '@/components/dashboard/pendencias-list';
 import { requireSession } from '@/lib/auth/session';
 import { listOverBudget, type OverBudgetItem } from '@/lib/db/queries/budgets';
+import { listStatementSituations, settlementByCompetence } from '@/lib/db/queries/card-settlement';
 import {
   getDashboardData,
   listIncomeExpenseRows,
@@ -92,12 +93,15 @@ export default async function DashboardPage() {
 
   const settings = await getSettings(householdId);
 
-  const [dashboard, uncategorizedItems, incomeExpenseRows, overdueRecurring] = await Promise.all([
+  const [dashboard, uncategorizedItems, incomeExpenseRows, overdueRecurring, situations] = await Promise.all([
     getDashboardData(householdId, today, settings.commitmentMonths),
     listUncategorizedTransactionItems(householdId, today),
     listIncomeExpenseRows(householdId, today, INCOME_EXPENSE_MONTHS),
     listOverdueRecurring(householdId, today, OVERDUE_RECURRING_LIMIT),
+    listStatementSituations(householdId),
   ]);
+  // Pago e pendente das faturas do mes (mesma fonte da tela de Cartoes e de Lancamentos).
+  const currentSettlement = settlementByCompetence(situations).find((item) => item.competence === competence) ?? null;
 
   // Orcamentos estourados no mes (T-205): "estourado" e o `light === 'red'` de
   // `budgetStatus`, decidido la. Se a consulta falhar, o painel segue com um aviso
@@ -189,6 +193,7 @@ export default async function DashboardPage() {
         windowEnd,
         breakdown: commitment.breakdown,
         overdueCompetences: [...commitment.overdueCompetences],
+        currentSettlement,
         byCompetence: commitment.byCompetence.map((entry) => ({
           competence: entry.competence,
           totalCents: entry.totalCents,

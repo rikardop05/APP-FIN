@@ -39,6 +39,10 @@ export const transactionSchema = z.object({
   /** Total de parcelas do plano; null se não é parcela (ou resposta antiga sem o campo). */
   installmentsCount: z.number().int().nullable().default(null),
   note: z.string().nullable(),
+  /** Fatura do lançamento de cartão (resposta antiga sem o campo = sem fatura). */
+  statementStatus: z.enum(['open', 'closed', 'paid']).nullable().default(null),
+  statementDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
+  statementPayment: z.enum(['none', 'full', 'partial', 'over']).nullable().default(null),
 });
 
 export const transactionResponseSchema = z.object({
@@ -49,6 +53,8 @@ export const transactionResponseSchema = z.object({
     cards: z.array(optionSchema),
     members: z.array(optionSchema),
   }),
+  /** Pago e pendente das faturas de cartão por competência (vem pronto da query). */
+  settlement: z.array(z.object({ competence: z.string(), paidCents: centsSchema, pendingCents: centsSchema })).default([]),
 });
 
 export const ruleSuggestionSchema = z.object({

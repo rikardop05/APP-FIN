@@ -4,20 +4,23 @@ import { useState } from 'react';
 
 import { competenceShort } from '@/components/cashflow/labels';
 import { Button } from '@/components/ui-kit';
+import type { Cents } from '@/lib/money';
 
+import { PaymentDialog } from './payment-dialog';
 import {
   PAID_NETWORK_ERROR,
   paidButtonAriaLabel,
   paidButtonLabel,
   paidErrorMessage,
   paidSuccessMessage,
+  statusRequestBody,
   statementStatusResponseSchema,
   targetStatus,
   type StatementStatus,
 } from './statement-paid';
 
 type StatementPaidButtonProps = {
-  statement: { id: string; period: string; status: StatementStatus };
+  statement: { id: string; period: string; status: StatementStatus; computedTotalCents: Cents };
   /** Nome do cartão: âncora de contexto junto do botão (no celular, o cabeçalho da fatura fica longe). */
   cardName?: string;
   /** Depois de gravar: a tela recarrega as faturas e o servidor refaz o comprometido. */
@@ -34,25 +37,41 @@ export function StatementPaidButton({ statement, cardName, onChanged }: Statemen
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
-  async function toggle() {
-    const next = targetStatus(status);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogError, setDialogError] = useState<string | null>(null);
+
+  function onButtonClick() {
+    // Marcar abre o dialogo (integral ou outro valor); desmarcar segue direto, como antes.
+    if (targetStatus(status) === 'paid') {
+      setDialogError(null);
+      setDialogOpen(true);
+    }
+    else void send('open');
+  }
+
+  async function send(next: 'paid' | 'open', paidAmountCents?: number) {
     setBusy(true);
     setMessage(null);
+    setDialogError(null);
     try {
       const response = await fetch(`/api/statements/${statementId}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: next }),
+        body: JSON.stringify(statusRequestBody(next, paidAmountCents)),
       });
       const body: unknown = await response.json().catch(() => null);
       if (!response.ok || !statementStatusResponseSchema.safeParse(body).success) {
-        setMessage({ kind: 'error', text: paidErrorMessage(response.ok ? null : response.status, body) });
+        const text = paidErrorMessage(response.ok ? null : response.status, body);
+        if (next === 'paid') setDialogError(text);
+        else setMessage({ kind: 'error', text });
         return;
       }
-      setMessage({ kind: 'success', text: paidSuccessMessage(next) });
+      setMessage({ kind: 'success', text: paidSuccessMessage(next, paidAmountCents !== undefined) });
+      setDialogOpen(false);
       onChanged();
     } catch {
-      setMessage({ kind: 'error', text: PAID_NETWORK_ERROR });
+      if (next === 'paid') setDialogError(PAID_NETWORK_ERROR);
+      else setMessage({ kind: 'error', text: PAID_NETWORK_ERROR });
     } finally {
       setBusy(false);
     }
@@ -70,10 +89,20 @@ export function StatementPaidButton({ statement, cardName, onChanged }: Statemen
         size="sm"
         disabled={busy}
         aria-label={paidButtonAriaLabel(status, competenceShort(period), cardName)}
-        onClick={() => void toggle()}
+        onClick={onButtonClick}
       >
         {busy ? 'Salvando…' : paidButtonLabel(status)}
       </Button>
+      {dialogOpen ? (
+        <PaymentDialog
+          total={statement.computedTotalCents}
+          periodLabel={competenceShort(period)}
+          busy={busy}
+          serverError={dialogError}
+          onCancel={() => setDialogOpen(false)}
+          onConfirm={(paidAmountCents) => void send('paid', paidAmountCents)}
+        />
+      ) : null}
       {message ? (
         <p
           role={message.kind === 'error' ? 'alert' : 'status'}
