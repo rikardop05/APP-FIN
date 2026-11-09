@@ -142,15 +142,15 @@ describe('buildPlannedRows', () => {
       expect(row?.cashDate).toBe('2026-09-20');
     });
 
-    it('fecha 25, vence 5 (o ciclo que atravessa o mês): dia 28 cai no mês SEGUINTE, vence só 2 meses depois', () => {
+    it('fecha 25, vence 5 (o ciclo que atravessa o mês): dia 28 fecha em out, e a competência é o mês do VENCIMENTO (nov)', () => {
       const rows = buildPlannedRows(cardSeries(25, 5), charge(28, 3));
-      expect(rows.map((row) => row.competence)).toEqual(['2026-10', '2026-11', '2026-12']);
+      expect(rows.map((row) => row.competence)).toEqual(['2026-11', '2026-12', '2027-01']);
       expect(rows.map((row) => row.cashDate)).toEqual(['2026-11-05', '2026-12-05', '2027-01-05']);
     });
 
-    it('fecha 25, vence 5: dia 20 (antes do fechamento) fica na fatura do próprio mês', () => {
+    it('fecha 25, vence 5: dia 20 (antes do fechamento) fica na fatura que fecha no próprio mês, de competência = mês do vencimento', () => {
       const [row] = buildPlannedRows(cardSeries(25, 5), charge(20));
-      expect(row?.competence).toBe('2026-09');
+      expect(row?.competence).toBe('2026-10');
       expect(row?.cashDate).toBe('2026-10-05');
     });
 
@@ -159,7 +159,7 @@ describe('buildPlannedRows', () => {
         PlannedSeriesError,
       );
       expect(() => buildPlannedRows(cardSeries(28, 5), charge(31, 2, '2027-01'))).toThrow(
-        /2027-02/,
+        /2027-03/,
       );
     });
 

@@ -40,7 +40,7 @@ import {
   type Competence,
   type IsoDate,
 } from '@/lib/date';
-import { billingPeriodFor, type CardCycleConfig } from '@/lib/finance/billing';
+import { billingPeriodFor, statementWindow, type CardCycleConfig } from '@/lib/finance/billing';
 import { matchRuleForKind, type Rule } from '@/lib/finance/categorization';
 import { dedupeHash, normalizeDescription } from '@/lib/finance/dedupe';
 import { detectInstallment } from '@/lib/import/installments';
@@ -678,9 +678,11 @@ function cashDateFor(
 ): IsoDate | null {
   if (sourceKind !== 'credit_card') return occurredOn;
   if (cardCycle === null) return null;
-  // `competenceStart` cai sempre na propria competencia (o 1o dia e <= o
-  // fechamento), entao `billingPeriodFor` devolve o vencimento dela.
-  return billingPeriodFor(competenceStart(competence), cardCycle).dueDate;
+  // A competencia e o mes do VENCIMENTO (decisao de 2026-11-09): o vencimento
+  // dela vem de `statementWindow`. NAO usar `billingPeriodFor(competenceStart(C))`:
+  // o dia 1 de C cai na fatura que FECHA em C, que em cartao com vencimento no
+  // mes seguinte tem competencia C+1.
+  return statementWindow(competence, cardCycle).dueDate;
 }
 
 /** Descricao de uma parcela gerada: "Mercado Livre (4/10)". */

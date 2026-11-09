@@ -71,8 +71,9 @@ describe('competenceMismatch — CADASTRO do cartão errado: o caso Santander re
 
   it('não oferece conserto quando o dia impresso NÃO resolve o ciclo (fechamento provavelmente errado também)', () => {
     // Fechamento 15, vencimento 20, competência 2026-09 → esperado 2026-09-20.
-    // Impresso 2026-09-12: mesmo mês, mas com dia 12 (< fechamento 15) o vencimento
-    // iria para 2026-10-12. Corrigir o dia não faria o aviso sumir → sem botão.
+    // Impresso 2026-09-12: mesmo mês, mas o dia 12 (<= fechamento 15) atravessa o
+    // fechamento: a janela da fatura mudaria de mês. O fechamento provavelmente
+    // também está errado → sem botão.
     const mismatch = check({ closingDay: 15, dueDay: 20 }, '2026-09', due('2026-09-12'));
     expect(mismatch?.kind).toBe('registration');
     expect(mismatch?.fix).toBeNull();
@@ -93,18 +94,23 @@ describe('competenceMismatch — causa indistinguível', () => {
 });
 
 describe('competenceMismatch — compara DATAS, não meses', () => {
-  it('fechamento 25 / vencimento 5: a competência 09 vence em OUTUBRO e isso é correto', () => {
-    // Por mês (09 ≠ 10) isto gritaria; por data (esperado 2026-10-05 === impresso) não.
-    expect(check({ closingDay: 25, dueDay: 5 }, '2026-09', due('2026-10-05'))).toBeNull();
+  it('fechamento 25 / vencimento 5: a competência 10 vence em OUTUBRO (mês do vencimento)', () => {
+    expect(check({ closingDay: 25, dueDay: 5 }, '2026-10', due('2026-10-05'))).toBeNull();
+  });
+
+  it('declarar a competência do FECHAMENTO (09) em vez da do vencimento (10) avisa', () => {
+    const mismatch = check({ closingDay: 25, dueDay: 5 }, '2026-09', due('2026-10-05'));
+    expect(mismatch?.kind).toBe('competence');
+    expect(mismatch?.expectedDueDate).toBe('2026-09-05');
   });
 
   it('o mesmo cartão, competência errada por um mês, avisa', () => {
-    const mismatch = check({ closingDay: 25, dueDay: 5 }, '2026-10', due('2026-10-05'));
+    const mismatch = check({ closingDay: 25, dueDay: 5 }, '2026-11', due('2026-10-05'));
     expect(mismatch?.expectedDueDate).toBe('2026-11-05');
   });
 
-  it('virada de ano: fechamento 25 / vencimento 5, competência 2026-12 vence em 2027-01-05', () => {
-    expect(check({ closingDay: 25, dueDay: 5 }, '2026-12', due('2027-01-05'))).toBeNull();
+  it('virada de ano: fechamento 25 / vencimento 5, competência 2027-01 vence em 2027-01-05', () => {
+    expect(check({ closingDay: 25, dueDay: 5 }, '2027-01', due('2027-01-05'))).toBeNull();
   });
 
   it('dia 31 em mês curto é ajustado para o último dia (a regra é do billing)', () => {

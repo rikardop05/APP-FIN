@@ -86,29 +86,31 @@ function nextDay(date: IsoDate): IsoDate {
 }
 
 /**
- * Vencimento da fatura que fecha em `closingCompetence`.
+ * Quantos meses separam o fechamento do vencimento (0 ou 1).
  *
- * Regra do contrato: `dueDay <= closingDay` vence no mes seguinte ao
- * fechamento. E o caso comum (fecha dia 28, vence dia 5); quando o vencimento
- * cai depois do fechamento no mesmo mes (fecha dia 3, vence dia 10), vence no
- * proprio mes. A comparacao usa os dias CONFIGURADOS, nao os ja ancorados no
- * mes: senao um fechamento 31 ancorado em 28/02 mudaria de lado em fevereiro.
+ * Decisao do Ricardo (2026-11-09): a competencia da fatura e o mes do
+ * VENCIMENTO ("a fatura que vence em 07/11 e de novembro"). `dueDay <=
+ * closingDay` vence no mes seguinte ao fechamento (fecha 30, vence 7); com
+ * `dueDay > closingDay` o vencimento cai no proprio mes do fechamento. A
+ * comparacao usa os dias CONFIGURADOS, nao os ja ancorados no mes: senao um
+ * fechamento 31 ancorado em 28/02 mudaria de lado em fevereiro.
  */
-function dueDateFor(closingCompetence: Competence, cfg: CardCycleConfig): IsoDate {
-  const dueCompetence =
-    cfg.dueDay <= cfg.closingDay
-      ? addCompetence(closingCompetence, 1)
-      : closingCompetence;
-  const start = competenceStart(dueCompetence);
-  return clampDayToMonth(yearOf(start), monthOf(start), cfg.dueDay);
+function dueOffsetOf(cfg: CardCycleConfig): 0 | 1 {
+  return cfg.dueDay <= cfg.closingDay ? 1 : 0;
+}
+
+/** Vencimento da fatura de `competence`: o `dueDay` ancorado no PROPRIO mes dela. */
+function dueDateOf(competence: Competence, dueDay: number): IsoDate {
+  const start = competenceStart(competence);
+  return clampDayToMonth(yearOf(start), monthOf(start), dueDay);
 }
 
 /**
  * Em qual fatura cai uma compra.
  *
- * Compra ATE o fechamento (inclusive) entra na fatura corrente; um dia depois
- * do fechamento, na seguinte (RF-CC-02). A competencia da fatura e o mes em que
- * ela FECHA.
+ * Compra ATE o fechamento (inclusive) entra na fatura que fecha no mes da
+ * compra; um dia depois do fechamento, na seguinte (RF-CC-02). A competencia
+ * da fatura e o mes em que ela VENCE: o mes do fechamento, mais `dueOffset`.
  */
 export function billingPeriodFor(
   occurredOn: IsoDate,
@@ -121,17 +123,17 @@ export function billingPeriodFor(
   const purchaseCompetence = toCompetence(occurredOn);
   const closingOfPurchaseMonth = closingDateOf(purchaseCompetence, cfg.closingDay);
 
-  const competence =
+  const closingCompetence =
     occurredOn <= closingOfPurchaseMonth
       ? purchaseCompetence
       : addCompetence(purchaseCompetence, 1);
 
-  const closingDate = closingDateOf(competence, cfg.closingDay);
+  const competence = addCompetence(closingCompetence, dueOffsetOf(cfg));
 
   return {
     competence,
-    closingDate,
-    dueDate: dueDateFor(competence, cfg),
+    closingDate: closingDateOf(closingCompetence, cfg.closingDay),
+    dueDate: dueDateOf(competence, cfg.dueDay),
   };
 }
 
@@ -140,6 +142,10 @@ export function billingPeriodFor(
  * `from <= occurredOn <= to`. `to` e o proprio dia de fechamento e `from` e o
  * dia seguinte ao fechamento anterior, entao duas faturas consecutivas nao se
  * sobrepoem nem deixam buraco.
+ *
+ * `competence` e o mes do VENCIMENTO: `dueDate` cai sempre nele, e o
+ * fechamento cai em `competence - dueOffset` (fecha 30/10, vence 07/11 =>
+ * fatura de novembro, `closingDate` 2026-10-30).
  */
 export function statementWindow(
   competence: Competence,
@@ -148,9 +154,10 @@ export function statementWindow(
   assertCycleDay(cfg.closingDay, 'closingDay');
   assertCycleDay(cfg.dueDay, 'dueDay');
 
-  const closingDate = closingDateOf(competence, cfg.closingDay);
+  const closingCompetence = addCompetence(competence, -dueOffsetOf(cfg));
+  const closingDate = closingDateOf(closingCompetence, cfg.closingDay);
   const previousClosing = closingDateOf(
-    addCompetence(competence, -1),
+    addCompetence(closingCompetence, -1),
     cfg.closingDay,
   );
 
@@ -158,7 +165,7 @@ export function statementWindow(
     from: nextDay(previousClosing),
     to: closingDate,
     closingDate,
-    dueDate: dueDateFor(competence, cfg),
+    dueDate: dueDateOf(competence, cfg.dueDay),
   };
 }
 

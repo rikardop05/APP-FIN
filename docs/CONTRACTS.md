@@ -43,11 +43,19 @@ function diffMonths(a: Competence, b: Competence): number
 ```ts
 interface CardCycleConfig { closingDay: number; dueDay: number }
 
-/** Em qual fatura cai uma compra. Se occurredOn > fechamento do mês, vai para o mês seguinte. */
+/**
+ * Em qual fatura cai uma compra. Se occurredOn > fechamento do mês, vai para a fatura que fecha no mês seguinte.
+ *
+ * COMPETÊNCIA = MÊS DO VENCIMENTO (decisão do Ricardo, 2026-11-09: "a fatura que vence em 07/11 é de novembro").
+ *   dueOffset = dueDay <= closingDay ? 1 : 0     // dias CONFIGURADOS, não os ancorados no mês
+ *   competence = (mês em que a fatura fecha) + dueOffset
+ * Fecha 30/10 e vence 07/11 => competência 2026-11. Com dueDay > closingDay nada muda (fecha e vence no mesmo mês).
+ * Vale para qualquer ciclo: dueDate.slice(0, 7) === competence.
+ */
 function billingPeriodFor(occurredOn: IsoDate, cfg: CardCycleConfig): {
   competence: Competence
-  closingDate: IsoDate
-  dueDate: IsoDate      // se dueDay <= closingDay, vence no mês seguinte ao fechamento
+  closingDate: IsoDate  // cai em competence - dueOffset
+  dueDate: IsoDate      // o dueDay ancorado NO PRÓPRIO mês da competência
 }
 
 function statementWindow(competence: Competence, cfg: CardCycleConfig): {

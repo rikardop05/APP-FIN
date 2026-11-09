@@ -88,7 +88,7 @@ Final do cartão → membro que o usa (decisão 20, migration 0012). A importaç
 | coluna | tipo | notas |
 |---|---|---|
 | credit_card_id | uuid not null | |
-| period | text not null | competência `YYYY-MM` |
+| period | text not null | competência `YYYY-MM` = mês do VENCIMENTO (`due_date`); `closing_date` pode cair no mês anterior |
 | closing_date | date not null | |
 | due_date | date not null | |
 | reported_total_cents | bigint | total informado no arquivo; null se manual |
@@ -127,7 +127,7 @@ O registro central.
 |---|---|---|
 | household_id | uuid not null | |
 | occurred_on | date not null | data do fato (compra, recebimento) |
-| competence | text not null | `YYYY-MM`; em cartão = competência da fatura, não o mês da compra |
+| competence | text not null | `YYYY-MM`; em cartão = competência da fatura (o mês do vencimento dela), não o mês da compra |
 | cash_date | date | data prevista/efetiva de saída do caixa; em item de fatura = `due_date` da fatura |
 | description | text not null | editável pelo usuário |
 | raw_description | text not null | como veio do arquivo ou da linha colada; **nunca sobrescrever**. String vazia só em lançamento manual |

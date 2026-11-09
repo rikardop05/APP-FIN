@@ -48,12 +48,13 @@ describe('aviso de vencimento que não bate com o ciclo atual do cartão', () =>
     expect(dueDateWarnings(stored7, cycle10, '2026-09-10')).toHaveLength(1);
     expect(dueDateWarnings(stored7, cycle10, '2026-09-11')).toEqual([]);
 
-    // Só o fechamento mudou: gravada 10/09, esperada 05/10. Em 15/09 o aviso continua, até 05/10.
+    // Só o fechamento mudou (fecha 28, vence 5): gravada 10/09, esperada 05/09 (a competência é o mês do
+    // vencimento). O aviso vale até a MAIOR das duas, 10/09.
     const cycle28 = { closingDay: 28, dueDay: 5 };
     const stored = [statement({ period: '2026-09', dueDate: '2026-09-10' })];
-    expect(dueDateWarnings(stored, cycle28, '2026-09-15')).toHaveLength(1);
-    expect(dueDateWarnings(stored, cycle28, '2026-10-05')).toHaveLength(1);
-    expect(dueDateWarnings(stored, cycle28, '2026-10-06')).toEqual([]);
+    expect(dueDateWarnings(stored, cycle28, '2026-09-08')).toHaveLength(1);
+    expect(dueDateWarnings(stored, cycle28, '2026-09-10')).toHaveLength(1);
+    expect(dueDateWarnings(stored, cycle28, '2026-09-11')).toEqual([]);
   });
 
   it('avisa só as que divergem e ainda não venceram, mantendo a ordem recebida', () => {
@@ -69,24 +70,24 @@ describe('aviso de vencimento que não bate com o ciclo atual do cartão', () =>
     expect(warnings.map((warning) => warning.statementId)).toEqual(['divergente']);
   });
 
-  it('só o fechamento mudou e o esperado cai no mês seguinte: mostra as duas datas, sem "vence dia"', () => {
-    // fecha 28, vence 5: dueDay <= closingDay, então vence no mês seguinte ao fechamento (CONTRACTS §3).
+  it('mostra as duas datas completas, sem "vence dia"', () => {
+    // fecha 28, vence 5: dueDay <= closingDay, então fecha no mês anterior; o vencimento cai no mês da competência (CONTRACTS §3).
     const cycle = { closingDay: 28, dueDay: 5 };
-    expect(dueDateWarnings([statement({ period: '2026-09', dueDate: '2026-10-05' })], cycle, '2026-09-20')).toEqual([]);
+    expect(dueDateWarnings([statement({ period: '2026-09', dueDate: '2026-09-05' })], cycle, '2026-09-03')).toEqual([]);
     const warnings = dueDateWarnings([statement({ period: '2026-09', dueDate: '2026-09-10' })], cycle, '2026-09-03');
-    expect(warnings[0]?.expectedDueDate).toBe('2026-10-05');
+    expect(warnings[0]?.expectedDueDate).toBe('2026-09-05');
     expect(warnings[0]?.message).toBe(
-      'A fatura de setembro de 2026 está gravada com vencimento em 10/09/2026, mas o ciclo atual do cartão daria 05/10/2026. Nada foi alterado: confira a data na fatura.',
+      'A fatura de setembro de 2026 está gravada com vencimento em 10/09/2026, mas o ciclo atual do cartão daria 05/09/2026. Nada foi alterado: confira a data na fatura.',
     );
     expect(warnings[0]?.message).not.toContain('vence dia');
   });
 
-  it('virada de ano: fecha 28, vence 5, competência 2026-12 vence em 05/01/2027', () => {
+  it('virada de ano: fecha 28, vence 5, competência 2027-01 vence em 05/01/2027', () => {
     const cycle = { closingDay: 28, dueDay: 5 };
-    expect(dueDateWarnings([statement({ period: '2026-12', dueDate: '2027-01-05' })], cycle, '2026-12-20')).toEqual([]);
-    const warnings = dueDateWarnings([statement({ period: '2026-12', dueDate: '2027-01-10' })], cycle, '2026-12-20');
+    expect(dueDateWarnings([statement({ period: '2027-01', dueDate: '2027-01-05' })], cycle, '2026-12-20')).toEqual([]);
+    const warnings = dueDateWarnings([statement({ period: '2027-01', dueDate: '2027-01-10' })], cycle, '2026-12-20');
     expect(warnings[0]?.expectedDueDate).toBe('2027-01-05');
-    expect(warnings[0]?.message).toContain('dezembro de 2026');
+    expect(warnings[0]?.message).toContain('janeiro de 2027');
     expect(warnings[0]?.message).toContain('05/01/2027');
   });
 
