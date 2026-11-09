@@ -1038,7 +1038,7 @@ invólucro em `kpis.ts` seria camada redundante sobre função pura já testada.
 
 ## 15. Importação — `/lib/import`
 
-> **v1:** `types.ts` + `detect.ts` (T-120), `installments.ts` (T-121), `pdf/` (T-117), `text.ts` (T-119), `pipeline.ts` (T-107).
+> **v1:** `types.ts` + `detect.ts` (T-120), `installments.ts` (T-121), `pdf/` (T-117, T-ITAU), `text.ts` (T-119), `pipeline.ts` (T-107).
 > **Fase 4:** `ofx.ts` (T-106 — nenhum dos três bancos oferece OFX), `csv.ts` (T-105), `xlsx.ts` (T-118) e os tipos de mapeamento de coluna. Declarados aqui para estabilidade de contrato, **não implementar na v1**.
 
 ```ts
@@ -1073,7 +1073,7 @@ interface PdfTextRow {
 function extractPdfTextItems(bytes: Uint8Array, opts?: { password?: string }): Promise<PdfTextItem[]>
 
 /**
- * RF-IMP-12: remonta linhas a partir das coordenadas. Infraestrutura COMUM aos tres bancos.
+ * RF-IMP-12: remonta linhas a partir das coordenadas. Infraestrutura COMUM aos parsers PDF.
  * O Santander emite cada celula como run separado: 884 runs, apenas 1 com data e valor juntos.
  * Agrupa por y (com tolerancia, default 2pt) e ordena por x.
  */
@@ -1086,7 +1086,7 @@ function groupIntoRows(items: PdfTextItem[], opts?: GroupIntoRowsOptions): PdfTe
 /**
  * Parsers por banco: mapeiam faixas de x para data | descricao | valor.
  *
- * O segundo parametro e OPCIONAL e aditivo, e os tres bancos convergiram para a
+ * O segundo parametro e OPCIONAL e aditivo, e os bancos convergiram para a
  * mesma forma sem combinarem — sinal de que o problema e do dominio, nao do layout:
  * NENHUM dos tres imprime o ano na linha de lancamento.
  *
@@ -1102,12 +1102,19 @@ function groupIntoRows(items: PdfTextItem[], opts?: GroupIntoRowsOptions): PdfTe
  * toda janeiro, quando se importa a fatura de dezembro — e o ESLint bloqueia
  * `new Date()` em lib/import de proposito.
  */
+interface ItauPdfParseOptions { defaultYear?: number }
+
 function parseNubankPdf(rows: PdfTextRow[], opts?: NubankPdfParseOptions): ParseResult          // T-117
 function parseSantanderPdf(rows: PdfTextRow[], opts?: SantanderPdfParseOptions): ParseResult    // T-117b
 function parseMercadoPagoPdf(rows: PdfTextRow[], opts?: MercadoPagoPdfParseOptions): ParseResult // T-117c
+function parseItauPdf(rows: PdfTextRow[], opts?: ItauPdfParseOptions): ParseResult               // T-ITAU
 
 /** Identifica o banco pelo conteudo das primeiras linhas, para escolher o parser. */
-function detectPdfIssuer(rows: PdfTextRow[]): 'nubank' | 'santander' | 'mercadopago' | null
+function detectPdfIssuer(rows: PdfTextRow[]): 'nubank' | 'santander' | 'mercadopago' | 'itau' | null
+
+// bankKey para faturas PDF na v1: nubank_card, santander_card,
+// mercadopago_card e itau_card. A deteccao por conteudo do Itaú exige o
+// marcador de layout "ITAU UNIBANCO HOLDING"; a palavra "Itaú" isolada nao basta.
 
 // xBands — acrescentado em 2026-09-16, medicao do Santander (IMPORT-SOURCES §8).
 //

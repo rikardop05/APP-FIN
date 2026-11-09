@@ -19,6 +19,9 @@ describe('detectPdfIssuer', () => {
       'mercadopago',
     );
     expect(detectPdfIssuer([row('MERCADO PAGO')])).toBe('mercadopago');
+    expect(
+      detectPdfIssuer([row('ITAU UNIBANCO HOLDING S.A.'), row('Resumo da fatura em R$')]),
+    ).toBe('itau');
   });
 
   it('ignora caixa', () => {
@@ -38,5 +41,9 @@ describe('detectPdfIssuer', () => {
   it('devolve null sem nenhum banco reconhecido', () => {
     expect(detectPdfIssuer([row('Fatura de cartão')])).toBeNull();
     expect(detectPdfIssuer([])).toBeNull();
+  });
+
+  it('não confunde menção genérica a Itaú em instruções com emissor', () => {
+    expect(detectPdfIssuer([row('Pague sua fatura no Itaú ou em outro banco')])).toBeNull();
   });
 });

@@ -235,9 +235,11 @@ const BANK_LABEL: Record<string, string> = {
   nubank_card: 'Nubank',
   santander_card: 'Santander',
   mercadopago_card: 'Mercado Pago',
+  itau_card: 'Itaú',
   nubank: 'Nubank',
   santander: 'Santander',
   mercadopago: 'Mercado Pago',
+  itau: 'Itaú',
 };
 
 /** Nome do emissor a partir do `bankKey` do detector; desconhecido vira texto neutro. */

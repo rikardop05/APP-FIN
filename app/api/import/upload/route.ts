@@ -6,6 +6,7 @@ import { PdfPasswordError, extractPdfTextItems } from '@/lib/import/pdf/extract'
 import { detectPdfIssuer } from '@/lib/import/pdf/detect';
 import { groupIntoRows } from '@/lib/import/pdf/rows';
 import { parseMercadoPagoPdf } from '@/lib/import/pdf/mercadopago';
+import { parseItauPdf } from '@/lib/import/pdf/itau';
 import { parseNubankPdf } from '@/lib/import/pdf/nubank';
 import { parseSantanderPdf, SANTANDER_X_BANDS } from '@/lib/import/pdf/santander';
 import { parsePastedText } from '@/lib/import/text';
@@ -49,6 +50,15 @@ async function parsePdf(input: Extract<UploadBody, { inputType: 'pdf' }>) {
         defaultYear: defaultYear(input.defaultCompetence),
       }),
       bankKey: issuer,
+      format: 'pdf' as const,
+    };
+  }
+  if (issuer === 'itau') {
+    return {
+      parse: parseItauPdf(plainRows, {
+        defaultYear: defaultYear(input.defaultCompetence),
+      }),
+      bankKey: 'itau_card',
       format: 'pdf' as const,
     };
   }

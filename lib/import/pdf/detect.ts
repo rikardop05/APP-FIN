@@ -32,7 +32,7 @@
 import type { PdfTextRow } from './rows';
 
 /** Emissores que a v1 sabe parsear. */
-export type PdfIssuer = 'nubank' | 'santander' | 'mercadopago';
+export type PdfIssuer = 'nubank' | 'santander' | 'mercadopago' | 'itau';
 
 /**
  * Marcadores por emissor. Cada token e comparado em minusculas, por
@@ -44,6 +44,9 @@ const ISSUER_MARKERS: readonly { issuer: PdfIssuer; tokens: readonly string[] }[
     { issuer: 'nubank', tokens: ['nubank'] },
     { issuer: 'santander', tokens: ['santander'] },
     { issuer: 'mercadopago', tokens: ['mercado pago', 'mercadopago'] },
+    // Marcador específico do layout, não a palavra isolada "Itaú", que pode
+    // aparecer em instruções de pagamento de faturas de outros bancos.
+    { issuer: 'itau', tokens: ['itau unibanco holding s.a.'] },
   ];
 
 /**
