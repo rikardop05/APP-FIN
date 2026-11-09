@@ -97,6 +97,8 @@ interface CommitmentInput {
     competence: Competence; amountCents: Cents; creditCardId: string; status: 'posted' | 'planned'
     installment?: boolean      // parcela de parcelamento; ausente = compra lançada (ou estorno)
     statementPaid?: boolean    // fatura (cartão + competência) marcada como PAGA: a linha sai de tudo; ausente = não paga
+    statementPaidCents?: number | null // pagamento PARCIAL: valor pago; só nas linhas com statement_id; nulo/ausente = integral
+    statementTotalCents?: number | null // total da fatura como a tela mostra (soma dos lançamentos do statement_id)
     statementOverdue?: boolean // linha ANTES de fromCompetence com fatura existente e NÃO paga: entra em overdueUnpaidCents
   }[]
   fromCompetence: Competence
@@ -130,6 +132,14 @@ function futureCommitment(input: CommitmentInput): {
 > 'paid'`) a tira. O feed `listCommitmentTransactions` (`/lib/db/queries/dashboard.ts`, Painel e
 > `/cartoes`) preenche `statementPaid` pela fatura da própria linha (`statement_id`) ou, na parcela
 > projetada sem `statement_id`, pela fatura do mesmo cartão e competência.
+>
+> **Pagamento parcial (decisão do Ricardo, 2026-11-09).** `statements.paid_amount_cents` não nulo =
+> pago parcial (ou a maior), com `status = 'paid'`; nulo = integral. No comprometido entra só o SALDO:
+> `max(0, |statementTotalCents| - statementPaidCents)`, com `statementTotalCents` = o MESMO total da tela
+> de Cartões e da rota (soma dos lançamentos com o `statement_id`, status `posted`/`planned`), distribuído
+> em proporção SÓ entre as linhas com aquele `statement_id` (a última absorve o arredondamento). Linha sem
+> `statement_id` (parcela projetada) de fatura parcial vem com `statementPaid = false` e conta inteira.
+> Fatura parcial de competência anterior à janela entra em `overdueUnpaidCents` pelo saldo.
 >
 > **Vencida e não paga de QUALQUER competência anterior** (decisão do Ricardo, 2026-10-08) continua
 > comprometida: o feed traz, antes de `fromCompetence`, só as linhas de fatura EXISTENTE com `status`
@@ -1389,6 +1399,8 @@ HTTP (forma usada pela tela de cartões; erros como `{ error: string }` em pt-BR
 | rota | sucesso | erros |
 |---|---|---|
 | `GET /api/cards` | cada cartão ganha `holders: CardHolderItem[]`, por `last4` | |
+| `GET /api/cards` (faturas) | cada fatura ganha `paidAmountCents: Cents \| null` (só parcial ou a maior), `remainingCents: Cents \| null` (parcial: total - pago, em módulo) e `overpaidCents: Cents \| null` (pago - total) | |
+| `POST /api/statements/[id]/status` corpo `{ status: 'paid', paidAmountCents?: int > 0 } \| { status: 'open' }` (estrito) | 200 `{ id, status, paidAmountCents }`; ausente ou igual ao total = integral (grava NULL), maior que o total é aceito; `open` limpa o valor | 400 valor ≤ 0, não inteiro ou `open` com valor; 404 fatura de outro household |
 | `PUT /api/cards/[id]/holders` corpo `{ last4, memberId }` | 200 `{ cards, members }` | 400 final inválido ou membro de outro household; 404 cartão de outro household |
 | `DELETE /api/cards/[id]/holders/[holderId]` | 200 `{ cards, members }` | 404 se não for do cartão/household |
 

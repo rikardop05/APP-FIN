@@ -201,6 +201,11 @@ export const statements = pgTable(
     /** Total informado no arquivo; null se manual. */
     reportedTotalCents: cents('reported_total_cents'),
     status: statementStatus('status').notNull().default('open'),
+    /**
+     * Valor pago quando o pagamento NAO foi integral. null = integral (ou fatura nao paga).
+     * Pagamento parcial segue `status = 'paid'` com este valor menor que o total.
+     */
+    paidAmountCents: cents('paid_amount_cents'),
     source: recordSource('source').notNull(),
     /** Lancamento do pagamento. */
     paidTransactionId: uuid('paid_transaction_id').references(

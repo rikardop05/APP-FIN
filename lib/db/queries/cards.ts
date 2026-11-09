@@ -43,6 +43,12 @@ export type StatementListItem = {
   reportedTotalCents: Cents | null;
   computedTotalCents: Cents;
   differenceCents: Cents | null;
+  /** Valor pago quando o pagamento foi parcial ou a maior; null = integral (ou nao paga). */
+  paidAmountCents: Cents | null;
+  /** Parcial: total - pago, em modulo, o que resta da fatura. null nos demais casos. */
+  remainingCents: Cents | null;
+  /** Pagou a mais: pago - total, em modulo. null nos demais casos. */
+  overpaidCents: Cents | null;
   status: 'open' | 'closed' | 'paid';
   source: 'import' | 'manual' | 'generated';
 };
@@ -183,6 +189,7 @@ export async function listCards(householdId: string): Promise<CardListItem[]> {
         reportedTotalCents: statements.reportedTotalCents,
         computedTotalCents: sql<string>`coalesce(sum(${transactions.amountCents}), 0)`,
         status: statements.status,
+        paidAmountCents: statements.paidAmountCents,
         source: statements.source,
       })
       .from(statements)
@@ -205,6 +212,7 @@ export async function listCards(householdId: string): Promise<CardListItem[]> {
         statements.dueDate,
         statements.reportedTotalCents,
         statements.status,
+        statements.paidAmountCents,
         statements.source,
       )
       .orderBy(desc(statements.period)),
@@ -217,6 +225,10 @@ export async function listCards(householdId: string): Promise<CardListItem[]> {
     const reportedTotalCents = row.reportedTotalCents === null ? null : safeCents(row.reportedTotalCents);
     const differenceCents =
       reportedTotalCents === null ? null : safeCents(computedTotalCents - reportedTotalCents);
+    const paidAmountCents = row.status === 'paid' && row.paidAmountCents !== null ? safeCents(row.paidAmountCents) : null;
+    const totalMagnitude = Math.abs(computedTotalCents);
+    const remainingCents = paidAmountCents !== null && paidAmountCents < totalMagnitude ? safeCents(totalMagnitude - paidAmountCents) : null;
+    const overpaidCents = paidAmountCents !== null && paidAmountCents > totalMagnitude ? safeCents(paidAmountCents - totalMagnitude) : null;
     const list = statementsByCard.get(row.creditCardId) ?? [];
     list.push({
       id: row.id,
@@ -226,6 +238,9 @@ export async function listCards(householdId: string): Promise<CardListItem[]> {
       reportedTotalCents,
       computedTotalCents,
       differenceCents,
+      paidAmountCents,
+      remainingCents,
+      overpaidCents,
       status: row.status,
       source: row.source,
     });

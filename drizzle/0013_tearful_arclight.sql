@@ -1,0 +1,1 @@
+ALTER TABLE "statements" ADD COLUMN "paid_amount_cents" bigint;

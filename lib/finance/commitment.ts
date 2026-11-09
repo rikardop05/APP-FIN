@@ -54,6 +54,17 @@
  *    no total, nem no uso de limite. O app nao sabe se uma fatura vencida foi
  *    paga; so a marca explicita de paga a tira do comprometimento.
  *
+ *    **Pagamento PARCIAL** (decisao do Ricardo, 2026-11-09): `statementPaid` com
+ *    `statementPaidCents` > 0 nao tira a fatura inteira; fica so o SALDO
+ *    (|total da fatura| - pago, nunca negativo), onde total da fatura = soma das
+ *    linhas do mesmo cartao + competencia. O saldo e distribuido entre essas
+ *    linhas na PROPORCAO de cada uma (a ultima absorve o arredondamento, entao a
+ *    soma fecha exato; nunca passa do que as linhas do feed somam, entao pagar parcial
+ *    jamais AUMENTA o comprometido), em vez de virar uma linha sintetica: assim parcela x
+ *    compra, mes e cartao continuam agrupados como o Painel mostra. Pago maior
+ *    ou igual ao total, ou fatura de saldo credor (soma >= 0), = integral:
+ *    sai inteira. `statementPaidCents` ausente/nulo = integral.
+ *
  * 7. **Cada mes separa parcela de compra ja lancada** (`installmentCents` +
  *    `purchaseCents` = `totalCents`), e `breakdown` da as tres linhas do card
  *    "Comprometido nos cartoes", que fecham exatamente com `totalCents`: a
@@ -92,6 +103,16 @@ export interface CommitmentInput {
     /** A fatura desta linha (cartao + competencia) esta marcada como paga. Ausente = nao paga. */
     statementPaid?: boolean;
     /**
+     * Valor pago (centavos, positivo) quando o pagamento foi PARCIAL; ausente/nulo = integral. So as
+     * linhas da propria fatura (com `statement_id`) o levam; as demais seguem contando inteiras.
+     */
+    statementPaidCents?: number | null;
+    /**
+     * Total da fatura como a tela mostra (soma dos lancamentos do `statement_id`). Ausente = soma
+     * das linhas do grupo que tem `statementPaidCents`.
+     */
+    statementTotalCents?: number | null;
+    /**
      * Linha de competencia ANTERIOR a `fromCompetence` cuja fatura existe e nao esta paga
      * (item 8). So vale antes da janela. Ausente = linha do passado fica fora.
      */
@@ -125,6 +146,54 @@ function zero(): Cents {
  */
 function sumValues(values: Iterable<Cents>): Cents {
   return addCents(...values);
+}
+
+/**
+ * Para cada linha de fatura com pagamento parcial, o valor que RESTA dela (indice na lista de
+ * entrada -> centavos, com sinal de saida). Fatura = cartao + competencia. Linha fora do mapa de
+ * fatura paga integral some; linha dentro dele entra com o valor reduzido.
+ */
+function partialPaidAmounts(rows: CommitmentInput['transactions']): Map<number, Cents> {
+  const groups = new Map<string, { paid: number; total: bigint | null; indexes: number[]; sum: bigint }>();
+  rows.forEach((row, index) => {
+    const paid = row.statementPaidCents;
+    if (row.statementPaid !== true || paid === undefined || paid === null || paid <= 0) return;
+    const key = `${row.creditCardId}|${row.competence}`;
+    const total = row.statementTotalCents;
+    const group = groups.get(key) ?? { paid, total: total === undefined || total === null ? null : BigInt(total), indexes: [], sum: 0n };
+    group.indexes.push(index);
+    group.sum += BigInt(row.amountCents);
+    groups.set(key, group);
+  });
+  const result = new Map<number, Cents>();
+  for (const group of groups.values()) {
+    const owed = -(group.total ?? group.sum); // positivo quando a fatura e devedora
+    const afterPayment = owed > 0n ? (owed > BigInt(group.paid) ? owed - BigInt(group.paid) : 0n) : 0n;
+    // Teto: o que o feed tem da fatura. Pagar parcial nunca AUMENTA o comprometido (o total da
+    // tela pode incluir lancamentos que o feed nao traz, como transferencia).
+    const feedOwed = group.sum < 0n ? -group.sum : 0n;
+    const remaining = afterPayment < feedOwed ? afterPayment : feedOwed;
+    if (remaining === 0n || group.sum >= 0n) continue; // integral (ou sem linha devedora para levar o saldo): sai inteira
+    let assigned = 0n;
+    group.indexes.forEach((rowIndex, position) => {
+      const amount = BigInt(rows[rowIndex]?.amountCents ?? 0);
+      const isLast = position === group.indexes.length - 1;
+      // Proporcao da linha no total (ambos com sinal): amount / sum, vezes o saldo devedor (negativo).
+      const share = isLast ? -remaining - assigned : divideRoundedBig(amount * -remaining, group.sum);
+      assigned += share;
+      result.set(rowIndex, cents(Number(share)));
+    });
+  }
+  return result;
+}
+
+/** Divisao de bigint arredondada para o mais proximo (empate afasta do zero). */
+function divideRoundedBig(numerator: bigint, denominator: bigint): bigint {
+  const negative = numerator < 0n !== denominator < 0n;
+  const n = numerator < 0n ? -numerator : numerator;
+  const d = denominator < 0n ? -denominator : denominator;
+  const q = (2n * n + d) / (2n * d);
+  return negative ? -q : q;
 }
 
 /**
@@ -198,10 +267,14 @@ export function futureCommitment(input: CommitmentInput): {
   const seenCardIds: string[] = [];
   const seen = new Set<string>();
 
-  for (const transaction of input.transactions) {
-    // Fatura paga nao e mais compromisso (item 6 do cabecalho).
-    if (transaction.statementPaid === true) continue;
-    const amount = cents(transaction.amountCents);
+  const partialAmounts = partialPaidAmounts(input.transactions);
+
+  for (const [index, transaction] of input.transactions.entries()) {
+    // Fatura paga nao e mais compromisso (item 6); a parcial deixa so o saldo.
+    const partial = partialAmounts.get(index);
+    if (transaction.statementPaid === true && partial === undefined) continue;
+    const amount = partial ?? cents(transaction.amountCents);
+    if (partial !== undefined && amount === 0) continue;
     const cardId = transaction.creditCardId;
 
     if (!inWindow.has(transaction.competence)) {
