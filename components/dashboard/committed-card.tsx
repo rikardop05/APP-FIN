@@ -28,6 +28,8 @@ type CommittedCardProps = {
   };
   /** Meses de faturas vencidas e não pagas (`futureCommitment().overdueCompetences`). */
   overdueCompetences: readonly Competence[];
+  /** Pago e pendente das faturas do mês (calculados na query); null sem fatura gravada. */
+  currentSettlement: { paidCents: Cents; pendingCents: Cents } | null;
   byCompetence: readonly CommittedMonth[];
 };
 
@@ -51,6 +53,7 @@ export function CommittedCard({
   lastCommittedCompetence,
   breakdown,
   overdueCompetences,
+  currentSettlement,
   byCompetence,
 }: CommittedCardProps) {
   const endLine = commitmentEndLine(lastCommittedCompetence, windowEnd);
@@ -120,6 +123,17 @@ export function CommittedCard({
                 valor={<Money value={-current.totalCents as Cents} />}
               >
                 <span className="text-sm">Fatura do mês</span>
+                {currentSettlement !== null && (currentSettlement.paidCents > 0 || currentSettlement.pendingCents > 0) ? (
+                  <span className="text-sm text-muted-foreground">
+                    Todas as faturas de {competenceShort(current.competence)}: pago <Money value={currentSettlement.paidCents} sign="never" /> · pendente{' '}
+                    <Money value={currentSettlement.pendingCents} sign="never" />
+                  </span>
+                ) : null}
+                {currentSettlement !== null && currentSettlement.pendingCents !== -current.totalCents ? (
+                  <span className="text-xs text-muted-foreground">
+                    O pendente soma só as faturas já gravadas; o valor ao lado também conta parcelas ainda sem fatura.
+                  </span>
+                ) : null}
               </Canhoto>
             ) : null}
             {shown.map((entry) => (

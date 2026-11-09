@@ -54,6 +54,8 @@ type DashboardScreenProps = {
     };
     /** `futureCommitment().overdueCompetences`: os meses das faturas vencidas e não pagas. */
     overdueCompetences: Competence[];
+    /** Pago e pendente das faturas do mês corrente (`card-settlement`); null sem fatura gravada no mês. */
+    currentSettlement: { paidCents: Cents; pendingCents: Cents } | null;
     /** `futureCommitment().byCompetence`: alimenta os canhotos presos e o "mês que vem". */
     byCompetence: CommittedMonth[];
   };
@@ -140,6 +142,7 @@ export function DashboardScreen({
           lastCommittedCompetence={commitment.lastCommittedCompetence}
           breakdown={commitment.breakdown}
           overdueCompetences={commitment.overdueCompetences}
+          currentSettlement={commitment.currentSettlement}
           byCompetence={commitment.byCompetence}
         />
 

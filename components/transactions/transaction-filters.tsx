@@ -114,6 +114,14 @@ export function TransactionFilters({ value, options, open, onOpenChange, onChang
                 ))}
               </Select>
             </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-xs text-muted-foreground">Situação</span>
+              <Select value={value.settlement} onChange={(event) => onChange({ settlement: event.target.value === 'paid' ? 'paid' : event.target.value === 'pending' ? 'pending' : '' })}>
+                <option value="">Todos</option>
+                <option value="paid">Pagos</option>
+                <option value="pending">Pendentes</option>
+              </Select>
+            </label>
             <label className="flex flex-col gap-1 text-sm sm:col-span-2">
               <span className="text-xs text-muted-foreground">Texto</span>
               <Input

@@ -5,6 +5,7 @@ import type { AccountKind, CardBrand } from '@/lib/db';
 import { accounts, creditCards, members, statements, transactions } from '@/lib/db/schema';
 import type { Cents } from '@/lib/money';
 import { listCardHolders, type CardHolderItem } from './card-holders';
+import { settleStatement } from './statement-settlement';
 
 export type AccountMutation = {
   name: string;
@@ -45,6 +46,9 @@ export type StatementListItem = {
   differenceCents: Cents | null;
   /** Valor pago quando o pagamento foi parcial ou a maior; null = integral (ou nao paga). */
   paidAmountCents: Cents | null;
+  /** Pago e pendente da fatura (`settleStatement`): o que os resumos mostram. */
+  paidCents: Cents;
+  pendingCents: Cents;
   /** Parcial: total - pago, em modulo, o que resta da fatura. null nos demais casos. */
   remainingCents: Cents | null;
   /** Pagou a mais: pago - total, em modulo. null nos demais casos. */
@@ -226,9 +230,8 @@ export async function listCards(householdId: string): Promise<CardListItem[]> {
     const differenceCents =
       reportedTotalCents === null ? null : safeCents(computedTotalCents - reportedTotalCents);
     const paidAmountCents = row.status === 'paid' && row.paidAmountCents !== null ? safeCents(row.paidAmountCents) : null;
-    const totalMagnitude = Math.abs(computedTotalCents);
-    const remainingCents = paidAmountCents !== null && paidAmountCents < totalMagnitude ? safeCents(totalMagnitude - paidAmountCents) : null;
-    const overpaidCents = paidAmountCents !== null && paidAmountCents > totalMagnitude ? safeCents(paidAmountCents - totalMagnitude) : null;
+    const settlement = settleStatement({ status: row.status, computedTotalCents, paidAmountCents });
+    const { remainingCents, overpaidCents } = settlement;
     const list = statementsByCard.get(row.creditCardId) ?? [];
     list.push({
       id: row.id,
@@ -239,6 +242,8 @@ export async function listCards(householdId: string): Promise<CardListItem[]> {
       computedTotalCents,
       differenceCents,
       paidAmountCents,
+      paidCents: settlement.paidCents,
+      pendingCents: settlement.pendingCents,
       remainingCents,
       overpaidCents,
       status: row.status,

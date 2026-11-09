@@ -22,6 +22,8 @@ import type {
 } from '@/lib/db';
 import { billingPeriodFor } from '@/lib/finance/billing';
 import { toCompetence } from '@/lib/date';
+import { listStatementSituations, settlementByCompetence, type CompetenceSettlement } from './card-settlement';
+import type { PaymentKind } from './statement-settlement';
 import {
   accounts,
   categories,
@@ -66,7 +68,17 @@ export type TransactionListItem = {
   /** Total de parcelas do plano ("Parcela 03/10"); null se nao e parcela. */
   installmentsCount: number | null;
   note: string | null;
+  /**
+   * Fatura do lancamento de cartao (pelo `statement_id`); null em conta e na parcela projetada sem
+   * fatura. A tela so formata: o texto da situacao sai de `statementStatus` e `statementPayment`.
+   */
+  statementStatus: 'open' | 'closed' | 'paid' | null;
+  statementDueDate: string | null;
+  statementPayment: PaymentKind | null;
 };
+
+/** Pago e pendente das faturas de cartao por competencia (para o cabecalho de cada mes). */
+export type TransactionListResult = { items: TransactionListItem[]; settlement: CompetenceSettlement[] };
 
 export type TransactionFilterOption = { id: string; name: string };
 
@@ -291,7 +303,32 @@ export async function listTransactions(
   householdId: string,
   filters: TransactionFilters = {},
 ): Promise<TransactionListItem[]> {
-  const rows = await db
+  return (await listTransactionsWithSettlement(householdId, filters)).items;
+}
+
+export async function listTransactionsWithSettlement(
+  householdId: string,
+  filters: TransactionFilters = {},
+): Promise<TransactionListResult> {
+  const [rows, situations] = await Promise.all([listTransactionRows(householdId, filters), listStatementSituations(householdId)]);
+  const bySt = new Map(situations.map((item) => [item.statementId, item]));
+  return {
+    items: rows.map(({ statementId, ...row }) => {
+      const situation = statementId === null ? undefined : bySt.get(statementId);
+      return {
+        ...row,
+        amountCents: safeCents(row.amountCents),
+        statementStatus: situation?.status ?? null,
+        statementDueDate: situation?.dueDate ?? null,
+        statementPayment: situation?.kind ?? null,
+      };
+    }),
+    settlement: settlementByCompetence(situations),
+  };
+}
+
+async function listTransactionRows(householdId: string, filters: TransactionFilters) {
+  return await db
     .select({
       id: transactions.id,
       occurredOn: transactions.occurredOn,
@@ -314,6 +351,7 @@ export async function listTransactions(
       installmentNumber: transactions.installmentNumber,
       installmentsCount: installmentPlans.installmentsCount,
       note: transactions.note,
+      statementId: transactions.statementId,
     })
     .from(transactions)
     .leftJoin(
@@ -350,11 +388,6 @@ export async function listTransactions(
     )
     .where(and(...transactionPredicates(householdId, filters)))
     .orderBy(desc(transactions.occurredOn), desc(transactions.createdAt));
-
-  return rows.map((row) => ({
-    ...row,
-    amountCents: safeCents(row.amountCents),
-  }));
 }
 
 export async function listTransactionFilterOptions(

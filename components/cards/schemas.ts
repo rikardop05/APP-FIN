@@ -110,6 +110,8 @@ export const cardListSchema = z.object({
           computedTotalCents: centsSchema,
           differenceCents: centsSchema.nullable(),
           paidAmountCents: centsSchema.nullable().default(null),
+          paidCents: centsSchema.default(0 as Cents),
+          pendingCents: centsSchema.default(0 as Cents),
           remainingCents: centsSchema.nullable().default(null),
           overpaidCents: centsSchema.nullable().default(null),
           status: z.enum(['open', 'closed', 'paid']),

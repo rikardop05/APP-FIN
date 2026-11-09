@@ -7,7 +7,7 @@ import { cents } from '@/lib/money';
 import { Plus, Tags, Wand2 } from 'lucide-react';
 import { Button, EmptyState, LoadingBlock, PageHeader, SeloLegend, ShortcutLegend } from '@/components/ui-kit';
 import { TransactionFilters } from './transaction-filters';
-import { applyDelayMs, EMPTY_FILTERS, type TransactionFilterValues } from './filter-presentation';
+import { applyDelayMs, EMPTY_FILTERS, hasActiveFilters, type TransactionFilterValues } from './filter-presentation';
 import {
   BatchCategorizationDialog,
   DeleteTransactionDialog,
@@ -36,6 +36,7 @@ import {
 } from './schemas';
 import { TransactionList, type TransactionEditValues } from './transaction-list';
 import { listContentState, sortForDisplay } from './list-presentation';
+import { matchesSettlement, pruneSelection } from './payment-situation';
 
 const emptyOptions: TransactionOptions = {
   categories: [],
@@ -92,9 +93,6 @@ function queryString(filters: TransactionFilterValues): string {
   return value ? `?${value}` : '';
 }
 
-function hasFilters(filters: TransactionFilterValues): boolean {
-  return Object.entries(filters).some(([key, value]) => key === 'uncategorized' ? value === true : value !== '');
-}
 
 /** Deep link do Painel: "N sem categoria" abre `/lancamentos?semCategoria=1` já filtrado e com a caixa de filtros à vista. */
 function deepLinkSemCategoria(): boolean {
@@ -160,13 +158,25 @@ export function LancamentosScreen({ today }: { today: string }) {
   useEffect(() => {
     const delay = applyDelayMs(appliedFilters, filters);
     const timer = setTimeout(() => {
-      setAppliedFilters((current) => (JSON.stringify(current) === JSON.stringify(filters) ? current : { ...filters }));
+      // O filtro Situacao e so da tela: comparar pela consulta, para trocar de situacao NAO refazer o fetch.
+      setAppliedFilters((current) => (queryString(current) === queryString(filters) ? current : { ...filters }));
     }, delay);
     return () => clearTimeout(timer);
   }, [filters, appliedFilters]);
 
-  const rows = useMemo(() => sortForDisplay(data?.transactions ?? [], today), [data, today]);
+  // O filtro Situação é só da tela (a linha já traz a situação da fatura): vale na hora, sem nova consulta.
+  const rows = useMemo(
+    () => sortForDisplay(data?.transactions ?? [], today).filter((row) => matchesSettlement(row, filters.settlement)),
+    [data, today, filters.settlement],
+  );
   const options = data?.options ?? emptyOptions;
+  // Nunca aplicar lote em linha escondida: o que o filtro esconde sai da selecao.
+  useEffect(() => {
+    setSelectedIds((previous) => {
+      const kept = pruneSelection(previous, rows);
+      return kept.length === previous.length ? previous : kept;
+    });
+  }, [rows]);
   // Com erro de CARGA, nao mostrar o vazio (ha lancamentos, so nao carregaram):
   // a decisao esta na funcao pura listContentState. Erro de acao nao entra aqui.
   const contentState = listContentState({ loading, failed: loadFailed, rowCount: rows.length });
@@ -509,14 +519,14 @@ export function LancamentosScreen({ today }: { today: string }) {
 
       {contentState === 'empty' ? (
         <EmptyState
-          title={hasFilters(appliedFilters) ? 'Nenhum lançamento encontrado' : 'Nenhum lançamento ainda'}
-          description={hasFilters(appliedFilters) ? 'Ajuste os filtros ou limpe a busca para ver outros lançamentos.' : 'Registre um lançamento manual ou importe uma fatura ou extrato para começar.'}
-          action={hasFilters(appliedFilters) ? { label: 'Limpar filtros', onClick: clearFilters } : { label: 'Novo lançamento', onClick: () => setDialog({ kind: 'manual' }) }}
+          title={hasActiveFilters(filters) ? 'Nenhum lançamento encontrado' : 'Nenhum lançamento ainda'}
+          description={hasActiveFilters(filters) ? 'Ajuste os filtros ou limpe a busca para ver outros lançamentos.' : 'Registre um lançamento manual ou importe uma fatura ou extrato para começar.'}
+          action={hasActiveFilters(filters) ? { label: 'Limpar filtros', onClick: clearFilters } : { label: 'Novo lançamento', onClick: () => setDialog({ kind: 'manual' }) }}
         />
       ) : contentState === 'list' ? (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">{rows.length} lançamento{rows.length === 1 ? '' : 's'} encontrado{rows.length === 1 ? '' : 's'}</p>
-          <TransactionList rows={rows} options={options} selectedIds={selectedIds} onToggle={toggleSelection} onToggleAll={toggleAll} onEdit={setEditingId} onRule={openRule} onDelete={(id) => setDialog({ kind: 'delete', transactionId: id })} editingId={editingId} onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} />
+          <TransactionList rows={rows} today={today} settlement={data?.settlement ?? []} options={options} selectedIds={selectedIds} onToggle={toggleSelection} onToggleAll={toggleAll} onEdit={setEditingId} onRule={openRule} onDelete={(id) => setDialog({ kind: 'delete', transactionId: id })} editingId={editingId} onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} />
         </div>
       ) : null}
 
