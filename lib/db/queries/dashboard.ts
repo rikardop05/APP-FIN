@@ -57,6 +57,10 @@ export type DashboardCommitmentTransaction = {
   installment: boolean;
   /** A fatura da linha esta marcada como paga (`statements.status = 'paid'`): sai do comprometido. */
   statementPaid: boolean;
+  /** Valor pago quando o pagamento da fatura foi parcial; null = integral (ou nao paga). */
+  statementPaidCents: number | null;
+  /** Total da fatura (soma dos lancamentos com o statement_id, como na tela); null sem fatura. */
+  statementTotalCents: number | null;
   /** Linha de competencia anterior a janela, de fatura existente e nao paga: "Faturas vencidas nao pagas". */
   statementOverdue: boolean;
   /** Dia em que a linha sai do caixa (vencimento da fatura); null quando desconhecido. */
@@ -387,7 +391,7 @@ export async function listCommitmentTransactions(
   // Mesmo cuidado do `statementPaid` abaixo: nomes qualificados e alias proprio.
   const unpaidStatement = sql`exists (
   select 1 from "statements" as "unpaid_s"
-  where "unpaid_s"."status" <> 'paid'
+  where ("unpaid_s"."status" <> 'paid' or "unpaid_s"."paid_amount_cents" is not null)
     and ("unpaid_s"."id" = "transactions"."statement_id"
       or ("unpaid_s"."credit_card_id" = "transactions"."credit_card_id"
         and "unpaid_s"."period" = "transactions"."competence"))
@@ -407,12 +411,28 @@ export async function listCommitmentTransactions(
       // `transactions` aqui sai sem o nome da tabela, e dentro da subconsulta
       // `credit_card_id` resolve para a coluna de `statements` — a fatura paga de
       // QUALQUER cartao tirava a linha (pego pelo teste "outro cartao").
+      // Fatura com pagamento PARCIAL (`paid_amount_cents` nao nulo): so as linhas da propria
+      // fatura (`statement_id`) ficam marcadas e levam o valor pago; parcela projetada sem
+      // `statement_id` segue contando inteira (o motor so reduz o que esta na fatura).
       statementPaid: sql<boolean>`exists (
         select 1 from "statements" as "paid_s"
         where "paid_s"."status" = 'paid'
           and ("paid_s"."id" = "transactions"."statement_id"
-            or ("paid_s"."credit_card_id" = "transactions"."credit_card_id"
+            or ("paid_s"."paid_amount_cents" is null
+              and "paid_s"."credit_card_id" = "transactions"."credit_card_id"
               and "paid_s"."period" = "transactions"."competence"))
+      )`,
+      statementPaidCents: sql<string | null>`(
+        select "paid_p"."paid_amount_cents" from "statements" as "paid_p"
+        where "paid_p"."status" = 'paid' and "paid_p"."id" = "transactions"."statement_id"
+      )`,
+      // Total da fatura = o MESMO da tela de Cartoes e da rota (soma dos lancamentos com o
+      // `statement_id`, status contados), nao a soma das linhas deste feed.
+      statementTotalCents: sql<string | null>`(
+        select sum("t2"."amount_cents") from "transactions" as "t2"
+        where "t2"."statement_id" = "transactions"."statement_id"
+          and "t2"."household_id" = ${householdId}
+          and "t2"."status" in ('posted', 'planned')
       )`,
       // Linha de competencia ANTERIOR a janela que so esta aqui por ter fatura vencida e
       // nao paga (decisao do Ricardo, 2026-10-08, para qualquer competencia passada).
@@ -448,6 +468,8 @@ export async function listCommitmentTransactions(
       status: row.status,
       installment: row.installment === true,
       statementPaid: row.statementPaid === true,
+      statementPaidCents: row.statementPaidCents === null ? null : safeCents(row.statementPaidCents),
+      statementTotalCents: row.statementTotalCents === null ? null : safeCents(row.statementTotalCents),
       statementOverdue: row.statementOverdue === true,
       cashDate: row.cashDate,
     }));

@@ -570,6 +570,71 @@ describe('futureCommitment: detalhamento do card "Comprometido nos cartoes"', ()
     expect(result.breakdown).toEqual({ overdueUnpaidCents: 0, currentStatementCents: -13000, laterInstallmentsCents: -3000, laterPurchasesCents: 500 });
   });
 
+  describe('pagamento parcial: entra so o saldo, nos mesmos agrupamentos', () => {
+    // Outubro: compra -100,00 + parcela -30,00 = -130,00. Pago 50,00 => saldo 80,00.
+    const parcial = (pago: number | null | undefined) =>
+      linhas.map((linha) =>
+        linha.competence === '2026-10' ? { ...linha, statementPaid: true, statementPaidCents: pago } : linha,
+      );
+    const run = (transactions: Tx[]) => futureCommitment({ fromCompetence: '2026-10', months: 3, cards: [CARD_A], transactions });
+
+    it('saldo = total - pago, dividido entre parcela e compra na proporcao; a soma fecha exato', () => {
+      const result = run(parcial(5000));
+      const outubro = result.byCompetence[0];
+      expect(outubro?.totalCents).toBe(-8000);
+      // 10000/13000 e 3000/13000 de 8000: -6154 (arredondado) e o resto -1846.
+      expect(outubro?.purchaseCents).toBe(-6154);
+      expect(outubro?.installmentCents).toBe(-1846);
+      expect(result.breakdown.currentStatementCents).toBe(-8000);
+      expect(result.totalCents).toBe(-8000 - 5500 - 2500);
+      expect(result.limitUsage[0]?.usedCents).toBe(-16000);
+    });
+
+    it('integral (nulo ou ausente) sai inteira; pago >= total tambem', () => {
+      expect(run(parcial(null)).byCompetence[0]?.totalCents).toBe(0);
+      expect(run(parcial(undefined)).byCompetence[0]?.totalCents).toBe(0);
+      expect(run(parcial(13000)).byCompetence[0]?.totalCents).toBe(0);
+      expect(run(parcial(99999)).byCompetence[0]?.totalCents).toBe(0);
+    });
+
+    it('nunca fica negativo (saldo credor) e nao mexe em outras faturas', () => {
+      const credor: Tx[] = [{ ...linhas[0]!, amountCents: cents(1000), statementPaid: true, statementPaidCents: 500 }];
+      expect(run(credor).totalCents).toBe(0);
+      expect(run(parcial(5000)).byCompetence[1]?.totalCents).toBe(-5500);
+    });
+
+    it('caso da Coruja: total vem da tela (1.000), a projetada sem fatura segue inteira', () => {
+      const result = run([
+        { ...linhas[0]!, amountCents: cents(-100000), statementPaid: true, statementPaidCents: 40000, statementTotalCents: -100000 },
+        // Parcela projetada de 200 sem statement_id: o feed a manda NAO paga, conta inteira.
+        { ...linhas[1]!, amountCents: cents(-20000), statementPaid: false },
+      ]);
+      // 600 da fatura + 200 da projetada.
+      expect(result.byCompetence[0]?.totalCents).toBe(-80000);
+      expect(result.byCompetence[0]?.purchaseCents).toBe(-60000);
+      expect(result.byCompetence[0]?.installmentCents).toBe(-20000);
+    });
+
+    it('o saldo nunca passa da soma das linhas do feed (pagar parcial nao aumenta o comprometido)', () => {
+      // Tela diz -1000, mas o feed so traz -900 (o resto e lancamento que o feed nao leva). Pago 1,00.
+      const result = run([
+        { ...linhas[0]!, amountCents: cents(-90000), statementPaid: true, statementPaidCents: 100, statementTotalCents: -100000 },
+      ]);
+      expect(result.byCompetence[0]?.totalCents).toBe(-90000);
+    });
+
+    it('parcial de competencia anterior a janela vencida conta como vencida nao paga', () => {
+      const result = futureCommitment({
+        fromCompetence: '2026-11',
+        months: 1,
+        cards: [CARD_A],
+        transactions: [{ ...linhas[0]!, amountCents: cents(-10000), statementPaid: true, statementPaidCents: 4000, statementOverdue: true }],
+      });
+      expect(result.breakdown.overdueUnpaidCents).toBe(-6000);
+      expect(result.overdueCompetences).toEqual(['2026-10']);
+    });
+  });
+
   it('sem os campos novos: compra a vista e nao paga (compatibilidade)', () => {
     const result = futureCommitment({
       fromCompetence: '2026-10',

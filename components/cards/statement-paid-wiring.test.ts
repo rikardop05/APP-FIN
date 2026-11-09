@@ -20,7 +20,7 @@ describe('fatura paga na tela de cartões', () => {
   it('a lista usa o botão e o Carimbo PAGO, e a tela recarrega as faturas e o comprometido', () => {
     const list = read('components/cards/statement-list.tsx');
     expect(list).toContain('<StatementPaidButton');
-    expect(list).toContain('<Carimbo tone="ok">Pago</Carimbo>');
+    expect(list).toContain("'Pago parcial' : 'Pago'");
     const screen = read('components/cards/cartoes-screen.tsx');
     expect(screen).toContain('onStatusChanged={statusChanged}');
     expect(screen).toContain('router.refresh()');

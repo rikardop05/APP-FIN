@@ -48,7 +48,28 @@ describe('POST /api/statements/[id]/status', () => {
     const response = await POST(post({ status: 'paid' }), context());
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ id: STATEMENT, status: 'paid' });
-    expect(hoisted.setStatementStatus).toHaveBeenCalledWith('casa-de-teste', STATEMENT, 'paid');
+    expect(hoisted.setStatementStatus).toHaveBeenCalledWith('casa-de-teste', STATEMENT, 'paid', undefined);
+  });
+
+  it('marca com valor personalizado', async () => {
+    hoisted.setStatementStatus.mockResolvedValueOnce({ id: STATEMENT, status: 'paid', paidAmountCents: 35000 });
+    const { POST } = await import('./route');
+
+    const response = await POST(post({ status: 'paid', paidAmountCents: 35000 }), context());
+    expect(response.status).toBe(200);
+    expect(hoisted.setStatementStatus).toHaveBeenLastCalledWith('casa-de-teste', STATEMENT, 'paid', 35000);
+  });
+
+  it.each([0, -5, 12.5, '100', null])('recusa valor pago invalido (%s) com 400', async (value) => {
+    const { POST } = await import('./route');
+    const response = await POST(post({ status: 'paid', paidAmountCents: value }), context());
+    expect(response.status).toBe(400);
+  });
+
+  it('recusa valor junto de open', async () => {
+    const { POST } = await import('./route');
+    const response = await POST(post({ status: 'open', paidAmountCents: 100 }), context());
+    expect(response.status).toBe(400);
   });
 
   it('desmarca: open', async () => {
@@ -58,7 +79,7 @@ describe('POST /api/statements/[id]/status', () => {
     const response = await POST(post({ status: 'open' }), context());
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ id: STATEMENT, status: 'open' });
-    expect(hoisted.setStatementStatus).toHaveBeenCalledWith('casa-de-teste', STATEMENT, 'open');
+    expect(hoisted.setStatementStatus).toHaveBeenCalledWith('casa-de-teste', STATEMENT, 'open', undefined);
   });
 
   it('corpo inválido: 400 sem tocar o banco', async () => {

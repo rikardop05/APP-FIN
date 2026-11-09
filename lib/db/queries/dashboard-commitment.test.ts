@@ -149,6 +149,61 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('comprometido nos cartoe
     }
   });
 
+  it('fatura paga PARCIAL: o feed traz o valor pago e o motor deixa so o saldo (inclusive de mes anterior a janela)', async () => {
+    const f = await createFixture('parcial');
+    try {
+      const { listCommitmentTransactions } = await import('./dashboard');
+      const { futureCommitment } = await import('@/lib/finance/commitment');
+      const { eq } = await import('drizzle-orm');
+      const outubro = await f.statement('2026-10', 'paid');
+      const setembro = await f.statement('2026-09', 'paid');
+      const agosto = await f.statement('2026-08', 'paid'); // integral (NULL): nao entra
+      await f.db.update(f.schema.statements).set({ paidAmountCents: 4000 }).where(eq(f.schema.statements.id, outubro));
+      await f.db.update(f.schema.statements).set({ paidAmountCents: 1000 }).where(eq(f.schema.statements.id, setembro));
+      await f.tx('2026-10', -10000, { statementId: outubro });
+      await f.tx('2026-09', -3000, { statementId: setembro });
+      await f.tx('2026-08', -7000, { statementId: agosto });
+
+      const rows = await listCommitmentTransactions(f.householdId, '2026-10', 1);
+      expect(rows.map((row) => [row.competence, row.statementPaid, row.statementPaidCents]).sort()).toEqual([
+        ['2026-09', true, 1000],
+        ['2026-10', true, 4000],
+      ]);
+      const result = futureCommitment({ fromCompetence: '2026-10', months: 1, cards: [], transactions: rows });
+      expect(result.byCompetence[0]?.totalCents).toBe(-6000);
+      expect(result.breakdown.overdueUnpaidCents).toBe(-2000);
+      expect(result.totalCents).toBe(-8000);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it('caso da Coruja: fatura 1.000 + parcela projetada 200 + pago 400 -> tela resta 600; comprometido 600 + 200', async () => {
+    const f = await createFixture('coruja');
+    try {
+      const { listCommitmentTransactions } = await import('./dashboard');
+      const { listCards } = await import('./cards');
+      const { futureCommitment } = await import('@/lib/finance/commitment');
+      const { eq } = await import('drizzle-orm');
+      const outubro = await f.statement('2026-10', 'paid');
+      await f.db.update(f.schema.statements).set({ paidAmountCents: 40000 }).where(eq(f.schema.statements.id, outubro));
+      const planoId = await f.plan();
+      await f.tx('2026-10', -100000, { statementId: outubro });
+      await f.tx('2026-10', -20000, { status: 'planned', installmentPlanId: planoId, installmentNumber: 1 });
+
+      const tela = (await listCards(f.householdId)).flatMap((c) => c.statements).find((s) => s.id === outubro);
+      expect(tela).toMatchObject({ computedTotalCents: -100000, paidAmountCents: 40000, remainingCents: 60000 });
+
+      const rows = await listCommitmentTransactions(f.householdId, '2026-10', 1);
+      const result = futureCommitment({ fromCompetence: '2026-10', months: 1, cards: [], transactions: rows });
+      expect(result.byCompetence[0]?.purchaseCents).toBe(-60000);
+      expect(result.byCompetence[0]?.installmentCents).toBe(-20000);
+      expect(result.totalCents).toBe(-80000);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
   it('fatura paga de OUTRO cartao no mesmo mes nao tira nada', async () => {
     const f = await createFixture('outro-cartao');
     try {

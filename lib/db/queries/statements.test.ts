@@ -80,6 +80,7 @@ describe.skipIf(!process.env.DATABASE_URL)('setStatementStatus (integração)', 
       expect(await m.queries.setStatementStatus(s.householdId, s.statementId, 'paid')).toEqual({
         id: s.statementId,
         status: 'paid',
+        paidAmountCents: null,
       });
       expect(await statusOf(m, s.statementId)).toBe('paid');
 
@@ -90,8 +91,47 @@ describe.skipIf(!process.env.DATABASE_URL)('setStatementStatus (integração)', 
       expect(await m.queries.setStatementStatus(s.householdId, s.statementId, 'open')).toEqual({
         id: s.statementId,
         status: 'open',
+        paidAmountCents: null,
       });
       expect(await statusOf(m, s.statementId)).toBe('open');
+    } finally {
+      await cleanup(m, s.householdId);
+    }
+  });
+
+  it('pagamento parcial grava o valor; igual ao total vira integral (null); open limpa', async () => {
+    const m = await modules();
+    const s = await seed(m, 'Fatura parcial test');
+    try {
+      const { db, schema } = m;
+      const [card] = await db.select({ id: schema.statements.creditCardId }).from(schema.statements).where(eq(schema.statements.id, s.statementId));
+      await db.insert(schema.transactions).values({
+        householdId: s.householdId,
+        occurredOn: '2026-08-20',
+        competence: '2026-09',
+        description: 'x',
+        rawDescription: 'x',
+        amountCents: -100_000,
+        kind: 'expense',
+        creditCardId: card?.id,
+        statementId: s.statementId,
+      });
+      expect(await m.queries.setStatementStatus(s.householdId, s.statementId, 'paid', 35_000)).toMatchObject({ status: 'paid', paidAmountCents: 35_000 });
+      // Pagou a mais: aceito e gravado.
+      expect(await m.queries.setStatementStatus(s.householdId, s.statementId, 'paid', 120_000)).toMatchObject({ paidAmountCents: 120_000 });
+      // Igual ao total (em modulo): integral.
+      expect(await m.queries.setStatementStatus(s.householdId, s.statementId, 'paid', 100_000)).toMatchObject({ paidAmountCents: null });
+      await m.queries.setStatementStatus(s.householdId, s.statementId, 'paid', 35_000);
+      expect(await m.queries.setStatementStatus(s.householdId, s.statementId, 'open')).toMatchObject({ status: 'open', paidAmountCents: null });
+
+      // A lista de Cartoes traz pago, resta e a maior.
+      const { listCards } = await import('./cards');
+      await m.queries.setStatementStatus(s.householdId, s.statementId, 'paid', 35_000);
+      const partial = (await listCards(s.householdId)).flatMap((c) => c.statements).find((x) => x.id === s.statementId);
+      expect(partial).toMatchObject({ paidAmountCents: 35_000, remainingCents: 65_000, overpaidCents: null });
+      await m.queries.setStatementStatus(s.householdId, s.statementId, 'paid', 120_000);
+      const over = (await listCards(s.householdId)).flatMap((c) => c.statements).find((x) => x.id === s.statementId);
+      expect(over).toMatchObject({ remainingCents: null, overpaidCents: 20_000 });
     } finally {
       await cleanup(m, s.householdId);
     }

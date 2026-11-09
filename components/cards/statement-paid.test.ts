@@ -6,9 +6,36 @@ import {
   paidButtonLabel,
   paidErrorMessage,
   paidSuccessMessage,
+  parsePaymentChoice,
+  paymentKind,
+  statusRequestBody,
   statementStatusResponseSchema,
   targetStatus,
 } from './statement-paid';
+
+describe('pagamento integral ou valor personalizado', () => {
+  it('classifica o pagamento', () => {
+    expect(paymentKind({ status: 'open', remainingCents: null, overpaidCents: null })).toBe('none');
+    expect(paymentKind({ status: 'paid', remainingCents: null, overpaidCents: null })).toBe('full');
+    expect(paymentKind({ status: 'paid', remainingCents: 5000, overpaidCents: null })).toBe('partial');
+    expect(paymentKind({ status: 'paid', remainingCents: null, overpaidCents: 100 })).toBe('over');
+  });
+  it('integral nao manda valor; outro valor vira centavos', () => {
+    expect(parsePaymentChoice({ mode: 'full', text: 'lixo' })).toEqual({ ok: true });
+    expect(parsePaymentChoice({ mode: 'custom', text: '350,00' })).toEqual({ ok: true, paidAmountCents: 35000 });
+    expect(parsePaymentChoice({ mode: 'custom', text: '' }).ok).toBe(false);
+    expect(parsePaymentChoice({ mode: 'custom', text: 'abc' }).ok).toBe(false);
+    expect(parsePaymentChoice({ mode: 'custom', text: '0,00' })).toEqual({ ok: false, error: 'O valor pago precisa ser maior que zero.' });
+  });
+  it('corpo da requisicao', () => {
+    expect(statusRequestBody('paid')).toEqual({ status: 'paid' });
+    expect(statusRequestBody('paid', 35000)).toEqual({ status: 'paid', paidAmountCents: 35000 });
+    expect(statusRequestBody('open', 35000)).toEqual({ status: 'open' });
+  });
+  it('mensagem de pagamento parcial', () => {
+    expect(paidSuccessMessage('paid', true)).toContain('parcial');
+  });
+});
 
 describe('marcar fatura como paga', () => {
   it('alterna entre paga e aberta', () => {

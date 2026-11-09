@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { parseBRL } from '@/lib/money';
+
 /**
  * Marcar e desmarcar fatura como paga (decisão do Ricardo, 2026-10-08). A rota é do Funil:
  * `POST /api/statements/{id}/status` com `{ status: 'paid' | 'open' }`, que devolve `{ id, status }`.
@@ -13,6 +15,35 @@ export const statementStatusResponseSchema = z.object({
   id: z.string().uuid(),
   status: z.enum(['open', 'closed', 'paid']),
 });
+
+/** Como a fatura paga foi quitada: a lista escolhe selo e texto por isto. */
+export type PaymentKind = 'none' | 'full' | 'partial' | 'over';
+
+export function paymentKind(statement: { status: StatementStatus; remainingCents: number | null; overpaidCents: number | null }): PaymentKind {
+  if (statement.status !== 'paid') return 'none';
+  if (statement.remainingCents !== null) return 'partial';
+  if (statement.overpaidCents !== null) return 'over';
+  return 'full';
+}
+
+export type PaymentChoice = { mode: 'full' | 'custom'; text: string };
+
+/**
+ * O que o dialogo manda: integral = sem valor (o servidor grava null); outro valor = centavos > 0
+ * lidos do campo de moeda por `parseBRL`. Texto vazio, invalido ou <= 0 devolve a mensagem de erro.
+ */
+export function parsePaymentChoice(choice: PaymentChoice): { ok: true; paidAmountCents?: number } | { ok: false; error: string } {
+  if (choice.mode === 'full') return { ok: true };
+  const parsed = parseBRL(choice.text);
+  if (parsed === null || choice.text.trim() === '') return { ok: false, error: 'Informe o valor pago, por exemplo 350,00.' };
+  if (parsed <= 0) return { ok: false, error: 'O valor pago precisa ser maior que zero.' };
+  return { ok: true, paidAmountCents: parsed };
+}
+
+/** Corpo do POST: marcar (integral ou valor) ou desmarcar. */
+export function statusRequestBody(next: 'paid' | 'open', paidAmountCents?: number): { status: 'paid' | 'open'; paidAmountCents?: number } {
+  return next === 'paid' && paidAmountCents !== undefined ? { status: next, paidAmountCents } : { status: next };
+}
 
 /** O estado para o qual o botão leva: paga vira aberta, qualquer outra vira paga. */
 export function targetStatus(current: StatementStatus): 'paid' | 'open' {
@@ -31,7 +62,8 @@ export function paidButtonAriaLabel(current: StatementStatus, periodLabel: strin
 }
 
 /** Feedback de sucesso. */
-export function paidSuccessMessage(next: 'paid' | 'open'): string {
+export function paidSuccessMessage(next: 'paid' | 'open', partial = false): string {
+  if (next === 'paid' && partial) return 'Pagamento parcial registrado. Só o que falta pagar continua no comprometido.';
   return next === 'paid'
     ? 'Fatura marcada como paga. Se estava na janela do comprometido, ela saiu da conta.'
     : 'Fatura desmarcada. Se está na janela do comprometido, ela voltou a contar.';

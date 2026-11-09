@@ -8,7 +8,7 @@ import type { CardCycleConfig } from '@/lib/finance/billing';
 import type { FutureStub } from './card-stubs';
 import { dueDateWarnings } from './due-date-check';
 import type { StatementRecord } from './schemas';
-import { isOverdueUnpaid, OVERDUE_UNPAID_HINT } from './statement-paid';
+import { isOverdueUnpaid, OVERDUE_UNPAID_HINT, paymentKind } from './statement-paid';
 import { StatementPaidButton } from './statement-paid-button';
 
 /**
@@ -161,13 +161,27 @@ function StatementCanhoto({
     >
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
         <span className="font-medium">Fatura de {competenceShort(statement.period)}</span>
-        {statement.status === 'paid' ? <Carimbo tone="ok">Pago</Carimbo> : null}
+        {statement.status === 'paid' ? (
+          <Carimbo tone="ok">{paymentKind(statement) === 'partial' ? 'Pago parcial' : 'Pago'}</Carimbo>
+        ) : null}
         {statement.reportedTotalCents === null ? null : (
           <span className="text-muted-foreground">
             informado <Money value={statement.reportedTotalCents} sign="never" />
           </span>
         )}
       </p>
+      {paymentKind(statement) === 'partial' && statement.paidAmountCents !== null && statement.remainingCents !== null ? (
+        <p className="text-sm text-muted-foreground">
+          Pago <Money value={statement.paidAmountCents} sign="never" /> de <Money value={statement.computedTotalCents} sign="never" /> · resta{' '}
+          <Money value={statement.remainingCents} sign="never" />
+        </p>
+      ) : null}
+      {paymentKind(statement) === 'over' && statement.paidAmountCents !== null && statement.overpaidCents !== null ? (
+        <p className="text-sm text-muted-foreground">
+          Pago <Money value={statement.paidAmountCents} sign="never" />, <Money value={statement.overpaidCents} sign="never" /> a mais que o total de{' '}
+          <Money value={statement.computedTotalCents} sign="never" />
+        </p>
+      ) : null}
       {overdue ? <p className="text-sm text-muted-foreground">{OVERDUE_UNPAID_HINT}</p> : null}
       {mismatch ? (
         <p className="text-sm text-destructive">

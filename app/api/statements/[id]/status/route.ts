@@ -18,10 +18,15 @@ export async function POST(request: Request, context: RouteContext) {
     const payload: unknown = await request.json().catch(() => null);
     const body = statementStatusBodySchema.safeParse(payload);
     if (!body.success) {
-      return NextResponse.json({ error: 'Status da fatura inválido.' }, { status: 400 });
+      return NextResponse.json({ error: 'Status ou valor pago inválido.' }, { status: 400 });
     }
     return NextResponse.json(
-      await setStatementStatus(session.householdId, statementId.data, body.data.status),
+      await setStatementStatus(
+        session.householdId,
+        statementId.data,
+        body.data.status,
+        body.data.status === 'paid' ? body.data.paidAmountCents : undefined,
+      ),
     );
   } catch (error) {
     if (error instanceof SessionMissingError) {
