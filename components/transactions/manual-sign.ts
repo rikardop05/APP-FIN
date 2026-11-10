@@ -39,6 +39,17 @@ export function amountForInput(amountCents: Cents, kind: ManualAmountKind): Cent
 }
 
 /**
+ * Troca de TIPO no editor com o valor ja digitado: devolve o que o campo passa a
+ * MOSTRAR, preservando a direcao do dinheiro. O valor lido do campo e primeiro
+ * assinado pelo tipo ANTIGO (uma Despesa aparece sem sinal, mas vale negativo) e so
+ * entao reexibido no tipo NOVO. Sem isto, uma Despesa de 100 virada Transferencia
+ * gravaria +100: a saida viraria entrada.
+ */
+export function amountOnKindChange(typedCents: Cents, fromKind: ManualAmountKind, toKind: ManualAmountKind): Cents {
+  return amountForInput(signedAmountCents(typedCents, fromKind), toKind);
+}
+
+/**
  * Aplica o sinal do tipo ao valor lido por `parseBRL`, para GRAVAR:
  * `expense` -> negativo; `income` -> positivo; os demais -> como digitado.
  */

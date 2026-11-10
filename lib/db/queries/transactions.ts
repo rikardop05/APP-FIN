@@ -13,6 +13,7 @@ import {
 } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { assertCategoryFitsKinds } from './category-kind';
+import { canEditTransactionKind, type EditableTransactionKind } from './transactions-editable-kinds';
 import { COUNTED_STATUSES } from './counted-statuses';
 import { reconcileManualPosting } from './manual-reconcile';
 import type {
@@ -101,6 +102,8 @@ export type TransactionUpdate = {
   categoryId?: string | null;
   memberId?: string | null;
   note?: string | null;
+  /** Troca de tipo (só lançamento de conta já lançado; ver `canEditTransactionKind`). */
+  kind?: EditableTransactionKind;
 };
 
 export type ManualTransactionMutation = {
@@ -132,6 +135,22 @@ export class InvalidTransactionReferenceError extends Error {
   constructor() {
     super('Referência de lançamento inválida.');
     this.name = 'InvalidTransactionReferenceError';
+  }
+}
+
+/** Troca de tipo pedida numa linha em que o tipo não é editável (cartão, previsão, pagamento de fatura). */
+export class TransactionKindNotEditableError extends Error {
+  constructor() {
+    super('O tipo deste lançamento não pode ser alterado.');
+    this.name = 'TransactionKindNotEditableError';
+  }
+}
+
+/** Troca para Despesa com valor positivo ou para Receita com valor negativo: o sinal não combina com o tipo. */
+export class TransactionKindSignError extends Error {
+  constructor() {
+    super('O valor não combina com o tipo: despesa é saída (negativa) e receita é entrada (positiva).');
+    this.name = 'TransactionKindSignError';
   }
 }
 
@@ -478,15 +497,36 @@ export async function updateTransaction(
     input.memberId ?? null,
   );
   const [existing] = await db
-    .select({ creditCardId: transactions.creditCardId, kind: transactions.kind })
+    .select({
+      creditCardId: transactions.creditCardId,
+      accountId: transactions.accountId,
+      kind: transactions.kind,
+      status: transactions.status,
+      categoryId: transactions.categoryId,
+      amountCents: transactions.amountCents,
+    })
     .from(transactions)
     .where(and(eq(transactions.id, id), eq(transactions.householdId, householdId)))
     .limit(1);
   if (!existing) throw new TransactionNotFoundError();
-  // Só confere quando a edição MUDA a categoria: editar a descrição de um lançamento antigo que já
-  // estava numa categoria que não cabe não pode travar.
-  if (input.categoryId !== undefined) {
-    await ensureCategoryFitsKinds(householdId, input.categoryId, [existing.kind]);
+  // Troca de tipo (ex.: entrada que não é renda vira Transferência e sai da Sobra, RC-03). O valor
+  // e o sinal não são tocados aqui: quem move a conta é o sinal, e ele fica como estava.
+  const kindChanged = input.kind !== undefined && input.kind !== existing.kind;
+  if (kindChanged && !canEditTransactionKind(existing)) throw new TransactionKindNotEditableError();
+  const kind = input.kind ?? existing.kind;
+  // Na TROCA para Despesa ou Receita o valor que fica (o do corpo, ou o já gravado) tem de ter o
+  // sinal do tipo: sem isto, um PATCH só com `kind` gravaria Despesa positiva, que o orçamento lê
+  // como estorno. Só na troca: editar a descrição de um dado antigo inconsistente não pode travar.
+  if (kindChanged) {
+    const amount = input.amountCents ?? safeCents(existing.amountCents);
+    if ((kind === 'expense' && amount > 0) || (kind === 'income' && amount < 0)) throw new TransactionKindSignError();
+  }
+  // Só confere quando a edição MUDA a categoria ou o tipo: editar a descrição de um lançamento
+  // antigo que já estava numa categoria que não cabe não pode travar. Na troca de tipo sem
+  // categoria no corpo, a categoria que FICA na linha tem de caber no tipo novo.
+  if (input.categoryId !== undefined || kindChanged) {
+    const categoryId = input.categoryId !== undefined ? input.categoryId : existing.categoryId;
+    await ensureCategoryFitsKinds(householdId, categoryId, [kind]);
   }
 
   const dateFields = input.occurredOn
