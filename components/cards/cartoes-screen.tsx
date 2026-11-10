@@ -147,6 +147,8 @@ function ArchiveConfirmDialog({
 export function CartoesScreen({ today, commitmentMonths, commitmentTransactions }: CartoesScreenProps) {
   const router = useRouter();
   const [accounts, setAccounts] = useState<AccountList['accounts']>([]);
+  /** "Em conta hoje": soma dos saldos de hoje, vinda do servidor (a tela não soma). */
+  const [totalBalanceCents, setTotalBalanceCents] = useState<AccountList['totalBalanceCents'] | null>(null);
   const [cards, setCards] = useState<CardList['cards']>([]);
   const [members, setMembers] = useState<CardList['members']>([]);
   const [dialog, setDialog] = useState<DialogState | null>(null);
@@ -171,6 +173,7 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
       const accountData = await readResponse(accountsResponse, accountListSchema);
       const cardData = await readResponse(cardsResponse, cardListSchema);
       setAccounts(accountData.accounts);
+      setTotalBalanceCents(accountData.totalBalanceCents);
       setCards(cardData.cards);
       setMembers(cardData.members);
     } catch (loadError) {
@@ -351,6 +354,18 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
                 action={{ label: 'Nova conta', onClick: () => setDialog({ kind: 'account' }) }}
               />
             ) : (
+              <>
+              {totalBalanceCents !== null ? (
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border border-border bg-card px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Em conta hoje</p>
+                    <p className="text-xs text-muted-foreground">
+                      Soma do saldo de {accounts.length === 1 ? 'uma conta' : `${accounts.length} contas`}, só com o que já foi lançado.
+                    </p>
+                  </div>
+                  <Money value={totalBalanceCents} className="text-xl font-semibold" />
+                </div>
+              ) : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 {accounts.map((account) => (
                   <article key={account.id} className="border border-border bg-card p-4">
@@ -370,19 +385,22 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
                         </Button>
                       </div>
                     </div>
-                    <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <dl className="mt-4 flex flex-col gap-1">
                       <div>
-                        <dt className="text-xs text-muted-foreground">Saldo inicial</dt>
-                        <dd className="font-medium"><Money value={account.openingBalanceCents} /></dd>
+                        <dt className="text-xs text-muted-foreground">Saldo hoje</dt>
+                        <dd className="text-xl font-semibold"><Money value={account.currentBalanceCents} /></dd>
                       </div>
-                      <div>
-                        <dt className="text-xs text-muted-foreground">Data do saldo</dt>
-                        <dd className="font-medium"><DateText value={account.openingDate} /></dd>
+                      <div className="flex flex-wrap gap-x-1 text-xs text-muted-foreground">
+                        <dt>Saldo inicial</dt>
+                        <dd>
+                          <Money value={account.openingBalanceCents} /> em <DateText value={account.openingDate} />
+                        </dd>
                       </div>
                     </dl>
                   </article>
                 ))}
               </div>
+              </>
             )}
           </section>
 

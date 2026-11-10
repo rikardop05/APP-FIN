@@ -78,8 +78,12 @@ export const accountListSchema = z.object({
       openingBalanceCents: centsSchema,
       openingDate: isoDateSchema,
       active: z.boolean(),
+      /** Saldo real da conta hoje, calculado no servidor (`listAccountsWithBalance`). */
+      currentBalanceCents: centsSchema,
     }),
   ),
+  /** Soma dos saldos de hoje das contas ativas ("Em conta hoje"), também do servidor. */
+  totalBalanceCents: centsSchema,
 });
 
 export const cardListSchema = z.object({
