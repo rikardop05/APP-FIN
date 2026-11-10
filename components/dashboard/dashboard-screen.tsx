@@ -13,6 +13,7 @@ import type { PassiveIncomeState } from './passive-income/passive-income';
 import {
   PendenciasList,
   type DivergentStatementItem,
+  type MissingStatementListItem,
   type OverBudgetListItem,
   type OverdueRecurringListItem,
   type UncategorizedItem,
@@ -71,6 +72,8 @@ type DashboardScreenProps = {
   pendencias: {
     uncategorizedCount: number;
     uncategorizedItems: UncategorizedItem[];
+    /** Faturas já fechadas e não importadas: a do mês e buracos do mês anterior (`listMissingStatements`). */
+    missingStatements: MissingStatementListItem[];
     divergentStatements: DivergentStatementItem[];
     /** `null` = a consulta de orçamento falhou; a lista diz isso em vez de omitir a seção. */
     overBudget: OverBudgetListItem[] | null;
@@ -104,6 +107,7 @@ export function DashboardScreen({
     divergentCount: pendencias.divergentStatements.length,
     overBudgetCount: pendencias.overBudget?.length ?? 0,
     overdueRecurringCount: pendencias.overdueRecurring.count,
+    missingStatementCount: pendencias.missingStatements.length,
   });
 
   return (
@@ -173,6 +177,7 @@ export function DashboardScreen({
       <PendenciasList
         uncategorizedCount={pendencias.uncategorizedCount}
         uncategorizedItems={pendencias.uncategorizedItems}
+        missingStatements={pendencias.missingStatements}
         divergentStatements={pendencias.divergentStatements}
         overBudget={pendencias.overBudget}
         overdueRecurring={pendencias.overdueRecurring}

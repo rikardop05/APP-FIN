@@ -7,6 +7,7 @@ import {
   contributionsTitle,
   monthName,
   nextMonthCommitment,
+  missingStatementLine,
   pendingSummary,
   pendingTitle,
   stubMonths,
@@ -106,12 +107,32 @@ describe('comprometimento', () => {
 
 describe('pendencias', () => {
   it('conta e descreve', () => {
-    const s = pendingSummary({ uncategorizedCount: 2, divergentCount: 1, overBudgetCount: 0, overdueRecurringCount: 0 });
+    const s = pendingSummary({
+      uncategorizedCount: 2,
+      divergentCount: 1,
+      overBudgetCount: 0,
+      overdueRecurringCount: 0,
+      missingStatementCount: 0,
+    });
     expect(s.total).toBe(3);
     expect(s.parts).toEqual(['2 sem categoria', '1 fatura divergente']);
     expect(pendingTitle(0)).toBe('Nada pendente');
     expect(pendingTitle(1)).toBe('1 pendência');
     expect(pendingTitle(3)).toBe('3 pendências');
+  });
+  it('fatura do mês não importada entra na contagem: sozinha já tira o "Nada pendente"', () => {
+    const none = { uncategorizedCount: 0, divergentCount: 0, overBudgetCount: 0, overdueRecurringCount: 0 };
+    const one = pendingSummary({ ...none, missingStatementCount: 1 });
+    expect(one).toEqual({ total: 1, parts: ['1 fatura não importada'] });
+    expect(pendingTitle(one.total)).toBe('1 pendência');
+    const two = pendingSummary({ ...none, uncategorizedCount: 1, missingStatementCount: 2 });
+    expect(two).toEqual({ total: 3, parts: ['1 sem categoria', '2 faturas não importadas'] });
+    expect(pendingTitle(pendingSummary({ ...none, missingStatementCount: 0 }).total)).toBe('Nada pendente');
+  });
+  it('a frase da pendência diz o mês por extenso e o cartão', () => {
+    expect(missingStatementLine('2026-11', 'Mercado Pago')).toBe(
+      'Fatura de novembro do Mercado Pago ainda não importada',
+    );
   });
 });
 

@@ -13,6 +13,7 @@ import {
 } from '@/lib/db/schema';
 import { cents, type Cents } from '@/lib/money';
 import { futureCommitment } from '@/lib/finance/commitment';
+import { missingStatements } from '@/lib/finance/missing-statements';
 
 /**
  * Agregação paralela para o dashboard (T-115). Cada item devolvido aqui entra
@@ -632,6 +633,72 @@ export async function listStatementIdsForCompetence(
       ),
     );
   return rows.map((row) => row.id);
+}
+
+/** Fatura já fechada e ainda não importada de um cartão ativo (a do mês, ou um buraco no mês anterior). */
+export type MissingStatementItem = {
+  creditCardId: string;
+  cardName: string;
+  /** A competência da fatura que falta: a corrente ou a anterior. */
+  competence: Competence;
+  closingDate: IsoDate;
+  dueDate: IsoDate;
+};
+
+/**
+ * Pendência "fatura não importada" (Lote 1, item 3): cartões ATIVOS sem `statement`
+ * numa competência cuja fatura já fechou. A competência de `today` conta sempre; a
+ * anterior só quando o cartão já tem fatura mais antiga que ela (buraco no histórico,
+ * não o começo dele). Cada janela pendente é um item próprio.
+ *
+ * Por isso a leitura traz TODAS as faturas dos cartões até a competência corrente, e
+ * não só as duas olhadas: é a fatura mais antiga que diz se a anterior é buraco.
+ *
+ * A regra ("já fechou e não tem fatura") é de `missingStatements`
+ * (lib/finance/missing-statements.ts), sobre a janela de `statementWindow`; aqui só
+ * se leem os cartões ativos e as faturas da competência. `statements` não tem
+ * `household_id`: a fronteira da família vem do join com `credit_cards`
+ * (CONVENTIONS §7). Cartão inativo não entra: não se espera fatura dele.
+ *
+ * Qualquer `statement` da competência conta como importada, seja de arquivo ou
+ * manual: a pendência é "não há fatura deste mês", não "não veio de arquivo".
+ *
+ * Ordem: nome do cartão e, dentro dele, a competência mais antiga primeiro.
+ */
+export async function listMissingStatements(
+  householdId: string,
+  today: IsoDate,
+): Promise<MissingStatementItem[]> {
+  const competence = toCompetence(today);
+  const [cardRows, statementRows] = await Promise.all([
+    db
+      .select({
+        id: creditCards.id,
+        name: creditCards.name,
+        closingDay: creditCards.closingDay,
+        dueDay: creditCards.dueDay,
+      })
+      .from(creditCards)
+      .where(and(eq(creditCards.householdId, householdId), eq(creditCards.active, true)))
+      .orderBy(asc(creditCards.name), asc(creditCards.id)),
+    db
+      .select({ creditCardId: statements.creditCardId, period: statements.period })
+      .from(statements)
+      .innerJoin(creditCards, eq(creditCards.id, statements.creditCardId))
+      .where(
+        and(
+          eq(creditCards.householdId, householdId),
+          eq(creditCards.active, true),
+          lte(statements.period, competence),
+        ),
+      ),
+  ]);
+
+  const nameById = new Map(cardRows.map((card) => [card.id, card.name]));
+  return missingStatements({ today, cards: cardRows, statements: statementRows }).map((item) => ({
+    ...item,
+    cardName: nameById.get(item.creditCardId) ?? '',
+  }));
 }
 
 export type IncomeExpenseRow = {

@@ -20,6 +20,7 @@ import { listStatementSituations, settlementByCompetence } from '@/lib/db/querie
 import {
   getDashboardData,
   listIncomeExpenseRows,
+  listMissingStatements,
   listOverdueRecurring,
   listUncategorizedTransactionItems,
 } from '@/lib/db/queries/dashboard';
@@ -93,13 +94,18 @@ export default async function DashboardPage() {
 
   const settings = await getSettings(householdId);
 
-  const [dashboard, uncategorizedItems, incomeExpenseRows, overdueRecurring, situations] = await Promise.all([
-    getDashboardData(householdId, today, settings.commitmentMonths),
-    listUncategorizedTransactionItems(householdId, today),
-    listIncomeExpenseRows(householdId, today, INCOME_EXPENSE_MONTHS),
-    listOverdueRecurring(householdId, today, OVERDUE_RECURRING_LIMIT),
-    listStatementSituations(householdId),
-  ]);
+  const [dashboard, uncategorizedItems, incomeExpenseRows, overdueRecurring, situations, missingStatements] =
+    await Promise.all([
+      getDashboardData(householdId, today, settings.commitmentMonths),
+      listUncategorizedTransactionItems(householdId, today),
+      listIncomeExpenseRows(householdId, today, INCOME_EXPENSE_MONTHS),
+      listOverdueRecurring(householdId, today, OVERDUE_RECURRING_LIMIT),
+      listStatementSituations(householdId),
+      // Fatura do mes ja fechada e nao importada, por cartao ativo. A regra e de
+      // `missingStatements` (lib/finance); sem ela o painel dizia "Nada pendente" com a
+      // fatura do mes faltando.
+      listMissingStatements(householdId, today),
+    ]);
   // Pago e pendente das faturas do mes (mesma fonte da tela de Cartoes e de Lancamentos).
   const currentSettlement = settlementByCompetence(situations).find((item) => item.competence === competence) ?? null;
 
@@ -207,6 +213,7 @@ export default async function DashboardPage() {
       pendencias={{
         uncategorizedCount: dashboard.uncategorizedCount,
         uncategorizedItems: pendenciaItems,
+        missingStatements,
         divergentStatements: divergentItems,
         overBudget,
         overdueRecurring,

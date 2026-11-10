@@ -8,6 +8,7 @@ import { formatDateBR } from '@/lib/date';
 import type { BasisPoints, Cents } from '@/lib/money';
 
 import { OVER_BUDGET_INTRO, OVER_BUDGET_TITLE, overBudgetLine } from './over-budget-text';
+import { missingStatementLine } from './presentation';
 
 export type UncategorizedItem = {
   id: string;
@@ -49,9 +50,25 @@ export type OverdueRecurringListItem = {
   amountCents: Cents;
 };
 
+/**
+ * Mesma forma de `MissingStatementItem` (`lib/db/queries/dashboard.ts`): fatura já fechada de um
+ * cartão ativo sem `statement` — a do mês, ou a do mês anterior quando é um buraco no histórico do
+ * cartão. Quem decide é `missingStatements`
+ * (lib/finance/missing-statements.ts); aqui só se escreve a frase e o link.
+ */
+export type MissingStatementListItem = {
+  creditCardId: string;
+  cardName: string;
+  competence: string;
+  closingDate: string;
+  dueDate: string;
+};
+
 type PendenciasListProps = {
   uncategorizedCount: number;
   uncategorizedItems: UncategorizedItem[];
+  /** Faturas já fechadas e ainda não importadas: uma por cartão ativo e competência. */
+  missingStatements: MissingStatementListItem[];
   divergentStatements: DivergentStatementItem[];
   /**
    * Orçamentos estourados no mês (T-205). `null` = a consulta falhou: a lista
@@ -80,11 +97,13 @@ type PendenciasListProps = {
 export function PendenciasList({
   uncategorizedCount,
   uncategorizedItems,
+  missingStatements,
   divergentStatements,
   overBudget,
   overdueRecurring,
 }: PendenciasListProps) {
   const hasUncategorized = uncategorizedCount > 0;
+  const hasMissingStatements = missingStatements.length > 0;
   const hasDivergent = divergentStatements.length > 0;
   const overBudgetUnavailable = overBudget === null;
   const overBudgetItems = overBudget ?? [];
@@ -92,7 +111,12 @@ export function PendenciasList({
   const hasOverdueRecurring = overdueRecurring.count > 0;
   // `overBudget === null` NÃO conta como "nada pendente": não sabemos.
   const isEmpty =
-    !hasUncategorized && !hasDivergent && !hasOverBudget && !hasOverdueRecurring && !overBudgetUnavailable;
+    !hasUncategorized &&
+    !hasMissingStatements &&
+    !hasDivergent &&
+    !hasOverBudget &&
+    !hasOverdueRecurring &&
+    !overBudgetUnavailable;
 
   if (isEmpty) {
     return (
@@ -107,7 +131,8 @@ export function PendenciasList({
             Nada pendente neste mês
           </h2>
           <p className="text-sm text-muted-foreground">
-            Nenhuma categoria em aberto, fatura divergente, orçamento estourado ou despesa fixa em atraso.
+            Nenhuma categoria em aberto, fatura por importar ou divergente, orçamento estourado ou despesa fixa em
+            atraso.
           </p>
         </div>
         <EmptyState
@@ -181,6 +206,44 @@ export function PendenciasList({
                 {uncategorizedCount - uncategorizedItems.length === 1 ? 'item' : 'itens'} em Lançamentos →
               </Link>
             ) : null}
+          </article>
+        ) : null}
+
+        {hasMissingStatements ? (
+          <article aria-labelledby="dashboard-pendencias-missing-heading" className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <h3 id="dashboard-pendencias-missing-heading" className="text-sm font-semibold text-foreground">
+                Faturas ainda não importadas
+              </h3>
+              <Badge variant="warning">
+                {missingStatements.length} {missingStatements.length === 1 ? 'fatura' : 'faturas'}
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Fatura que já fechou e ainda não está aqui. Sem ela, a despesa do mês e o comprometido nos cartões
+              ficam abaixo do real.
+            </p>
+            <ul className="flex flex-col divide-y divide-border border-y border-border">
+              {missingStatements.map((item) => (
+                <li key={`${item.creditCardId}-${item.competence}`} className="flex items-center gap-2 py-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+                  <div className="flex min-w-0 flex-col">
+                    <span className="text-sm font-medium text-foreground">
+                      {missingStatementLine(item.competence, item.cardName)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Fechou em {formatDateBR(item.closingDate)} · vence em {formatDateBR(item.dueDate)}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <Link
+              href="/importar"
+              className="min-h-11 text-sm text-primary underline underline-offset-2 sm:min-h-0"
+            >
+              Importar fatura →
+            </Link>
           </article>
         ) : null}
 

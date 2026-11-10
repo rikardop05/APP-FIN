@@ -82,18 +82,30 @@ export function pendingSummary(input: {
   divergentCount: number;
   overBudgetCount: number;
   overdueRecurringCount: number;
+  /** Faturas já fechadas e ainda não importadas (uma por cartão ativo e competência). */
+  missingStatementCount: number;
 }): PendingSummary {
   const parts: string[] = [];
   const add = (count: number, one: string, many: string) => {
     if (count > 0) parts.push(`${count} ${count === 1 ? one : many}`);
   };
   add(input.uncategorizedCount, 'sem categoria', 'sem categoria');
+  add(input.missingStatementCount, 'fatura não importada', 'faturas não importadas');
   add(input.divergentCount, 'fatura divergente', 'faturas divergentes');
   add(input.overBudgetCount, 'orçamento estourado', 'orçamentos estourados');
   add(input.overdueRecurringCount, 'despesa fixa em atraso', 'despesas fixas em atraso');
   const total =
-    input.uncategorizedCount + input.divergentCount + input.overBudgetCount + input.overdueRecurringCount;
+    input.uncategorizedCount +
+    input.missingStatementCount +
+    input.divergentCount +
+    input.overBudgetCount +
+    input.overdueRecurringCount;
   return { total, parts };
+}
+
+/** "Fatura de novembro do Mercado Pago ainda não importada". */
+export function missingStatementLine(competence: Competence, cardName: string): string {
+  return `Fatura de ${monthName(competence)} do ${cardName} ainda não importada`;
 }
 
 /** Título do bloco de pendências: contagem, nunca lista. */
