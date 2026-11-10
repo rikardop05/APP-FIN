@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { budgetStatus, suggestBudgetFromHistory } from '@/lib/finance/budget';
+import {
+  budgetMonthTotals,
+  budgetStatus,
+  spendOutsideCategories,
+  suggestBudgetFromHistory,
+  unbudgetedSpend,
+} from '@/lib/finance/budget';
 import { basisPoints, cents } from '@/lib/money';
 
 function budget(categoryId: string, plannedCents: number) {
@@ -403,5 +409,171 @@ describe('budgetStatus — semaforo sobre o TOTAL ESPERADO (decisao 10b, 2026-10
   it('orcamento zero com so previsto: usageBp null e vermelho (o mes vai estourar)', () => {
     const [row] = budgetStatus({ budgets: [budget('a', 0)], spent: [], upcoming: [spentEntry('a', -500)], warnBp: WARN_8000 });
     expect(row).toMatchObject({ usageBp: null, expectedCents: 500, light: 'red', remainingCents: -500 });
+  });
+});
+
+describe('unbudgetedSpend — gasto em categoria sem orcamento salvo', () => {
+  it('mes sem nenhum orcamento: cada categoria com gasto sai com realizado e previsto', () => {
+    // mercado: 300,00 + 200,00 realizados = 500,00; previsto 100,00; esperado 600,00.
+    // lazer: so previsto de 80,00.
+    const rows = unbudgetedSpend({
+      budgetedCategoryIds: [],
+      spent: [spentEntry('mercado', -30000), spentEntry('mercado', -20000)],
+      upcoming: [spentEntry('mercado', -10000), spentEntry('lazer', -8000)],
+    });
+    expect(rows).toEqual([
+      { categoryId: 'mercado', spentCents: 50000, upcomingCents: 10000, expectedCents: 60000 },
+      { categoryId: 'lazer', spentCents: 0, upcomingCents: 8000, expectedCents: 8000 },
+    ]);
+  });
+
+  it('categoria COM orcamento nao sai aqui (ela e linha de budgetStatus), nem com orcamento zero', () => {
+    const rows = unbudgetedSpend({
+      budgetedCategoryIds: ['mercado', 'zero'],
+      spent: [spentEntry('mercado', -100), spentEntry('zero', -200), spentEntry('lazer', -300)],
+    });
+    expect(rows).toEqual([{ categoryId: 'lazer', spentCents: 300, upcomingCents: 0, expectedCents: 300 }]);
+  });
+
+  it('estorno que zera ou supera o gasto nao gera linha (§14), e nao come o previsto', () => {
+    // a: -100 + 150 = +50 -> realizado 0, sem previsto: sem linha.
+    // b: -100 + 150 = +50 -> realizado 0; previsto 70 fica inteiro.
+    const rows = unbudgetedSpend({
+      budgetedCategoryIds: [],
+      spent: [spentEntry('a', -100), spentEntry('a', 150), spentEntry('b', -100), spentEntry('b', 150)],
+      upcoming: [spentEntry('b', -70)],
+    });
+    expect(rows).toEqual([{ categoryId: 'b', spentCents: 0, upcomingCents: 70, expectedCents: 70 }]);
+  });
+
+  it('allowedCategoryIds restringe as categorias; ausente, vale todas', () => {
+    const spent = [spentEntry('folha', -100), spentEntry('raiz', -200)];
+    expect(unbudgetedSpend({ budgetedCategoryIds: [], spent, allowedCategoryIds: ['folha'] })).toEqual([
+      { categoryId: 'folha', spentCents: 100, upcomingCents: 0, expectedCents: 100 },
+    ]);
+    expect(unbudgetedSpend({ budgetedCategoryIds: [], spent })).toHaveLength(2);
+  });
+
+  it('nada gasto: lista vazia', () => {
+    expect(unbudgetedSpend({ budgetedCategoryIds: ['a'], spent: [], upcoming: [] })).toEqual([]);
+  });
+});
+
+describe('spendOutsideCategories — despesa que nenhuma linha do Orcamento mostra', () => {
+  const entry = (categoryId: string | null, amountCents: number) => ({ categoryId, amountCents: cents(amountCents) });
+
+  it('soma sem categoria, raiz e natureza nao orcavel; categoria orcavel fica de fora', () => {
+    // sem categoria: 500,00 + 300,00 = 800,00; raiz: 100,00; mercado (orcavel) nao entra.
+    // previsto: so a raiz, 50,00.
+    const result = spendOutsideCategories({
+      spent: [entry(null, -50000), entry(null, -30000), entry('raiz', -10000), entry('mercado', -435577)],
+      upcoming: [entry('raiz', -5000), entry('mercado', -9999)],
+      allowedCategoryIds: ['mercado'],
+    });
+    expect(result).toEqual({ spentCents: 90000, upcomingCents: 5000, expectedCents: 95000 });
+  });
+
+  it('estorno maior que o gasto de UM grupo nao desconta do outro (§14)', () => {
+    // sem categoria: -100 + 300 = +200 -> 0; raiz: 400.
+    const result = spendOutsideCategories({
+      spent: [entry(null, -100), entry(null, 300), entry('raiz', -400)],
+      allowedCategoryIds: [],
+    });
+    expect(result).toEqual({ spentCents: 400, upcomingCents: 0, expectedCents: 400 });
+  });
+
+  it('tudo em categoria orcavel, ou nada: zero', () => {
+    const zero = { spentCents: 0, upcomingCents: 0, expectedCents: 0 };
+    expect(spendOutsideCategories({ spent: [entry('a', -100)], allowedCategoryIds: ['a'] })).toEqual(zero);
+    expect(spendOutsideCategories({ spent: [], upcoming: [], allowedCategoryIds: [] })).toEqual(zero);
+  });
+});
+
+describe('budgetMonthTotals — o total do topo do Orcamento', () => {
+  const line = (plannedCents: number, spentCents: number, upcomingCents: number) => ({
+    plannedCents: cents(plannedCents),
+    spentCents: cents(spentCents),
+    upcomingCents: cents(upcomingCents),
+  });
+  const loose = (spentCents: number, upcomingCents: number) => ({
+    spentCents: cents(spentCents),
+    upcomingCents: cents(upcomingCents),
+  });
+
+  it('soma as linhas com orcamento e calcula uso, folga e cor', () => {
+    // orcado 1.000 + 1.000 = 2.000; realizado 500 + 100 = 600; previsto 100 + 100 = 200;
+    // esperado 800; folga 1.200; uso 800/2.000 = 40%.
+    const totals = budgetMonthTotals({
+      rows: [line(100000, 50000, 10000), line(100000, 10000, 10000)],
+      unbudgeted: [],
+      warnBp: WARN_8000,
+    });
+    expect(totals.budgeted).toEqual({
+      plannedCents: 200000,
+      spentCents: 60000,
+      upcomingCents: 20000,
+      expectedCents: 80000,
+      remainingCents: 120000,
+      usageBp: 4000,
+      light: 'green',
+    });
+    expect(totals.unbudgeted).toEqual({ spentCents: 0, upcomingCents: 0, expectedCents: 0 });
+    expect(totals.outside).toEqual({ spentCents: 0, upcomingCents: 0, expectedCents: 0 });
+  });
+
+  it('o gasto fora das categorias passa adiante e NAO entra no uso', () => {
+    const outside = { spentCents: cents(80000), upcomingCents: cents(0), expectedCents: cents(80000) };
+    const totals = budgetMonthTotals({ rows: [line(100000, 50000, 0)], unbudgeted: [], outside, warnBp: WARN_8000 });
+    expect(totals.outside).toEqual(outside);
+    expect(totals.budgeted).toMatchObject({ usageBp: 5000, light: 'green' });
+  });
+
+  it('SEM orcamento salvo: mostra o gasto, sem cor e sem uso (nunca "estourou")', () => {
+    // realizado 5.155,77 = 4.000,00 + 1.155,77; previsto 300,00.
+    const totals = budgetMonthTotals({
+      rows: [],
+      unbudgeted: [loose(400000, 30000), loose(115577, 0)],
+      warnBp: WARN_8000,
+    });
+    expect(totals.unbudgeted).toEqual({ spentCents: 515577, upcomingCents: 30000, expectedCents: 545577 });
+    expect(totals.budgeted.light).toBeNull();
+    expect(totals.budgeted.usageBp).toBeNull();
+    expect(totals.budgeted.plannedCents).toBe(0);
+    expect(totals.budgeted.expectedCents).toBe(0);
+  });
+
+  it('gasto sem orcamento NAO entra no uso nem na cor do total', () => {
+    // orcado 1.000, esperado 500 -> 50% verde, mesmo com 9.000 gastos fora do orcamento.
+    const totals = budgetMonthTotals({
+      rows: [line(100000, 50000, 0)],
+      unbudgeted: [loose(900000, 0)],
+      warnBp: WARN_8000,
+    });
+    expect(totals.budgeted).toMatchObject({ usageBp: 5000, light: 'green', remainingCents: 50000 });
+    expect(totals.unbudgeted.expectedCents).toBe(900000);
+  });
+
+  it('amarelo a partir do aviso, vermelho acima de 100%', () => {
+    const light = (expected: number) =>
+      budgetMonthTotals({ rows: [line(1000, 0, expected)], unbudgeted: [], warnBp: WARN_8000 }).budgeted;
+    expect(light(799).light).toBe('green');
+    expect(light(800).light).toBe('yellow');
+    expect(light(1000).light).toBe('yellow');
+    expect(light(1001)).toMatchObject({ light: 'red', remainingCents: -1 });
+  });
+
+  it('so orcamento ZERO com gasto: vermelho sem percentual (orcamento zero e limite explicito)', () => {
+    const totals = budgetMonthTotals({ rows: [line(0, 500, 0)], unbudgeted: [], warnBp: WARN_8000 });
+    expect(totals.budgeted).toMatchObject({ usageBp: null, light: 'red', remainingCents: -500 });
+  });
+
+  it('nada no mes: tudo zero e sem cor', () => {
+    const totals = budgetMonthTotals({ rows: [], unbudgeted: [], warnBp: WARN_8000 });
+    expect(totals.budgeted.light).toBeNull();
+    expect(totals.unbudgeted.expectedCents).toBe(0);
+  });
+
+  it('recusa warnBp fora de 0..10000', () => {
+    expect(() => budgetMonthTotals({ rows: [], unbudgeted: [], warnBp: basisPoints(10001) })).toThrow(RangeError);
   });
 });

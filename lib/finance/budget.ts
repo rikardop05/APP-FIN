@@ -164,6 +164,165 @@ export function budgetStatus(input: {
   });
 }
 
+/** Gasto de uma categoria SEM orcamento salvo no mes. Nao tem uso, folga nem cor. */
+export interface UnbudgetedSpendRow {
+  categoryId: string;
+  /** Realizado (`posted`), em modulo. */
+  spentCents: Cents;
+  /** Previsto a realizar (`planned`), em modulo. */
+  upcomingCents: Cents;
+  /** `spentCents + upcomingCents`. */
+  expectedCents: Cents;
+}
+
+/**
+ * O que foi gasto (ou esta previsto) em categoria SEM linha de orcamento no mes.
+ *
+ * Existe porque `budgetStatus` so devolve linha para quem tem orcamento: sem isto, um
+ * mes sem orcamento salvo aparecia como "nenhuma despesa" com milhares de reais gastos.
+ * Ausencia de orcamento NAO e orcamento zero: aqui nao ha `usageBp`, folga nem cor, e a
+ * categoria nunca conta como "estourou" (decisao em STATUS: `usage: null`).
+ *
+ * Mesma agregacao de `budgetStatus`: saida negativa, cada parcela por `max(0, -soma)`
+ * SEPARADA (§14). So sai categoria com esperado > 0: estorno que zera o gasto nao gera
+ * linha. `allowedCategoryIds`, quando informado, restringe as categorias (as orcaveis);
+ * ausente, vale toda categoria que aparecer. Ordem: primeira aparicao em `spent`, depois
+ * em `upcoming`.
+ */
+export function unbudgetedSpend(input: {
+  budgetedCategoryIds: readonly string[];
+  spent: readonly { categoryId: string; amountCents: Cents }[];
+  upcoming?: readonly { categoryId: string; amountCents: Cents }[];
+  allowedCategoryIds?: readonly string[];
+}): UnbudgetedSpendRow[] {
+  const budgeted = new Set(input.budgetedCategoryIds);
+  const allowed = input.allowedCategoryIds === undefined ? null : new Set(input.allowedCategoryIds);
+  const upcoming = input.upcoming ?? [];
+  const spentByCategory = sumByCategory(input.spent);
+  const upcomingByCategory = sumByCategory(upcoming);
+
+  const rows: UnbudgetedSpendRow[] = [];
+  const seen = new Set<string>();
+  for (const { categoryId } of [...input.spent, ...upcoming]) {
+    if (seen.has(categoryId)) continue;
+    seen.add(categoryId);
+    if (budgeted.has(categoryId)) continue;
+    if (allowed !== null && !allowed.has(categoryId)) continue;
+    const spentCents = outflow(spentByCategory.get(categoryId));
+    const upcomingCents = outflow(upcomingByCategory.get(categoryId));
+    const expectedCents = addCents(spentCents, upcomingCents);
+    if (expectedCents === 0) continue;
+    rows.push({ categoryId, spentCents, upcomingCents, expectedCents });
+  }
+  return rows;
+}
+
+/** Despesa do mes que nao cabe em nenhuma linha do Orcamento. */
+export interface OutsideSpend {
+  spentCents: Cents;
+  upcomingCents: Cents;
+  expectedCents: Cents;
+}
+
+/**
+ * Despesa FORA das categorias orcaveis: sem categoria (`categoryId` nulo), em categoria
+ * raiz ou de natureza que nao recebe orcamento. Nenhuma linha da tela mostra esse
+ * dinheiro, entao o total precisa dizer quanto e — senao "R$ X gastos" fica menor que
+ * a despesa do mes sem explicacao (achado da Lupa, Lote 1).
+ *
+ * Mesma agregacao do resto do modulo: por categoria, cada parcela por `max(0, -soma)`
+ * (§14), e so depois a soma. Os lancamentos sem categoria formam UM grupo.
+ */
+export function spendOutsideCategories(input: {
+  spent: readonly { categoryId: string | null; amountCents: Cents }[];
+  upcoming?: readonly { categoryId: string | null; amountCents: Cents }[];
+  allowedCategoryIds: readonly string[];
+}): OutsideSpend {
+  const allowed = new Set(input.allowedCategoryIds);
+  const total = (entries: readonly { categoryId: string | null; amountCents: Cents }[]): Cents => {
+    const byGroup = new Map<string | null, Cents>();
+    for (const entry of entries) {
+      if (entry.categoryId !== null && allowed.has(entry.categoryId)) continue;
+      byGroup.set(entry.categoryId, addCents(byGroup.get(entry.categoryId) ?? cents(0), entry.amountCents));
+    }
+    return addCents(...[...byGroup.values()].map((net) => outflow(net)));
+  };
+  const spentCents = total(input.spent);
+  const upcomingCents = total(input.upcoming ?? []);
+  return { spentCents, upcomingCents, expectedCents: addCents(spentCents, upcomingCents) };
+}
+
+/** Total do mes no topo do Orcamento: o orcado contra o esperado, e o que ficou fora dele. */
+export interface BudgetMonthTotals {
+  /** Soma das categorias COM orcamento (orcamento zero e limite explicito e entra). */
+  budgeted: {
+    plannedCents: Cents;
+    spentCents: Cents;
+    upcomingCents: Cents;
+    expectedCents: Cents;
+    remainingCents: Cents;
+    /** `null` quando o orcado soma zero. */
+    usageBp: BasisPoints | null;
+    /** `null` so quando NENHUMA categoria tem orcamento: sem orcamento nao ha cor. */
+    light: BudgetLight | null;
+  };
+  /** Soma das categorias SEM orcamento: fora da barra, do uso e da cor. */
+  unbudgeted: {
+    spentCents: Cents;
+    upcomingCents: Cents;
+    expectedCents: Cents;
+  };
+  /** Despesa fora das categorias orcaveis (`spendOutsideCategories`): em nenhuma linha da tela. */
+  outside: OutsideSpend;
+}
+
+/**
+ * Soma as linhas do mes. A cor e o uso do total sao a MESMA conta do semaforo por
+ * categoria (`budgetStatus` sobre uma linha agregada), nunca uma comparacao refeita.
+ * O gasto sem orcamento sai separado e NAO entra no uso: somar ao esperado faria o
+ * total "estourar" por categoria que ninguem orcou.
+ */
+export function budgetMonthTotals(input: {
+  rows: readonly { plannedCents: Cents; spentCents: Cents; upcomingCents: Cents }[];
+  unbudgeted: readonly { spentCents: Cents; upcomingCents: Cents }[];
+  /** Ausente = nada fora das categorias. */
+  outside?: OutsideSpend;
+  warnBp: BasisPoints;
+}): BudgetMonthTotals {
+  const warnBp = assertWarnBp(input.warnBp);
+  const plannedCents = addCents(...input.rows.map((row) => row.plannedCents));
+  const spentCents = addCents(...input.rows.map((row) => row.spentCents));
+  const upcomingCents = addCents(...input.rows.map((row) => row.upcomingCents));
+  const unbudgetedSpent = addCents(...input.unbudgeted.map((row) => row.spentCents));
+  const unbudgetedUpcoming = addCents(...input.unbudgeted.map((row) => row.upcomingCents));
+
+  const [status] = budgetStatus({
+    budgets: [{ categoryId: 'total', plannedCents }],
+    spent: [{ categoryId: 'total', amountCents: cents(-spentCents) }],
+    upcoming: [{ categoryId: 'total', amountCents: cents(-upcomingCents) }],
+    warnBp,
+  });
+  if (status === undefined) throw new Error('budgetStatus nao devolveu a linha agregada.');
+
+  return {
+    budgeted: {
+      plannedCents,
+      spentCents: status.spentCents,
+      upcomingCents: status.upcomingCents,
+      expectedCents: status.expectedCents,
+      remainingCents: status.remainingCents,
+      usageBp: status.usageBp,
+      light: input.rows.length === 0 ? null : status.light,
+    },
+    unbudgeted: {
+      spentCents: unbudgetedSpent,
+      upcomingCents: unbudgetedUpcoming,
+      expectedCents: addCents(unbudgetedSpent, unbudgetedUpcoming),
+    },
+    outside: input.outside ?? { spentCents: cents(0), upcomingCents: cents(0), expectedCents: cents(0) },
+  };
+}
+
 function assertMonths(value: number): number {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw new RangeError(

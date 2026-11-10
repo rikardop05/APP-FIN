@@ -36,6 +36,39 @@ const rowSchema = z.object({
   light: z.enum(['green', 'yellow', 'red']),
 });
 
+/** Categoria SEM orçamento salvo, com gasto ou previsão no mês: não tem uso, folga nem cor. */
+const unbudgetedSchema = z.object({
+  categoryId: z.string().uuid(),
+  spentCents: centsSchema,
+  upcomingCents: centsSchema,
+  expectedCents: centsSchema,
+});
+
+/** Total do mês, somado pelo motor (`budgetMonthTotals`): a tela não soma linha. */
+const totalsSchema = z.object({
+  budgeted: z.object({
+    plannedCents: centsSchema,
+    spentCents: centsSchema,
+    upcomingCents: centsSchema,
+    expectedCents: centsSchema,
+    remainingCents: centsSchema,
+    usageBp: basisPointsSchema.nullable(),
+    /** `null` = nenhuma categoria com orçamento no mês. */
+    light: z.enum(['green', 'yellow', 'red']).nullable(),
+  }),
+  unbudgeted: z.object({
+    spentCents: centsSchema,
+    upcomingCents: centsSchema,
+    expectedCents: centsSchema,
+  }),
+  /** Despesa fora das categorias orçáveis (sem categoria, raiz, natureza não orçável). */
+  outside: z.object({
+    spentCents: centsSchema,
+    upcomingCents: centsSchema,
+    expectedCents: centsSchema,
+  }),
+});
+
 const categorySchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -48,6 +81,8 @@ export const budgetMonthResponseSchema = z.object({
   period: competenceSchema,
   warnBp: basisPointsSchema,
   rows: z.array(rowSchema),
+  unbudgeted: z.array(unbudgetedSchema),
+  totals: totalsSchema,
   /** Todas as folhas orçáveis, com ou sem orçamento: a tela monta o formulário com elas. */
   categories: z.array(categorySchema),
 });
@@ -63,4 +98,5 @@ export const apiErrorSchema = z.object({ error: z.string() });
 export type BudgetMonthResponse = z.infer<typeof budgetMonthResponseSchema>;
 export type BudgetRowView = BudgetMonthResponse['rows'][number];
 export type BudgetCategoryView = BudgetMonthResponse['categories'][number];
+export type BudgetUnbudgetedView = BudgetMonthResponse['unbudgeted'][number];
 export type SuggestionResponse = z.infer<typeof suggestionResponseSchema>;

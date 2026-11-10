@@ -351,13 +351,82 @@ describe.skipIf(process.env.DATABASE_URL === undefined)('orçamento por categori
           { categoryId: a.mercado, plannedCents: cents(1000) },
         ]);
         await a.tx('2026-10', a.mercado, -5000);
-        expect((await m.budgets.getBudgetMonth(b.householdId, '2026-10')).rows).toEqual([]);
+        await a.tx('2026-10', a.lazer, -700); // sem orçamento: também não pode vazar
+        const other = await m.budgets.getBudgetMonth(b.householdId, '2026-10');
+        expect(other.rows).toEqual([]);
+        expect(other.unbudgeted).toEqual([]);
+        expect(other.totals.unbudgeted.expectedCents).toBe(0);
+        expect(other.totals.outside.expectedCents).toBe(0);
         expect(await m.budgets.listOverBudget(b.householdId, '2026-10')).toEqual([]);
       } finally {
         await cleanup(m, b.householdId);
       }
     } finally {
       await cleanup(m, a.householdId);
+    }
+  });
+
+  it('mês SEM orçamento salvo: o gasto aparece em `unbudgeted` e no total, sem cor e sem "estourado"', async () => {
+    const m = await modules();
+    const s = await seed(m);
+    try {
+      await s.tx('2026-11', s.mercado, -400000); // realizado
+      await s.tx('2026-11', s.mercado, -115577); // realizado: 4.000,00 + 1.155,77 = 5.155,77
+      await s.tx('2026-11', s.lazer, -30000, { status: 'planned' }); // só previsto
+      await s.tx('2026-11', s.aporte, -99999); // folha de investimento: não é orçável, fora
+      await s.tx('2026-11', s.root, -88888); // raiz: não é orçável, fora
+      await s.tx('2026-11', null, -77777); // sem categoria: fora
+      await s.tx('2026-11', s.mercado, -66666, { kind: 'transfer' }); // RC-03: fora
+      await s.tx('2026-10', s.mercado, -55555); // outra competência: fora
+
+      const month = await m.budgets.getBudgetMonth(s.householdId, '2026-11');
+      expect(month.rows).toEqual([]);
+      // Ordem da tela: nome dentro da raiz (Lazer antes de Mercado).
+      expect(month.unbudgeted).toEqual([
+        { categoryId: s.lazer, spentCents: 0, upcomingCents: 30000, expectedCents: 30000 },
+        { categoryId: s.mercado, spentCents: 515577, upcomingCents: 0, expectedCents: 515577 },
+      ]);
+      expect(month.totals.unbudgeted).toEqual({ spentCents: 515577, upcomingCents: 30000, expectedCents: 545577 });
+      // Fora das categorias orçáveis: aporte 999,99 + raiz 888,88 + sem categoria 777,77 = 2.666,64.
+      // A transferência e a outra competência não entram em lugar nenhum.
+      expect(month.totals.outside).toEqual({ spentCents: 266664, upcomingCents: 0, expectedCents: 266664 });
+      expect(month.totals.budgeted).toMatchObject({ plannedCents: 0, expectedCents: 0, usageBp: null, light: null });
+      // Ausência de orçamento nunca é "estourou".
+      expect(await m.budgets.listOverBudget(s.householdId, '2026-11')).toEqual([]);
+    } finally {
+      await cleanup(m, s.householdId);
+    }
+  });
+
+  it('mês com orçamento em UMA categoria: a outra, com gasto, sai em `unbudgeted` e fica fora do uso do total', async () => {
+    const m = await modules();
+    const s = await seed(m);
+    try {
+      await m.budgets.replaceBudgets(s.householdId, '2026-11', [
+        { categoryId: s.mercado, plannedCents: cents(100000) },
+      ]);
+      await s.tx('2026-11', s.mercado, -50000);
+      await s.tx('2026-11', s.lazer, -900000);
+
+      const month = await m.budgets.getBudgetMonth(s.householdId, '2026-11');
+      expect(month.rows.map((row) => row.categoryId)).toEqual([s.mercado]);
+      expect(month.unbudgeted).toEqual([
+        { categoryId: s.lazer, spentCents: 900000, upcomingCents: 0, expectedCents: 900000 },
+      ]);
+      // 50.000 / 100.000 = 50% verde; os 9.000,00 sem orçamento não entram no uso.
+      expect(month.totals.budgeted).toMatchObject({ expectedCents: 50000, usageBp: 5000, light: 'green' });
+      expect(month.totals.unbudgeted.expectedCents).toBe(900000);
+
+      // Passando a categoria a ter orçamento, ela sai de `unbudgeted` (nunca nos dois lugares).
+      await m.budgets.replaceBudgets(s.householdId, '2026-11', [
+        { categoryId: s.mercado, plannedCents: cents(100000) },
+        { categoryId: s.lazer, plannedCents: cents(0) },
+      ]);
+      const after = await m.budgets.getBudgetMonth(s.householdId, '2026-11');
+      expect(after.unbudgeted).toEqual([]);
+      expect(after.rows.find((row) => row.categoryId === s.lazer)).toMatchObject({ light: 'red', usageBp: null });
+    } finally {
+      await cleanup(m, s.householdId);
     }
   });
 });
