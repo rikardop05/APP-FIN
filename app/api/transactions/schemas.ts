@@ -27,6 +27,14 @@ const optionalNullableUuid = z.string().uuid().nullable().optional();
 export const transactionIdSchema = z.string().uuid();
 
 export const transactionFiltersSchema = z.object({
+  /** Mês da lista (competência `YYYY-MM`); ausente = todos os meses. */
+  competence: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Mês inválido.')
+    .optional(),
+  /** Filtros rápidos da tela. */
+  direction: z.enum(['income', 'expense']).optional(),
+  origin: z.enum(['card', 'account']).optional(),
   from: isoDateSchema.optional(),
   to: isoDateSchema.optional(),
   categoryId: z.string().uuid().optional(),

@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
 import { categoryKindFailure } from './category-kind-failure';
 import {
+  countUncategorized,
   createManualTransaction,
+  getMonthSummary,
   InvalidTransactionReferenceError,
   listTransactionFilterOptions,
   listTransactionsWithSettlement,
@@ -17,6 +19,9 @@ import {
 function filtersFromRequest(request: Request) {
   const params = new URL(request.url).searchParams;
   return transactionFiltersSchema.safeParse({
+    competence: params.get('competence') || undefined,
+    direction: params.get('direction') || undefined,
+    origin: params.get('origin') || undefined,
     from: params.get('from') || undefined,
     to: params.get('to') || undefined,
     categoryId: params.get('categoryId') || undefined,
@@ -35,11 +40,16 @@ export async function GET(request: Request) {
     if (!filters.success) {
       return NextResponse.json({ error: 'Filtros inválidos.' }, { status: 400 });
     }
-    const [{ items: transactions, settlement }, options] = await Promise.all([
+    // `summary` (Receitas, Despesas, Sobra do mês, do motor do Painel) só existe com um mês
+    // escolhido, e é do mês INTEIRO: os outros filtros não entram nele. `uncategorizedCount`
+    // é do household, não do filtro (botão "Revisar N sem categoria").
+    const [{ items: transactions, settlement }, options, summary, uncategorizedCount] = await Promise.all([
       listTransactionsWithSettlement(householdId, filters.data),
       listTransactionFilterOptions(householdId),
+      filters.data.competence === undefined ? null : getMonthSummary(householdId, filters.data.competence),
+      countUncategorized(householdId),
     ]);
-    return NextResponse.json({ transactions, options, settlement });
+    return NextResponse.json({ transactions, options, settlement, summary, uncategorizedCount });
   } catch (error) {
     if (error instanceof SessionMissingError) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });

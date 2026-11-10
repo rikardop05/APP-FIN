@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
+import { toCompetence } from '@/lib/date';
 import { cents } from '@/lib/money';
-import { Plus, Tags, Wand2 } from 'lucide-react';
-import { Button, EmptyState, LoadingBlock, PageHeader, SeloLegend, ShortcutLegend } from '@/components/ui-kit';
+import { ChevronLeft, ChevronRight, Plus, Tags, Wand2 } from 'lucide-react';
+import { competenceLong } from '@/components/cashflow/labels';
+import { Button, EmptyState, LoadingBlock, Money, MonthPicker, Picote, SeloLegend, ShortcutLegend } from '@/components/ui-kit';
 import { TransactionFilters } from './transaction-filters';
 import { applyDelayMs, EMPTY_FILTERS, hasActiveFilters, type TransactionFilterValues } from './filter-presentation';
 import {
@@ -37,6 +39,18 @@ import {
 import { TransactionList, type TransactionEditValues } from './transaction-list';
 import { listContentState, sortForDisplay } from './list-presentation';
 import { matchesSettlement, pruneSelection } from './payment-situation';
+import {
+  ALL_MONTHS,
+  competenceParam,
+  countLabel,
+  reviewLabel,
+  shiftMonth,
+  surplusLabel,
+  toggleAllMonths,
+  viewHref,
+  type InitialView,
+  type MonthView,
+} from './month-view';
 
 const emptyOptions: TransactionOptions = {
   categories: [],
@@ -79,8 +93,16 @@ async function readJson<T>(response: Response, schema: { safeParse: (value: unkn
   return result.data;
 }
 
-function queryString(filters: TransactionFilterValues): string {
+/**
+ * A consulta que os filtros pedem. O mês (`competence`) entra à parte: é navegação, não filtro, e a
+ * comparação "os filtros mudaram?" (`queryString(current) === queryString(filters)`) não depende dele.
+ */
+function queryString(filters: TransactionFilterValues, month: MonthView = ALL_MONTHS): string {
   const params = new URLSearchParams();
+  const competence = competenceParam(month);
+  if (competence !== undefined) params.set('competence', competence);
+  if (filters.direction) params.set('direction', filters.direction);
+  if (filters.origin) params.set('origin', filters.origin);
   if (filters.from) params.set('from', filters.from);
   if (filters.to) params.set('to', filters.to);
   if (filters.categoryId) params.set('categoryId', filters.categoryId);
@@ -93,17 +115,26 @@ function queryString(filters: TransactionFilterValues): string {
   return value ? `?${value}` : '';
 }
 
-
-/** Deep link do Painel: "N sem categoria" abre `/lancamentos?semCategoria=1` já filtrado e com a caixa de filtros à vista. */
-function deepLinkSemCategoria(): boolean {
-  if (typeof window === 'undefined') return false;
-  return new URLSearchParams(window.location.search).get('semCategoria') === '1';
-}
-
-export function LancamentosScreen({ today }: { today: string }) {
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+/**
+ * Lançamentos por mês (Lote 2, itens 5 a 7).
+ *
+ * `initial` vem da URL, lida no servidor (`initialView`): o mês (`?mes=`) e o deep link do Painel
+ * (`?semCategoria=1`, que abre em todos os meses já filtrado). Assim a primeira consulta já é a certa, sem
+ * depender de `window` na montagem.
+ *
+ * A tela NÃO soma dinheiro: Receitas, Despesas e Sobra vêm de `summary` (o `monthlyKpis` do Painel, do mês
+ * inteiro) e a contagem do botão "Revisar N sem categoria" vem de `uncategorizedCount` (do household).
+ */
+export function LancamentosScreen({ today, initial }: { today: string; initial: InitialView }) {
+  const initialFilters = useMemo(
+    () => (initial.uncategorized ? { ...EMPTY_FILTERS, uncategorized: true } : EMPTY_FILTERS),
+    [initial.uncategorized],
+  );
+  const [month, setMonth] = useState<MonthView>(initial.month);
+  const [filters, setFilters] = useState(initialFilters);
+  const [appliedFilters, setAppliedFilters] = useState(initialFilters);
+  // Vindo do deep link do Painel, o painel de filtros abre à vista (o filtro "não categorizados" mora nele).
+  const [filtersOpen, setFiltersOpen] = useState(initial.uncategorized);
   const [data, setData] = useState<TransactionResponse | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -127,7 +158,7 @@ export function LancamentosScreen({ today }: { today: string }) {
     setError(null);
     setLoadFailed(false);
     try {
-      const response = await fetch(`/api/transactions${queryString(nextFilters)}`, { cache: 'no-store' });
+      const response = await fetch(`/api/transactions${queryString(nextFilters, month)}`, { cache: 'no-store' });
       const result = await readJson(response, transactionResponseSchema);
       setData(result);
       setSelectedIds((previous) => previous.filter((id) => result.transactions.some((row) => row.id === id)));
@@ -138,21 +169,17 @@ export function LancamentosScreen({ today }: { today: string }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [month]);
 
+  // Recarrega quando os filtros aplicados OU o mês mudam (`load` depende do mês).
   useEffect(() => { void load(appliedFilters); }, [appliedFilters, load]);
 
-  // Deep link do Painel ("N sem categoria" → /lancamentos?semCategoria=1): aplica o filtro e abre a
-  // caixa APÓS a montagem (nunca no render inicial, que o servidor monta sem window — hidratação).
-  const deepLinkApplied = useRef(false);
-  useEffect(() => {
-    if (deepLinkApplied.current) return;
-    deepLinkApplied.current = true;
-    if (!deepLinkSemCategoria()) return;
-    setFilters({ ...EMPTY_FILTERS, uncategorized: true });
-    setAppliedFilters({ ...EMPTY_FILTERS, uncategorized: true });
-    setFiltersOpen(true);
-  }, []);
+  /** Troca o mês e põe a escolha na URL (`?mes=`), sem navegação: o F5 e o link copiado abrem o mesmo mês. */
+  function changeMonth(next: MonthView) {
+    if (next === month) return;
+    setMonth(next);
+    window.history.replaceState(null, '', viewHref(next, today, { uncategorized: filters.uncategorized }));
+  }
 
   // Filtros aplicam sozinhos: campos discretos na hora, texto com atraso curto (sem botao Filtrar).
   useEffect(() => {
@@ -417,9 +444,9 @@ export function LancamentosScreen({ today }: { today: string }) {
     setAutoApplyOpened(true);
     if (loadFailed) return;
     if (new URLSearchParams(window.location.search).get('aplicarRegras') !== '1') return;
-    window.history.replaceState(null, '', '/lancamentos');
+    window.history.replaceState(null, '', viewHref(month, today));
     void openApplyAll();
-  }, [loading, loadFailed, autoApplyOpened, openApplyAll]);
+  }, [loading, loadFailed, autoApplyOpened, openApplyAll, month, today]);
 
   async function applyRules(items: { transactionId: string; ruleId: string; categoryId: string }[]) {
     setBusy(true);
@@ -444,63 +471,132 @@ export function LancamentosScreen({ today }: { today: string }) {
   function clearFilters() {
     setFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
-    // A URL acompanha o estado: o deep link ?semCategoria=1 morre ao limpar (F5 não traz de volta).
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('semCategoria') === '1') {
-      window.history.replaceState(null, '', '/lancamentos');
-    }
+    // A URL acompanha o estado: o deep link ?semCategoria=1 morre ao limpar (F5 não traz de volta); o mês fica.
+    window.history.replaceState(null, '', viewHref(month, today));
   }
+
+  const filtered = hasActiveFilters(filters);
+  // O resumo é do mês INTEIRO (motor do Painel). Com filtro ativo ele some: mostrar o mês inteiro sobre uma
+  // lista filtrada pareceria o total do filtro.
+  const summary = !filtered && data !== null && data.summary !== null && data.summary.competence === month ? data.summary : null;
+  // Do household, não do filtro: sem pendência, o botão de revisão não existe (nem em "Mais ações").
+  const review = reviewLabel(data?.uncategorizedCount ?? 0);
+  const monthName = month === ALL_MONTHS ? null : competenceLong(month);
 
   return (
     <>
-      <PageHeader
-        title="Lançamentos"
-        description="Receitas e despesas da família, filtráveis por período, categoria, cartão ou conta, responsável e texto."
-        actions={
-          (() => {
-            // O hero acompanha o caso dominante (impeccable distill, P3): com linhas sem categoria
-            // NO FILTRO APLICADO em vista, a porta é a revisão; sem, é o lançamento novo. As
-            // demais ações descem para o apoio do "Mais ações".
-            const dominantAction = rows.some((row) => row.categoryName === null) ? 'review' : 'manual';
-            return (
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row [&>*]:w-full sm:[&>*]:w-auto">
-                {dominantAction === 'review' ? (
-                  <Link
-                    href="/lancamentos/revisar"
-                    className="inline-flex min-h-11 items-center justify-center bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 sm:min-h-9"
-                  >
-                    Revisar sem categoria
+      {/*
+        Cabeçalho próprio (não o PageHeader): no celular a descrição some e as ações ficam numa linha só
+        ("Novo lançamento" e "Mais ações"), para a lista começar mais cedo (Lote 2, item 6).
+      */}
+      <header className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Lançamentos</h1>
+            <p className="hidden text-sm text-muted-foreground sm:block">
+              Receitas e despesas da família, mês a mês, filtráveis por tipo, origem, responsável e texto.
+            </p>
+          </div>
+          <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto">
+            <Button className="min-w-0 flex-1 sm:flex-none" onClick={() => setDialog({ kind: 'manual' })}>
+              <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
+              Novo lançamento
+            </Button>
+            {/* Celular: o resto das ações num menu que abre POR CIMA da tela (não empurra a lista). */}
+            <details className="relative shrink-0 sm:hidden">
+              <summary className="sem-marcador inline-flex h-11 cursor-pointer list-none items-center justify-center border border-input bg-card px-4 text-sm font-medium hover:bg-secondary/60">
+                Mais ações
+              </summary>
+              <div className="absolute right-0 top-full z-30 mt-1 flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-1 border border-border bg-card p-1 shadow-lg">
+                {review !== null ? (
+                  <Link href="/lancamentos/revisar" className="inline-flex min-h-11 items-center px-3 text-sm font-medium hover:bg-muted">
+                    {review}
                   </Link>
-                ) : (
-                  <Button className="order-first sm:order-none" onClick={() => setDialog({ kind: 'manual' })}><Plus className="mr-2 h-4 w-4" aria-hidden="true" />Novo lançamento</Button>
-                )}
-                <details className="relative sm:hidden">
-                  <summary className="sem-marcador inline-flex min-h-11 cursor-pointer list-none items-center justify-center border border-border px-4 text-sm font-medium hover:bg-muted">Mais ações</summary>
-                  <div className="mt-1 flex flex-col gap-1 border border-border bg-card p-1">
-                    {dominantAction === 'review' ? (
-                      <button type="button" onClick={() => setDialog({ kind: 'manual' })} className="inline-flex min-h-11 items-center px-3 text-left text-sm font-medium hover:bg-muted">Novo lançamento</button>
-                    ) : (
-                      <Link href="/lancamentos/revisar" className="inline-flex min-h-11 items-center px-3 text-sm font-medium hover:bg-muted">Revisar sem categoria</Link>
-                    )}
-                    <button type="button" onClick={() => void openApplyAll()} disabled={busy} className="inline-flex min-h-11 items-center px-3 text-left text-sm font-medium hover:bg-muted disabled:opacity-50">Aplicar regras aos não categorizados</button>
-                  </div>
-                </details>
-                {dominantAction === 'review' ? (
-                  <Button variant="outline" className="hidden sm:inline-flex" onClick={() => setDialog({ kind: 'manual' })}><Plus className="mr-2 h-4 w-4" aria-hidden="true" />Novo lançamento</Button>
-                ) : (
-                  <Link href="/lancamentos/revisar" className="hidden min-h-9 items-center justify-center border border-border px-4 text-sm font-medium hover:bg-muted sm:inline-flex">Revisar sem categoria</Link>
-                )}
-                <Button variant="outline" className="hidden sm:inline-flex" onClick={() => void openApplyAll()} disabled={busy}><Wand2 className="mr-2 h-4 w-4" aria-hidden="true" />Aplicar regras aos não categorizados</Button>
+                ) : null}
+                <button type="button" onClick={() => void openApplyAll()} disabled={busy} className="inline-flex min-h-11 items-center px-3 text-left text-sm font-medium hover:bg-muted disabled:opacity-50">
+                  Aplicar regras aos não categorizados
+                </button>
               </div>
-            );
-          })()
-        }
-      />
+            </details>
+            {review !== null ? (
+              <Link
+                href="/lancamentos/revisar"
+                className="hidden h-9 items-center justify-center border border-input bg-card px-4 text-sm font-medium hover:bg-secondary/60 sm:inline-flex"
+              >
+                {review}
+              </Link>
+            ) : null}
+            <Button variant="outline" className="hidden sm:inline-flex" onClick={() => void openApplyAll()} disabled={busy}>
+              <Wand2 className="h-4 w-4" aria-hidden="true" />
+              Aplicar regras aos não categorizados
+            </Button>
+          </div>
+        </div>
+        <Picote />
+      </header>
+
+      {/* Navegação de mês: ‹ mês e ano ›. "Todos os meses" fica aqui a partir de `sm`; no celular, na fila dos filtros rápidos. */}
+      <div className="flex items-center gap-2" role="group" aria-label="Mês dos lançamentos">
+        <Button variant="outline" size="sm" aria-label="Mês anterior" disabled={month === ALL_MONTHS} onClick={() => changeMonth(shiftMonth(month, -1))}>
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+        </Button>
+        <MonthPicker
+          label="Mês dos lançamentos"
+          value={month === ALL_MONTHS ? '' : month}
+          centerYear={Number(toCompetence(today).slice(0, 4))}
+          className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,6rem)] gap-2 sm:max-w-xs"
+          onChange={(value) => changeMonth(value)}
+        />
+        <Button variant="outline" size="sm" aria-label="Próximo mês" disabled={month === ALL_MONTHS} onClick={() => changeMonth(shiftMonth(month, 1))}>
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </Button>
+        <Button
+          variant={month === ALL_MONTHS ? 'primary' : 'outline'}
+          size="sm"
+          className="hidden sm:inline-flex"
+          aria-pressed={month === ALL_MONTHS}
+          onClick={() => changeMonth(toggleAllMonths(month, today))}
+        >
+          Todos os meses
+        </Button>
+      </div>
+
+      {/* Resumo do mês: três números do motor do Painel (`monthlyKpis`), sempre do mês inteiro. */}
+      {summary !== null && monthName !== null ? (
+        <section aria-label={`Resumo de ${monthName}`} className="flex flex-col gap-1 border border-border bg-card px-3 py-2">
+          <dl className="grid grid-cols-3 gap-x-3">
+            <div className="flex min-w-0 flex-col">
+              <dt className="text-xs text-muted-foreground">Receitas</dt>
+              <dd><Money value={summary.incomeCents} sign="never" className="text-base font-semibold text-foreground sm:text-lg" /></dd>
+            </div>
+            <div className="flex min-w-0 flex-col">
+              <dt className="text-xs text-muted-foreground">Despesas</dt>
+              <dd><Money value={summary.expenseCents} sign="never" className="text-base font-semibold text-foreground sm:text-lg" /></dd>
+            </div>
+            <div className="flex min-w-0 flex-col">
+              <dt className="text-xs text-muted-foreground">{surplusLabel(summary.surplusCents)}</dt>
+              <dd><Money value={summary.surplusCents} className="text-base font-semibold text-foreground sm:text-lg" /></dd>
+            </div>
+          </dl>
+          <p className="text-xs text-muted-foreground">
+            Mês inteiro, lançado e previsto<span className="hidden sm:inline">, como no Painel. Aporte, transferência e pagamento de fatura ficam fora</span>.
+          </p>
+        </section>
+      ) : null}
 
       {error ? <div role="alert" className="flex flex-col gap-3 border border-destructive/50 bg-destructive-soft px-4 py-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"><span>{error}</span>{loadFailed ? <Button variant="outline" size="sm" onClick={() => void load(appliedFilters)}>Tentar novamente</Button> : null}</div> : null}
 
       {notice ? <div role="status" className="flex items-center justify-between gap-3 border border-success/50 bg-success-soft px-4 py-3 text-sm text-success"><span>{notice}</span><Button variant="ghost" size="sm" onClick={() => setNotice(null)}>Fechar</Button></div> : null}
 
-      <TransactionFilters value={filters} options={options} open={filtersOpen} onOpenChange={setFiltersOpen} onChange={(value) => setFilters((previous) => ({ ...previous, ...value }))} onClear={clearFilters} />
+      <TransactionFilters
+        value={filters}
+        options={options}
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        onChange={(value) => setFilters((previous) => ({ ...previous, ...value }))}
+        onClear={clearFilters}
+        allMonths={{ pressed: month === ALL_MONTHS, onToggle: () => changeMonth(toggleAllMonths(month, today)) }}
+      />
 
       {selectedIds.length > 0 ? (
         <div className="flex flex-col gap-3 border border-primary/30 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -519,13 +615,30 @@ export function LancamentosScreen({ today }: { today: string }) {
 
       {contentState === 'empty' ? (
         <EmptyState
-          title={hasActiveFilters(filters) ? 'Nenhum lançamento encontrado' : 'Nenhum lançamento ainda'}
-          description={hasActiveFilters(filters) ? 'Ajuste os filtros ou limpe a busca para ver outros lançamentos.' : 'Registre um lançamento manual ou importe uma fatura ou extrato para começar.'}
+          title={
+            hasActiveFilters(filters)
+              ? 'Nenhum lançamento encontrado'
+              : monthName !== null
+                ? `Nenhum lançamento em ${monthName}`
+                : 'Nenhum lançamento ainda'
+          }
+          description={
+            hasActiveFilters(filters)
+              ? `Ajuste os filtros ou limpe a busca para ver outros lançamentos${monthName !== null ? ` de ${monthName}` : ''}.`
+              : monthName !== null
+                ? 'Use ‹ e › para ver outro mês, ou "Todos os meses". Você também pode registrar um lançamento ou importar uma fatura.'
+                : 'Registre um lançamento manual ou importe uma fatura ou extrato para começar.'
+          }
           action={hasActiveFilters(filters) ? { label: 'Limpar filtros', onClick: clearFilters } : { label: 'Novo lançamento', onClick: () => setDialog({ kind: 'manual' }) }}
         />
       ) : contentState === 'list' ? (
         <div className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">{rows.length} lançamento{rows.length === 1 ? '' : 's'} encontrado{rows.length === 1 ? '' : 's'}</p>
+          {/* Com filtro ativo o resumo do mês some; fica só a contagem, dizendo que é do filtro. */}
+          {filtered ? (
+            <p className="text-sm text-muted-foreground">
+              {countLabel(rows.length)} com os filtros atuais. Receitas, despesas e sobra do mês aparecem sem filtro.
+            </p>
+          ) : null}
           <TransactionList rows={rows} today={today} settlement={data?.settlement ?? []} options={options} selectedIds={selectedIds} onToggle={toggleSelection} onToggleAll={toggleAll} onEdit={setEditingId} onRule={openRule} onDelete={(id) => setDialog({ kind: 'delete', transactionId: id })} editingId={editingId} onSaveEdit={saveEdit} onCancelEdit={() => setEditingId(null)} />
         </div>
       ) : null}
@@ -533,6 +646,8 @@ export function LancamentosScreen({ today }: { today: string }) {
       {/* Legenda e atalhos (impeccable clarify): o extenso lidera; a letra vira apoio. */}
       <div className="flex items-start gap-x-6 gap-y-1 border-t border-border pt-1">
         <SeloLegend estados={['Previsto', 'Não categorizado']} />
+        {/* J e K são do teclado: em toque (`pointer: coarse`) a legenda de atalhos não aparece. */}
+        <div className="[@media(pointer:coarse)]:hidden">
         <ShortcutLegend
           atalhos={[
             {
@@ -549,6 +664,7 @@ export function LancamentosScreen({ today }: { today: string }) {
             },
           ]}
         />
+        </div>
       </div>
 
       {dialog?.kind === 'manual' ? <ManualTransactionDialog today={today} options={options} busy={busy} initial={dialog.initial} onClose={() => setDialog(null)} onSubmit={createManual} /> : null}

@@ -10,6 +10,7 @@ import {
   isNull,
   lte,
   or,
+  sql,
 } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { assertCategoryFitsKinds } from './category-kind';
@@ -22,7 +23,8 @@ import type {
   TransactionStatus,
 } from '@/lib/db';
 import { billingPeriodFor } from '@/lib/finance/billing';
-import { toCompetence } from '@/lib/date';
+import { monthlyKpis } from '@/lib/finance/kpis';
+import { toCompetence, type Competence } from '@/lib/date';
 import { listStatementSituations, settlementByCompetence, type CompetenceSettlement } from './card-settlement';
 import type { PaymentKind } from './statement-settlement';
 import {
@@ -33,9 +35,15 @@ import {
   members,
   transactions,
 } from '@/lib/db/schema';
-import type { Cents } from '@/lib/money';
+import { cents, type Cents } from '@/lib/money';
 
 export type TransactionFilters = {
+  /** Mês da lista (`YYYY-MM`): a COMPETÊNCIA, o eixo do app (em cartão, a da fatura). Ausente = todos os meses. */
+  competence?: string;
+  /** Filtro rápido: só receitas (`income`) ou só despesas (`expense`), pelo `kind`. */
+  direction?: 'income' | 'expense';
+  /** Filtro rápido: só lançamento de cartão ou só de conta. */
+  origin?: 'card' | 'account';
   from?: string;
   to?: string;
   categoryId?: string;
@@ -298,6 +306,10 @@ function transactionPredicates(
     eq(transactions.householdId, householdId),
     inArray(transactions.status, COUNTED_STATUSES),
   ];
+  if (filters.competence) predicates.push(eq(transactions.competence, filters.competence));
+  if (filters.direction) predicates.push(eq(transactions.kind, filters.direction));
+  if (filters.origin === 'card') predicates.push(isNotNull(transactions.creditCardId));
+  if (filters.origin === 'account') predicates.push(isNotNull(transactions.accountId));
   if (filters.from) predicates.push(gte(transactions.occurredOn, filters.from));
   if (filters.to) predicates.push(lte(transactions.occurredOn, filters.to));
   if (filters.categoryId) predicates.push(eq(transactions.categoryId, filters.categoryId));
@@ -316,6 +328,82 @@ function transactionPredicates(
     );
   }
   return predicates;
+}
+
+/** Receitas, Despesas e Sobra de um mês, para o resumo no topo de Lançamentos. */
+export type MonthSummary = {
+  competence: Competence;
+  incomeCents: Cents;
+  expenseCents: Cents;
+  surplusCents: Cents;
+};
+
+/**
+ * Resumo do mês de `/lancamentos`: os MESMOS números do Painel, pelo MESMO motor
+ * (`monthlyKpis`) e pelo mesmo recorte do Painel (`getDashboardData`): todo lançamento
+ * do household na competência, `posted` e `planned`. A tela não soma nada.
+ *
+ * É sempre o mês INTEIRO, nunca o filtro: os filtros da lista não entram aqui, e a
+ * tela esconde o resumo quando há filtro ativo (um "total do filtro" seria outra
+ * conta, com outro nome).
+ *
+ * `monthlyKpis` só olha `categoryNature` para a fatia essencial, que este resumo não
+ * usa; sem categoria vai como `non_essential`, o mesmo default do Painel.
+ */
+export async function getMonthSummary(householdId: string, competence: Competence): Promise<MonthSummary> {
+  const rows = await db
+    .select({
+      amountCents: transactions.amountCents,
+      kind: transactions.kind,
+      status: transactions.status,
+      categoryNature: sql<CategoryNature>`COALESCE(${categories.nature}, 'non_essential')`,
+    })
+    .from(transactions)
+    .leftJoin(
+      categories,
+      and(eq(categories.id, transactions.categoryId), eq(categories.householdId, householdId)),
+    )
+    .where(
+      and(
+        eq(transactions.householdId, householdId),
+        eq(transactions.competence, competence),
+        inArray(transactions.status, COUNTED_STATUSES),
+      ),
+    );
+  const kpis = monthlyKpis({
+    competence,
+    transactions: rows.map((row) => ({ ...row, amountCents: safeCents(row.amountCents) })),
+    // Não fazem parte deste resumo; o motor só os repassa.
+    futureInstallmentsCents: cents(0),
+    uncategorizedCount: 0,
+  });
+  return {
+    competence,
+    incomeCents: kpis.incomeCents,
+    expenseCents: kpis.expenseCents,
+    surplusCents: kpis.surplusCents,
+  };
+}
+
+/**
+ * Quantos lançamentos do HOUSEHOLD estão sem categoria, em qualquer mês: o número do
+ * botão "Revisar N sem categoria". Não depende do filtro da lista. Mesmo critério de
+ * "sem categoria" da lista e do Painel (`posted` e `planned`, `category_id` nulo); o
+ * Painel conta só a competência corrente, então os dois batem quando tudo o que falta
+ * categorizar é do mês.
+ */
+export async function countUncategorized(householdId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.householdId, householdId),
+        inArray(transactions.status, COUNTED_STATUSES),
+        isNull(transactions.categoryId),
+      ),
+    );
+  return row?.count ?? 0;
 }
 
 export async function listTransactions(
