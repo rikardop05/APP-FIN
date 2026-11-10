@@ -1,40 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import type { BasisPoints, Cents } from '@/lib/money';
-import { changedCount, monthTotals, saveHint } from './totals';
+import type { Cents } from '@/lib/money';
+import { changedCount, outsideLine, saveHint, totalLine, unbudgetedLine, upcomingLine } from './totals';
 
 const c = (n: number) => n as Cents;
-const warn = 8000 as BasisPoints;
-const row = (planned: number, spent: number, expected: number) => ({ plannedCents: c(planned), spentCents: c(spent), expectedCents: c(expected) });
+/** O formatBRL pode usar espaço não separável depois de `R$`; o teste compara com espaço comum. */
+const plain = (text: string | null) => (text === null ? null : text.replace(/ /g, ' '));
 
-describe('monthTotals', () => {
-  it('soma todas as linhas, inclusive orcamento zero, e calcula o uso', () => {
-    const t = monthTotals([row(100000, 50000, 60000), row(100000, 10000, 20000)], warn);
-    expect(t.plannedCents).toBe(200000);
-    expect(t.expectedCents).toBe(80000);
-    expect(t.spentCents).toBe(60000);
-    expect(t.remainingCents).toBe(120000);
-    expect(t.usageBp).toBe(4000);
-    expect(t.light).toBe('green');
+describe('textos do total do mês', () => {
+  it('com orçamento: esperado de orçado', () => {
+    expect(plain(totalLine({ expectedCents: c(80000), plannedCents: c(200000) }))).toBe(
+      'R$ 800,00 de R$ 2.000,00 orçados',
+    );
   });
-  it('orcamento zero com gasto entra e deixa o total vermelho', () => {
-    const t = monthTotals([row(100000, 0, 0), row(0, 30000, 30000)], warn);
-    expect(t.plannedCents).toBe(100000);
-    expect(t.expectedCents).toBe(30000);
+  it('previsto só aparece quando existe', () => {
+    expect(upcomingLine(c(0))).toBeNull();
+    expect(plain(upcomingLine(c(30000)))).toBe('Mais R$ 300,00 previstos até o fim do mês.');
   });
-  it('amarelo a partir do aviso e vermelho acima de 100%', () => {
-    expect(monthTotals([row(1000, 0, 800)], warn).light).toBe('yellow');
-    expect(monthTotals([row(1000, 0, 1000)], warn).light).toBe('yellow');
-    const over = monthTotals([row(1000, 0, 1001)], warn);
-    expect(over.light).toBe('red');
-    expect(over.remainingCents).toBe(-1);
+  it('gasto fora do orçamento: some quando é zero e abre em realizado e previsto quando há previsão', () => {
+    expect(unbudgetedLine({ spentCents: c(0), upcomingCents: c(0), expectedCents: c(0) })).toBeNull();
+    expect(plain(unbudgetedLine({ spentCents: c(90000), upcomingCents: c(0), expectedCents: c(90000) }))).toBe(
+      'Mais R$ 900,00 em categorias sem orçamento, fora desta barra.',
+    );
+    expect(plain(unbudgetedLine({ spentCents: c(90000), upcomingCents: c(10000), expectedCents: c(100000) }))).toBe(
+      'Mais R$ 1.000,00 em categorias sem orçamento (R$ 900,00 realizados e R$ 100,00 previstos), fora desta barra.',
+    );
   });
-  it('so orcamento zero com gasto fica vermelho sem percentual', () => {
-    const t = monthTotals([row(0, 500, 500)], warn);
-    expect(t.usageBp).toBeNull();
-    expect(t.light).toBe('red');
-  });
-  it('sem linhas nao ha cor', () => {
-    expect(monthTotals([], warn).light).toBeNull();
+});
+
+describe('outsideLine', () => {
+  it('some sem valor e diz quanto ficou fora das categorias', () => {
+    expect(outsideLine({ expectedCents: c(0) })).toBeNull();
+    expect(plain(outsideLine({ expectedCents: c(80000) }))).toBe(
+      'Fora desta conta: R$ 800,00 em despesas sem categoria ou em categoria que não recebe orçamento.',
+    );
   });
 });
 

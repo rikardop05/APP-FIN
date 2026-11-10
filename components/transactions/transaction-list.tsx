@@ -20,7 +20,17 @@ import {
 } from '@/components/ui-kit';
 import type { SeloTone } from '@/components/ui-kit';
 import type { Transaction, TransactionOptions } from './schemas';
-import { amountForInput, signedAmountCents } from './manual-sign';
+import { amountForInput, amountOnKindChange, signedAmountCents } from './manual-sign';
+import {
+  buildEditValues,
+  categoryAfterKindChange,
+  directionChange,
+  editableKindLabel,
+  readEditableKind,
+  showsKindField,
+  type TransactionEditValues,
+} from './edit-values';
+import { EDITABLE_TRANSACTION_KINDS } from '@/lib/db/queries/transactions-editable-kinds';
 import { paymentSituation } from './payment-situation';
 import { commonMarks, groupByCompetence, installmentLabel, isBankText, isIncompleteDescription, rowMarkLabels, rowMarkTone, stripInstallmentSuffix } from './list-presentation';
 
@@ -50,13 +60,7 @@ type TransactionListProps = {
   onCancelEdit: () => void;
 };
 
-export type TransactionEditValues = {
-  occurredOn: string;
-  description: string;
-  amountCents: number;
-  categoryId: string | null;
-  memberId: string | null;
-};
+export type { TransactionEditValues };
 
 /**
  * Talão do canhoto: a parcela (03/10) quando a linha é parcelada com total conhecido, senão a data
@@ -100,6 +104,11 @@ function TransactionEditor({ row, options, onSave, onCancel }: EditorProps) {
   // Descrição incompleta ("NULL" do banco): o campo abre VAZIO, para a pessoa digitar a de verdade.
   const [description, setDescription] = useState(isIncompleteDescription(row.description) ? '' : row.description);
   const [amount, setAmount] = useState(formatBRL(amountForInput(row.amountCents, row.kind)));
+  // Tipo: editável só em lançamento de conta já lançado (a regra é a do servidor).
+  const [kind, setKind] = useState(row.kind);
+  const kindEditable = showsKindField(row);
+  // Despesa e Receita: valor sem sinal (o tipo define a direção). Os demais levam o sinal digitado.
+  const signedInput = kind !== 'expense' && kind !== 'income';
   const [categoryId, setCategoryId] = useState(row.categoryId ?? '');
   const [memberId, setMemberId] = useState(row.memberId ?? '');
   const [busy, setBusy] = useState(false);
@@ -112,24 +121,35 @@ function TransactionEditor({ row, options, onSave, onCancel }: EditorProps) {
       setError('Informe um valor válido.');
       return;
     }
-    // Despesa e Receita: o campo mostra sem sinal e a gravacao reaplica o sinal
-    // do tipo, para editar nao inverter a direcao. Os demais seguem literais.
-    const amountCents = signedAmountCents(parsedAmount, row.kind);
     setBusy(true);
     setError(null);
     try {
-      await onSave({
-        occurredOn,
-        description: description.trim(),
-        amountCents,
-        categoryId: categoryId || null,
-        memberId: memberId || null,
-      });
+      // Despesa e Receita: o campo mostra sem sinal e a gravacao reaplica o sinal
+      // do tipo, para editar nao inverter a direcao. Os demais seguem literais.
+      await onSave(buildEditValues(row, { occurredOn, description, typedAmountCents: parsedAmount, kind, categoryId, memberId }));
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar.');
     } finally {
       setBusy(false);
     }
+  }
+
+  // Trocar para Receita ou Despesa pode inverter a direção (o sinal vem do tipo): avisa antes de salvar.
+  const typedNow = parseBRL(amount);
+  const flipped =
+    kind === row.kind || typedNow === null ? null : directionChange(row.amountCents, signedAmountCents(typedNow, kind));
+
+  /**
+   * Troca de tipo: o valor do campo é reexibido no tipo novo SEM mudar a direção do dinheiro (uma
+   * Despesa de 100 vira Transferência de -100), e a categoria que não cabe mais é limpa.
+   */
+  function changeKind(value: string) {
+    const next = readEditableKind(value);
+    if (next === null || next === kind) return;
+    const typed = parseBRL(amount);
+    if (typed !== null) setAmount(formatBRL(amountOnKindChange(typed, kind, next)));
+    setCategoryId(categoryAfterKindChange(categoryId, next, options.categories));
+    setKind(next);
   }
 
   return (
@@ -146,7 +166,19 @@ function TransactionEditor({ row, options, onSave, onCancel }: EditorProps) {
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-muted-foreground">Valor</span>
           <Input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" required />
+          {kindEditable && signedInput ? <span className="text-xs text-muted-foreground">Use valor negativo para saída.</span> : null}
         </label>
+        {kindEditable ? (
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs text-muted-foreground">Tipo</span>
+            <Select value={kind} onChange={(event) => changeKind(event.target.value)}>
+              {EDITABLE_TRANSACTION_KINDS.map((option) => <option key={option} value={option}>{editableKindLabel[option]}</option>)}
+            </Select>
+            {kind === 'transfer' && row.kind !== 'transfer' ? (
+              <span className="text-xs text-muted-foreground">Transferência não entra em receita nem em despesa: sai da sobra do mês.</span>
+            ) : null}
+          </label>
+        ) : null}
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-xs text-muted-foreground">Categoria</span>
           <Select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
@@ -162,6 +194,15 @@ function TransactionEditor({ row, options, onSave, onCancel }: EditorProps) {
           </Select>
         </label>
       </div>
+      {flipped !== null ? (
+        <p className="border border-border bg-card px-3 py-2 text-sm text-foreground" role="status">
+          <strong className="font-semibold">Atenção: a direção do dinheiro muda.</strong>{' '}
+          {flipped === 'to-inflow'
+            ? 'Este lançamento era uma saída e vai ser gravado como entrada.'
+            : 'Este lançamento era uma entrada e vai ser gravado como saída.'}{' '}
+          O saldo da conta muda junto. Se não é isso, escolha outro tipo.
+        </p>
+      ) : null}
       {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={busy}>Cancelar</Button>

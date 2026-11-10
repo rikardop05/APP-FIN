@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { COUNTED_STATUSES } from './counted-statuses';
 import type { AccountKind, CardBrand } from '@/lib/db';
+import type { IsoDate } from '@/lib/date';
 import { accounts, creditCards, members, statements, transactions } from '@/lib/db/schema';
 import type { Cents } from '@/lib/money';
 import { listCardHolders, type CardHolderItem } from './card-holders';
@@ -34,6 +35,15 @@ export type AccountListItem = {
   openingBalanceCents: Cents;
   openingDate: string;
   active: boolean;
+};
+
+/** Conta com o saldo real em `through` (ver `listAccountsWithBalance`). */
+export type AccountWithBalance = AccountListItem & { currentBalanceCents: Cents };
+
+export type AccountBalances = {
+  accounts: AccountWithBalance[];
+  /** Soma de `currentBalanceCents` das contas ativas: o "Em conta hoje". */
+  totalBalanceCents: Cents;
 };
 
 export type StatementListItem = {
@@ -155,6 +165,60 @@ export async function listAccounts(householdId: string): Promise<AccountListItem
     ...row,
     openingBalanceCents: safeCents(row.openingBalanceCents),
   }));
+}
+
+/**
+ * Contas ativas com o saldo REAL até `through`, inclusive (o "Saldo hoje" de `/cartoes`).
+ *
+ * É a MESMA regra do saldo de abertura do Fluxo (`getCashflowData`, em `./cashflow`), com outro
+ * corte de data: `opening_balance_cents` + todo movimento `posted` da conta, de QUALQUER `kind`
+ * (pagamento de fatura e transferência movem a conta), com dia de caixa
+ * `coalesce(cash_date, occurred_on)` a partir de `opening_date`, inclusive — o saldo informado é
+ * o de INÍCIO desse dia. `planned` não entra (não aconteceu) e `reconciled` também não: é a
+ * previsão já cumprida, e quem moveu a conta foi o `posted` que a cumpriu (decisão nº 7).
+ *
+ * O Fluxo corta em `< dia 1 do mês`; aqui o corte é `<= through`. Com `through` = último dia do
+ * mês anterior, `totalBalanceCents` é igual a `openingBalanceCents` do Fluxo — o teste de
+ * integração trava essa igualdade. Com `through` = hoje, a diferença entre os dois é exatamente
+ * o que já foi lançado na conta do dia 1 até hoje.
+ */
+export async function listAccountsWithBalance(
+  householdId: string,
+  through: IsoDate,
+): Promise<AccountBalances> {
+  const cashDay = sql`coalesce(${transactions.cashDate}, ${transactions.occurredOn})`;
+  const [accountRows, movementRows] = await Promise.all([
+    listAccounts(householdId),
+    db
+      .select({
+        accountId: accounts.id,
+        total: sql<string>`coalesce(sum(${transactions.amountCents}), 0)`,
+      })
+      .from(transactions)
+      .innerJoin(accounts, eq(accounts.id, transactions.accountId))
+      .where(
+        and(
+          eq(transactions.householdId, householdId),
+          eq(accounts.householdId, householdId),
+          eq(accounts.active, true),
+          eq(transactions.status, 'posted'),
+          sql`${cashDay} >= ${accounts.openingDate}`,
+          sql`${cashDay} <= ${through}::date`,
+        ),
+      )
+      .groupBy(accounts.id),
+  ]);
+
+  const movementByAccount = new Map(movementRows.map((row) => [row.accountId, safeCents(row.total)]));
+  let total = 0;
+  const withBalance = accountRows.map((account) => {
+    const currentBalanceCents = safeCents(
+      account.openingBalanceCents + (movementByAccount.get(account.id) ?? 0),
+    );
+    total += currentBalanceCents;
+    return { ...account, currentBalanceCents };
+  });
+  return { accounts: withBalance, totalBalanceCents: safeCents(total) };
 }
 
 export async function listMembers(householdId: string): Promise<MemberListItem[]> {

@@ -37,9 +37,14 @@ import type { CategoryNature } from '@/lib/db/enums';
 import { budgets, categories, householdSettings, transactions } from '@/lib/db/schema';
 import { addCompetence, type Competence } from '@/lib/date';
 import {
+  budgetMonthTotals,
   budgetStatus,
+  spendOutsideCategories,
   suggestBudgetFromHistory,
+  unbudgetedSpend,
+  type BudgetMonthTotals,
   type BudgetStatusRow,
+  type UnbudgetedSpendRow,
 } from '@/lib/finance/budget';
 import { basisPoints, cents, type BasisPoints, type Cents } from '@/lib/money';
 
@@ -70,7 +75,15 @@ export interface BudgetMonthRow extends BudgetStatusRow {
 export interface BudgetMonth {
   period: Competence;
   warnBp: BasisPoints;
+  /** Categorias COM orçamento salvo no mês. */
   rows: BudgetMonthRow[];
+  /**
+   * Folhas orçáveis SEM orçamento salvo que têm gasto ou previsão no mês. Sem uso, folga
+   * nem cor: ausência de orçamento não é "estourou". Mesma ordem das categorias da tela.
+   */
+  unbudgeted: UnbudgetedSpendRow[];
+  /** Total do mês (do motor): o orçado contra o esperado, e o gasto fora do orçamento. */
+  totals: BudgetMonthTotals;
 }
 
 export interface OverBudgetItem {
@@ -143,17 +156,29 @@ export async function listBudgetableCategories(householdId: string): Promise<Bud
 }
 
 type SpentRow = { categoryId: string; amountCents: Cents };
+type ExpenseRow = { categoryId: string | null; amountCents: Cents };
+
+/** Só as linhas com categoria: o que alimenta as linhas do orçamento. */
+function categorized(rows: readonly ExpenseRow[]): SpentRow[] {
+  return rows.flatMap((row) =>
+    row.categoryId === null ? [] : [{ categoryId: row.categoryId, amountCents: row.amountCents }],
+  );
+}
 
 /**
- * Despesa por categoria em UMA competência (`expense`, categorizada), de um status:
- * `posted` é o REALIZADO, `planned` o PREVISTO A REALIZAR. A soma é com sinal (saída
- * negativa); o piso em zero é do motor, separado para cada parcela.
+ * Despesa por categoria em UMA competência (`expense`), de um status: `posted` é o
+ * REALIZADO, `planned` o PREVISTO A REALIZAR. A soma é com sinal (saída negativa); o piso
+ * em zero é do motor, separado para cada parcela.
+ *
+ * Vem TAMBÉM o grupo sem categoria (`categoryId` nulo): ele não entra em linha nenhuma do
+ * orçamento (`categorized`), mas o total do mês precisa dizer quanto ficou de fora
+ * (`spendOutsideCategories`).
  */
 async function readExpense(
   householdId: string,
   competence: Competence,
   status: 'posted' | 'planned',
-): Promise<SpentRow[]> {
+): Promise<ExpenseRow[]> {
   const rows = await db
     .select({
       categoryId: transactions.categoryId,
@@ -166,13 +191,10 @@ async function readExpense(
         eq(transactions.competence, competence),
         eq(transactions.kind, 'expense'),
         eq(transactions.status, status),
-        isNotNull(transactions.categoryId),
       ),
     )
     .groupBy(transactions.categoryId);
-  return rows.flatMap((row) =>
-    row.categoryId === null ? [] : [{ categoryId: row.categoryId, amountCents: cents(Number(row.total)) }],
-  );
+  return rows.map((row) => ({ categoryId: row.categoryId, amountCents: cents(Number(row.total)) }));
 }
 
 async function readWarnBp(householdId: string): Promise<BasisPoints> {
@@ -185,9 +207,21 @@ async function readWarnBp(householdId: string): Promise<BasisPoints> {
   return basisPoints(row.budgetWarnBp);
 }
 
-/** Orçamento do mês: semáforo (do motor) sobre o esperado = realizado + previsto (decisão 10b). */
-export async function getBudgetMonth(householdId: string, period: Competence): Promise<BudgetMonth> {
-  const [budgetRows, spent, upcoming, warnBp] = await Promise.all([
+/**
+ * Orçamento do mês: semáforo (do motor) sobre o esperado = realizado + previsto (decisão 10b),
+ * mais o gasto das categorias SEM orçamento (`unbudgeted`) e o total (`totals`).
+ *
+ * `budgetable` são as folhas orçáveis (a lista, ou a leitura em andamento); quem já as leu
+ * (a rota) passa, para não ler duas vezes. O gasto sem orçamento (`unbudgeted`) é restrito a
+ * elas: são as linhas que a tela consegue mostrar. O que cai fora delas (sem categoria, raiz,
+ * natureza não orçável) sai somado em `totals.outside`.
+ */
+export async function getBudgetMonth(
+  householdId: string,
+  period: Competence,
+  budgetable?: BudgetableCategory[] | Promise<BudgetableCategory[]>,
+): Promise<BudgetMonth> {
+  const [budgetRows, allSpent, allUpcoming, warnBp, budgetableCategories] = await Promise.all([
     db
       .select({
         categoryId: budgets.categoryId,
@@ -201,7 +235,11 @@ export async function getBudgetMonth(householdId: string, period: Competence): P
     readExpense(householdId, period, 'posted'),
     readExpense(householdId, period, 'planned'),
     readWarnBp(householdId),
+    budgetable ?? listBudgetableCategories(householdId),
   ]);
+
+  const spent = categorized(allSpent);
+  const upcoming = categorized(allUpcoming);
 
   const rootNames = await rootNameMap(
     householdId,
@@ -222,10 +260,29 @@ export async function getBudgetMonth(householdId: string, period: Competence): P
     warnBp,
   });
 
+  // Ordem da tela (raiz, depois nome): a de `listBudgetableCategories`. O motor devolve na
+  // ordem de aparição no banco; reordenar é apresentação, não conta.
+  const position = new Map(budgetableCategories.map((category, index) => [category.id, index]));
+  const budgetableIds = budgetableCategories.map((category) => category.id);
+  // Categoria com orçamento salvo que deixou de ser orçável continua sendo linha: não é "fora".
+  const outside = spendOutsideCategories({
+    spent: allSpent,
+    upcoming: allUpcoming,
+    allowedCategoryIds: [...budgetableIds, ...ordered.map((row) => row.categoryId)],
+  });
+  const unbudgeted = unbudgetedSpend({
+    budgetedCategoryIds: ordered.map((row) => row.categoryId),
+    spent,
+    upcoming,
+    allowedCategoryIds: budgetableIds,
+  }).sort((a, b) => (position.get(a.categoryId) ?? 0) - (position.get(b.categoryId) ?? 0));
+
   const byId = new Map(ordered.map((row) => [row.categoryId, row]));
   return {
     period,
     warnBp,
+    unbudgeted,
+    totals: budgetMonthTotals({ rows: status, unbudgeted, outside, warnBp }),
     rows: status.map((row) => {
       const meta = byId.get(row.categoryId);
       return {

@@ -3,6 +3,8 @@ import { requireSession, SessionMissingError } from '@/lib/auth/session';
 import { categoryKindFailure } from '../category-kind-failure';
 import {
   InvalidTransactionReferenceError,
+  TransactionKindNotEditableError,
+  TransactionKindSignError,
   TransactionNotFoundError,
   updateTransaction,
 } from '@/lib/db/queries/transactions';
@@ -38,6 +40,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     const kindFailure = categoryKindFailure(error);
     if (kindFailure !== null) {
       return NextResponse.json({ error: kindFailure.error }, { status: kindFailure.status });
+    }
+    if (error instanceof TransactionKindNotEditableError || error instanceof TransactionKindSignError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (error instanceof InvalidTransactionReferenceError) {
       return NextResponse.json({ error: 'Categoria ou responsável inválido.' }, { status: 400 });

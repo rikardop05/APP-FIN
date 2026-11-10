@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
+import { todayInSaoPaulo } from '@/app/_lib/today';
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
 import {
   createAccount,
-  listAccounts,
+  listAccountsWithBalance,
   type AccountMutation,
 } from '@/lib/db/queries/cards';
 import { accountBodySchema } from './schemas';
@@ -10,7 +11,7 @@ import { accountBodySchema } from './schemas';
 export async function GET() {
   try {
     const { householdId } = await requireSession();
-    return NextResponse.json({ accounts: await listAccounts(householdId) });
+    return NextResponse.json(await listAccountsWithBalance(householdId, todayInSaoPaulo()));
   } catch (error) {
     if (error instanceof SessionMissingError) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     }
     const input: AccountMutation = result.data;
     await createAccount(householdId, input);
-    return NextResponse.json({ accounts: await listAccounts(householdId) }, { status: 201 });
+    return NextResponse.json(await listAccountsWithBalance(householdId, todayInSaoPaulo()), { status: 201 });
   } catch (error) {
     if (error instanceof SessionMissingError) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });

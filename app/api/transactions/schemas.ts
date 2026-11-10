@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { formatDateBR } from '@/lib/date';
 import type { Cents } from '@/lib/money';
 import { APPLY_RULES_LIMIT } from '@/lib/db/queries/apply-rules-limit';
+import { EDITABLE_TRANSACTION_KINDS } from '@/lib/db/queries/transactions-editable-kinds';
 
 const isoDateSchema = z
   .string()
@@ -44,6 +45,8 @@ export const transactionUpdateSchema = z
     categoryId: optionalNullableUuid,
     memberId: optionalNullableUuid,
     note: z.string().trim().max(500).nullable().optional(),
+    /** Troca de tipo; o servidor só aceita em lançamento de conta já lançado. */
+    kind: z.enum(EDITABLE_TRANSACTION_KINDS).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'Informe ao menos um campo.');
 

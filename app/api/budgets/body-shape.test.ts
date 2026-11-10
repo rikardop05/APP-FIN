@@ -26,6 +26,7 @@ import { budgetsQuerySchema, saveBudgetsBodySchema, suggestionQuerySchema } from
 const MERCADO = '11111111-1111-4111-8111-111111111111';
 const LAZER = '22222222-2222-4222-8222-222222222222';
 const ROOT = '33333333-3333-4333-8333-333333333333';
+const FARMACIA = '44444444-4444-4444-8444-444444444444';
 
 describe('PUT /api/budgets: o corpo que a tela monta', () => {
   it('aceita o corpo montado por buildSaveBody, inclusive orçamento zero', () => {
@@ -128,11 +129,61 @@ describe('as respostas que a tela faz .parse', () => {
         upcomingCents: cents(0),
       },
     ],
+    // Categoria sem orçamento salvo, com gasto: sai sem uso, folga nem cor.
+    unbudgeted: [
+      { categoryId: FARMACIA, spentCents: cents(4990), upcomingCents: cents(1000), expectedCents: cents(5990) },
+    ],
+    totals: {
+      budgeted: {
+        plannedCents: cents(100000),
+        spentCents: cents(120000),
+        upcomingCents: cents(15000),
+        expectedCents: cents(135000),
+        remainingCents: cents(-35000),
+        usageBp: basisPoints(13500),
+        light: 'red',
+      },
+      unbudgeted: { spentCents: cents(4990), upcomingCents: cents(1000), expectedCents: cents(5990) },
+      outside: { spentCents: cents(80000), upcomingCents: cents(0), expectedCents: cents(80000) },
+    },
     categories: [
       { id: MERCADO, name: 'Mercado', rootId: ROOT, rootName: 'Alimentação', nature: 'essential' },
       { id: LAZER, name: 'Lazer', rootId: ROOT, rootName: 'Alimentação', nature: 'non_essential' },
+      { id: FARMACIA, name: 'Farmácia', rootId: ROOT, rootName: 'Alimentação', nature: 'essential' },
     ],
   };
+
+  it('mês SEM orçamento salvo: rows vazio, gasto em unbudgeted e total sem cor (light null) passam no parse', () => {
+    const empty: typeof response = {
+      ...response,
+      rows: [],
+      totals: {
+        budgeted: {
+          plannedCents: cents(0),
+          spentCents: cents(0),
+          upcomingCents: cents(0),
+          expectedCents: cents(0),
+          remainingCents: cents(0),
+          usageBp: null,
+          light: null,
+        },
+        unbudgeted: response.totals.unbudgeted,
+        outside: response.totals.outside,
+      },
+    };
+    const parsed = budgetMonthResponseSchema.safeParse(JSON.parse(JSON.stringify(empty)));
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.unbudgeted[0]?.spentCents).toBe(4990);
+  });
+
+  it('se a rota esquecer `unbudgeted` ou `totals`, o parse da tela lança', () => {
+    const { unbudgeted: _u, ...withoutUnbudgeted } = response;
+    const { totals: _t, ...withoutTotals } = response;
+    void _u;
+    void _t;
+    expect(budgetMonthResponseSchema.safeParse(withoutUnbudgeted).success).toBe(false);
+    expect(budgetMonthResponseSchema.safeParse(withoutTotals).success).toBe(false);
+  });
 
   it('o retorno REAL do servidor passa pelo schema da tela (restante negativo e usageBp nulo incluídos)', () => {
     expect(budgetMonthResponseSchema.safeParse(JSON.parse(JSON.stringify(response))).success).toBe(true);

@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
+import { todayInSaoPaulo } from '@/app/_lib/today';
 import { requireSession, SessionMissingError } from '@/lib/auth/session';
 import {
   AccountNotFoundError,
   deactivateAccount,
-  listAccounts,
+  listAccountsWithBalance,
   updateAccount,
   type AccountMutation,
 } from '@/lib/db/queries/cards';
@@ -28,7 +29,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
     const input: AccountMutation = result.data;
     await updateAccount(session.householdId, id, input);
-    return NextResponse.json({ accounts: await listAccounts(session.householdId) });
+    return NextResponse.json(await listAccountsWithBalance(session.householdId, todayInSaoPaulo()));
   } catch (error) {
     if (error instanceof SessionMissingError) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
@@ -45,7 +46,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const [id, session] = await Promise.all([getIds(context), requireSession()]);
     if (!id) return NextResponse.json({ error: 'Conta inválida.' }, { status: 400 });
     await deactivateAccount(session.householdId, id);
-    return NextResponse.json({ accounts: await listAccounts(session.householdId) });
+    return NextResponse.json(await listAccountsWithBalance(session.householdId, todayInSaoPaulo()));
   } catch (error) {
     if (error instanceof SessionMissingError) {
       return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });

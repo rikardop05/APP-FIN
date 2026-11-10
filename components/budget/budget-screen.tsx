@@ -5,7 +5,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { addCompetence, toCompetence } from '@/lib/date';
-import { cents, formatBRL, parseBRL } from '@/lib/money';
+import { formatBRL, parseBRL } from '@/lib/money';
 
 import {
   Button,
@@ -19,8 +19,9 @@ import {
   PageHeader,
 } from '@/components/ui-kit';
 
-import { changedCount, monthTotals, saveHint, totalLine } from './totals';
+import { changedCount, outsideLine, saveHint, totalLine, unbudgetedLine, upcomingLine } from './totals';
 import { buildSaveBody, type BudgetFieldValues } from './save-body';
+import { currentSpendFields } from './current-spend';
 import { BAR_X_CLASS, barScaleStyle } from '@/components/dashboard/bar-scale';
 import { competenceLabel, competenceTitle, EXPECTED_LABEL, expectedUsageText, formatPercent, LIGHT_VIEW, remainingText, rowMarca, toFieldText } from './labels';
 import {
@@ -37,6 +38,7 @@ import {
   type BudgetCategoryView,
   type BudgetMonthResponse,
   type BudgetRowView,
+  type BudgetUnbudgetedView,
 } from './schemas';
 
 type Message = { kind: 'info' | 'success' | 'error'; text: string };
@@ -44,12 +46,18 @@ type Message = { kind: 'info' | 'success' | 'error'; text: string };
 /**
  * Orçamento por categoria — T-205.
  *
- * A tela NÃO calcula: semáforo, uso, restante e sugestão vêm do servidor
- * (`budgetStatus` e `suggestBudgetFromHistory`, CONTRACTS §10). Aqui só se
- * formata, agrupa e ouve o usuário.
+ * A tela NÃO calcula: semáforo, uso, restante, total do mês e sugestão vêm do
+ * servidor (`budgetStatus`, `budgetMonthTotals`, `unbudgetedSpend` e
+ * `suggestBudgetFromHistory`, CONTRACTS §10). Aqui só se formata, agrupa e ouve
+ * o usuário.
  *
- * "Repetir mês anterior" e "Média de 3 meses" são SUGESTÃO: preenchem o
- * formulário e mais nada. Quem grava é a pessoa, ao clicar em Salvar.
+ * Categoria SEM orçamento salvo mostra o realizado e o previsto do mês mesmo
+ * assim (`unbudgeted`): ausência de orçamento não é "nenhum gasto", e também
+ * não é "estourou" — não leva percentual, barra nem selo.
+ *
+ * "Repetir mês anterior", "Média de 3 meses" e "Usar o gasto deste mês" são
+ * SUGESTÃO: preenchem o formulário e mais nada. Quem grava é a pessoa, ao
+ * clicar em Salvar.
  *
  * O semáforo e o realizado são do valor SALVO. Enquanto o campo diverge do
  * salvo, a linha avisa em vez de mostrar uma cor que não corresponde ao que
@@ -125,7 +133,8 @@ export function BudgetScreen({ today }: { today: string }) {
 
   const dirty = JSON.stringify(fields) !== JSON.stringify(baseline);
   const changed = changedCount(fields, baseline);
-  const totals = data === null ? null : monthTotals(data.rows, data.warnBp);
+  // O total do mês vem somado do motor (`budgetMonthTotals`); a tela só o escreve.
+  const monthTotals = data === null ? null : data.totals;
 
   function setField(categoryId: string, text: string) {
     setFields((current) => ({ ...current, [categoryId]: text }));
@@ -183,6 +192,26 @@ export function BudgetScreen({ today }: { today: string }) {
     } finally {
       setSuggesting(false);
     }
+  }
+
+  /** Preenche os campos com o gasto esperado do próprio mês (número do motor). Não grava. */
+  function fillFromCurrentSpend() {
+    if (data === null) return;
+    const filled = currentSpendFields(data);
+    const count = Object.keys(filled).length;
+    if (count === 0) {
+      setMessage({
+        kind: 'info',
+        text: `Não há gasto nem previsão em ${competenceLabel(period)} para usar como ponto de partida.`,
+      });
+      return;
+    }
+    setFields((current) => ({ ...current, ...filled }));
+    setInvalid(new Set());
+    setMessage({
+      kind: 'info',
+      text: `${String(count)} ${count === 1 ? 'categoria preenchida' : 'categorias preenchidas'} com o gasto de ${competenceLabel(period)} (realizado + previsto). Revise e salve: nada foi gravado ainda.`,
+    });
   }
 
   async function save() {
@@ -310,36 +339,63 @@ export function BudgetScreen({ today }: { today: string }) {
               </Faixa>
             ) : null}
 
-            {totals !== null ? (
+            {monthTotals !== null ? (
               <section aria-labelledby="budget-total-heading" className="flex flex-col gap-2 border border-border bg-card p-4">
                 <h2 id="budget-total-heading" className="text-sm font-medium text-muted-foreground">
                   Total de {competenceLabel(period)}
                 </h2>
-                {totals.light === null ? (
-                  <p className="text-sm text-muted-foreground">Nenhuma categoria de despesa neste mês.</p>
+                {monthTotals.budgeted.light === null ? (
+                  // Mês sem NENHUM orçamento salvo: o gasto aparece mesmo assim, sem barra e sem cor
+                  // (não há limite para medir, e ausência de orçamento nunca é "estourou").
+                  <>
+                    <p className="flex flex-wrap items-baseline gap-x-2 text-lg font-semibold">
+                      <span>
+                        <Money value={monthTotals.unbudgeted.spentCents} sign="never" /> gastos
+                      </span>
+                      <span className="text-sm font-normal text-muted-foreground">sem orçamento definido</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {upcomingLine(monthTotals.unbudgeted.upcomingCents) ?? 'Nenhuma despesa prevista até o fim do mês.'}{' '}
+                      Soma das categorias abaixo. Defina um valor em cada uma para acompanhar o limite.
+                    </p>
+                  </>
                 ) : (
                   <>
                     <p className="flex flex-wrap items-baseline gap-x-2 text-lg font-semibold">
-                      {totalLine(totals)}
+                      {totalLine(monthTotals.budgeted)}
                       <span className="text-sm font-normal text-muted-foreground">
-                        {LIGHT_VIEW[totals.light].label}{totals.usageBp === null ? '' : ` · ${formatPercent(totals.usageBp)}`}
+                        {LIGHT_VIEW[monthTotals.budgeted.light].label}
+                        {monthTotals.budgeted.usageBp === null ? '' : ` · ${formatPercent(monthTotals.budgeted.usageBp)}`}
                       </span>
                     </p>
                     <div
                       className="h-2 overflow-hidden bg-secondary"
                       role="img"
-                      aria-label={expectedUsageText(totals.usageBp)}
+                      aria-label={expectedUsageText(monthTotals.budgeted.usageBp)}
                     >
                       <div
-                        className={`${BAR_X_CLASS} ${LIGHT_VIEW[totals.light].bar}`}
-                        style={barScaleStyle(totals.usageBp === null ? (totals.expectedCents > 0 ? 100 : 0) : Math.min(100, totals.usageBp / 100), 'x')}
+                        className={`${BAR_X_CLASS} ${LIGHT_VIEW[monthTotals.budgeted.light].bar}`}
+                        style={barScaleStyle(
+                          monthTotals.budgeted.usageBp === null
+                            ? monthTotals.budgeted.expectedCents > 0
+                              ? 100
+                              : 0
+                            : Math.min(100, monthTotals.budgeted.usageBp / 100),
+                          'x',
+                        )}
                       />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {remainingText(cents(totals.remainingCents))}. Valores salvos.
+                      {remainingText(monthTotals.budgeted.remainingCents)}. Valores salvos.
                     </p>
+                    {unbudgetedLine(monthTotals.unbudgeted) !== null ? (
+                      <p className="text-xs text-muted-foreground">{unbudgetedLine(monthTotals.unbudgeted)}</p>
+                    ) : null}
                   </>
                 )}
+                {outsideLine(monthTotals.outside) !== null ? (
+                  <p className="text-xs text-muted-foreground">{outsideLine(monthTotals.outside)}</p>
+                ) : null}
               </section>
             ) : null}
 
@@ -350,6 +406,15 @@ export function BudgetScreen({ today }: { today: string }) {
                 </Button>
                 <Button variant="outline" size="sm" disabled={busy} onClick={() => void suggest('avg3')}>
                   Média de 3 meses
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  title="Usar o gasto deste mês como ponto de partida"
+                  onClick={fillFromCurrentSpend}
+                >
+                  Usar o gasto deste mês
                 </Button>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -433,6 +498,7 @@ function BudgetGroups({
   onChange: (categoryId: string, text: string) => void;
 }) {
   const rowById = new Map(data.rows.map((row) => [row.categoryId, row] as const));
+  const unbudgetedById = new Map(data.unbudgeted.map((row) => [row.categoryId, row] as const));
   const groups: { rootId: string; rootName: string; items: BudgetCategoryView[] }[] = [];
   for (const category of data.categories) {
     const last = groups[groups.length - 1];
@@ -453,6 +519,7 @@ function BudgetGroups({
                 <CategoryRow
                   category={category}
                   row={rowById.get(category.id)}
+                  unbudgeted={unbudgetedById.get(category.id)}
                   text={fields[category.id] ?? ''}
                   invalid={invalid.has(category.id)}
                   disabled={disabled}
@@ -470,6 +537,7 @@ function BudgetGroups({
 function CategoryRow({
   category,
   row,
+  unbudgeted,
   text,
   invalid,
   disabled,
@@ -477,6 +545,8 @@ function CategoryRow({
 }: {
   category: BudgetCategoryView;
   row: BudgetRowView | undefined;
+  /** Gasto do mês quando a categoria NÃO tem orçamento salvo; `undefined` = nada gasto nem previsto. */
+  unbudgeted: BudgetUnbudgetedView | undefined;
   text: string;
   invalid: boolean;
   disabled: boolean;
@@ -534,9 +604,28 @@ function CategoryRow({
         {category.name}
       </label>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-        {row === undefined ? (
+        {row === undefined && unbudgeted !== undefined ? (
+          // Sem orçamento salvo, mas com gasto: o realizado (e o previsto) aparecem, sem barra nem cor.
+          <div className="flex flex-col gap-1">
+            <p className="flex flex-wrap items-baseline gap-x-2">
+              <span className="text-muted-foreground">Realizado</span>
+              <Money value={unbudgeted.spentCents} sign="never" className="font-medium text-foreground" />
+              {unbudgeted.upcomingCents > 0 ? (
+                <>
+                  <span className="text-muted-foreground">· previsto</span>
+                  <Money value={unbudgeted.upcomingCents} sign="never" className="font-medium text-foreground" />
+                </>
+              ) : null}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {typed === null ? 'Sem orçamento definido.' : 'Salve para comparar com o orçamento.'}
+            </p>
+          </div>
+        ) : row === undefined ? (
           <p className="text-sm text-muted-foreground">
-            {typed === null ? 'Sem orçamento definido.' : 'Salve para ver o realizado desta categoria.'}
+            {typed === null
+              ? 'Sem orçamento definido. Nenhum gasto neste mês.'
+              : 'Nenhum gasto neste mês. Salve para acompanhar o limite.'}
           </p>
         ) : stale ? (
           <p className="text-sm text-muted-foreground">Valor alterado: salve para atualizar o realizado e a cor.</p>
