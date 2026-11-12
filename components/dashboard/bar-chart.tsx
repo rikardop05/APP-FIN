@@ -30,6 +30,8 @@ type BarChartProps = {
 
 const PAD = { top: 24, right: 8, bottom: 32, left: 8 };
 const MIN_LABEL_GAP = 60;
+/** Meia largura estimada de um rótulo como `nov/2026` a 12px. */
+const LABEL_HALF_WIDTH = 24;
 
 /**
  * Barras em SVG puro (não há biblioteca de gráfico no projeto), agrupadas por
@@ -104,15 +106,18 @@ export function BarChart({ series, groups, ariaLabel, maxLabel, height = 220 }: 
                 );
               })}
               {groupIndex % step === 0 ? (
-                <text
-                  x={PAD.left + groupW * groupIndex + groupW / 2}
-                  y={height - 10}
-                  textAnchor="middle"
-                  fontSize={12}
-                  className="fill-muted-foreground"
-                >
-                  {group.label}
-                </text>
+                (() => {
+                  // Rótulo centrado no grupo, mas preso às bordas: o primeiro e o último não podem sair do SVG.
+                  const center = PAD.left + groupW * groupIndex + groupW / 2;
+                  const halfLabel = LABEL_HALF_WIDTH;
+                  const anchor = center - halfLabel < 0 ? 'start' : center + halfLabel > width ? 'end' : 'middle';
+                  const x = anchor === 'start' ? PAD.left : anchor === 'end' ? width - PAD.right : center;
+                  return (
+                    <text x={x} y={height - 10} textAnchor={anchor} fontSize={12} className="fill-muted-foreground">
+                      {group.label}
+                    </text>
+                  );
+                })()
               ) : null}
             </g>
           );

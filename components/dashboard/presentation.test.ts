@@ -3,6 +3,7 @@ import type { BasisPoints, Cents } from '@/lib/money';
 import {
   commitmentEndLine,
   commitmentRows,
+  commitmentStrip,
   commitmentTotal,
   contributionsTitle,
   monthName,
@@ -192,5 +193,31 @@ describe('veredito dividido pelas faturas anteriores não pagas', () => {
     );
     expect(monthsList(['2026-07', '2026-09', '2026-10'])).toBe('jul, set e out');
     expect(monthsList(['2026-12', '2027-01'])).toBe('dez/2026 e jan/2027');
+  });
+});
+
+describe('faixa de barras do comprometido', () => {
+  const month = (competence: string, total: number, installment: number, purchase: number) => ({
+    competence,
+    totalCents: c(total),
+    installmentCents: c(installment),
+    purchaseCents: c(purchase),
+  });
+
+  it('mostra a magnitude da dívida de cada mês e zera mês sem dívida (só estorno)', () => {
+    const strip = commitmentStrip(
+      [month('2026-11', -50000, -30000, -20000), month('2026-12', -10050, -10050, 0), month('2027-01', 2500, 2500, 0)],
+      12,
+    );
+    expect(strip.map((m) => [m.competence, m.debtCents, m.installmentCents, m.purchaseCents])).toEqual([
+      ['2026-11', 50000, 30000, 20000],
+      ['2026-12', 10050, 10050, 0],
+      ['2027-01', 0, 0, 0],
+    ]);
+  });
+
+  it('respeita o limite de meses', () => {
+    const many = Array.from({ length: 20 }, (_, i) => month(`2027-${String((i % 12) + 1).padStart(2, '0')}`, -100, -100, 0));
+    expect(commitmentStrip(many, 12)).toHaveLength(12);
   });
 });

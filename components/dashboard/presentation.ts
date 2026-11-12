@@ -189,6 +189,30 @@ export function stubMonths<T extends { competence: Competence; totalCents: Cents
   return { shown: later.slice(0, limit), hiddenCount: Math.max(0, later.length - limit) };
 }
 
+export type CommitmentStripMonth = {
+  competence: Competence;
+  /** Magnitude de saída do mês (0 quando o mês não tem dívida: só estorno ou vazio). */
+  debtCents: Cents;
+  installmentCents: Cents;
+  purchaseCents: Cents;
+};
+
+/**
+ * Meses da faixa de barras do comprometido: do mês corrente até `limit` meses, cada um com a magnitude da
+ * dívida. Só desenha: os valores já vêm de `futureCommitment().byCompetence`.
+ */
+export function commitmentStrip(
+  byCompetence: readonly { competence: Competence; totalCents: Cents; installmentCents: Cents; purchaseCents: Cents }[],
+  limit: number,
+): CommitmentStripMonth[] {
+  return byCompetence.slice(0, limit).map((entry) => ({
+    competence: entry.competence,
+    debtCents: (entry.totalCents < 0 ? 0 - entry.totalCents : 0) as Cents,
+    installmentCents: (entry.totalCents < 0 ? 0 - entry.installmentCents : 0) as Cents,
+    purchaseCents: (entry.totalCents < 0 ? 0 - entry.purchaseCents : 0) as Cents,
+  }));
+}
+
 /** "Aportes de outubro". */
 export function contributionsTitle(competence: Competence): string {
   return `Aportes de ${monthName(competence)}`;

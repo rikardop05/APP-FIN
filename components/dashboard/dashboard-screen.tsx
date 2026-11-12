@@ -21,6 +21,7 @@ import {
 import { monthName, pendingSummary } from './presentation';
 import { ProjectedBalance, type ProjectedState } from './projected-balance';
 import { SpendingByCategory } from './spending-by-category';
+import { SpendingByMember, type SpendingByMemberItem } from './spending-by-member';
 
 type DashboardScreenProps = {
   competence: Competence;
@@ -42,6 +43,8 @@ type DashboardScreenProps = {
     average3mCents: Cents;
     variationBp: BasisPoints | null;
   }[];
+  /** "Quem gastou" (`spendingByMember`); `null` quando o mês não tem despesa com responsável. */
+  byMember: { items: SpendingByMemberItem[]; totalCents: Cents } | null;
   commitment: {
     totalCents: Cents;
     lastCommittedCompetence: Competence | null;
@@ -83,19 +86,21 @@ type DashboardScreenProps = {
 
 /**
  * Painel (onda 2, Carnê de Prestações). Esta tela NÃO calcula nada: todo número vem dos motores
- * (`monthlyKpis`, `spendingByCategory`, `futureCommitment`, `divergentStatements`, projeção do fluxo).
+ * (`monthlyKpis`, `spendingByCategory`, `spendingByMember`, `futureCommitment`, `divergentStatements`,
+ * projeção do fluxo).
  *
- * Ordem pensada para responder em 10 segundos, inclusive no celular: o FUTURO antes do passado.
- * 1. Três números do mês: sobra (com a base), veredito de 12 meses e comprometido do mês que vem;
- *    pendências só como contagem com link.
- * 2. Comprometido nos cartões (futuro) e saldo projetado (futuro).
- * 3. O mês corrente e o passado: resumo, receita × despesa, gastos por categoria.
- * 4. Renda passiva (20 anos) atrás de "ver mais" e a lista de pendências por último.
+ * Ordem (Lote 3): para onde foi o dinheiro vem logo depois do veredito.
+ * 1. Sobra, veredito e pendências (Headline).
+ * 2. Gastos por categoria.
+ * 3. Comprometido nos cartões e saldo projetado (futuro).
+ * 4. Resumo do mês, receita × despesa e "Quem gastou" (só com despesa de responsável).
+ * 5. Renda passiva (20 anos) atrás de "ver mais" e a lista de pendências por último.
  */
 export function DashboardScreen({
   competence,
   kpis,
   spending,
+  byMember,
   commitment,
   incomeExpense,
   projected,
@@ -139,16 +144,18 @@ export function DashboardScreen({
         pendingUnavailable={pendencias.overBudget === null}
       />
 
+      <SpendingByCategory items={spending} competence={competence} />
+
       <CommittedCard
         competence={competence}
-          windowEnd={commitment.windowEnd}
-          totalCents={commitment.totalCents}
-          lastCommittedCompetence={commitment.lastCommittedCompetence}
-          breakdown={commitment.breakdown}
-          overdueCompetences={commitment.overdueCompetences}
-          currentSettlement={commitment.currentSettlement}
-          byCompetence={commitment.byCompetence}
-        />
+        windowEnd={commitment.windowEnd}
+        totalCents={commitment.totalCents}
+        lastCommittedCompetence={commitment.lastCommittedCompetence}
+        breakdown={commitment.breakdown}
+        overdueCompetences={commitment.overdueCompetences}
+        currentSettlement={commitment.currentSettlement}
+        byCompetence={commitment.byCompetence}
+      />
 
       <ProjectedBalance state={projected} />
 
@@ -160,9 +167,9 @@ export function DashboardScreen({
         essentialShareBp={kpis.essentialShareBp}
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className={byMember ? 'grid grid-cols-1 gap-6 lg:grid-cols-2' : 'flex flex-col gap-6'}>
         <IncomeExpenseChart months={incomeExpense} currentCompetence={competence} />
-        <SpendingByCategory items={spending} competence={competence} />
+        {byMember ? <SpendingByMember items={byMember.items} totalCents={byMember.totalCents} /> : null}
       </div>
 
       <details>

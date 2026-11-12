@@ -3,7 +3,7 @@ import { loadInvestmentResponse } from '@/app/api/investment/load';
 import { todayInSaoPaulo } from '@/app/_lib/today';
 import { addCompetence, toCompetence } from '@/lib/date';
 import { futureCommitment } from '@/lib/finance/commitment';
-import { divergentStatements, monthlyKpis, spendingByCategory } from '@/lib/finance/kpis';
+import { divergentStatements, monthlyKpis, spendingByCategory, spendingByMember } from '@/lib/finance/kpis';
 import { cents, type Cents } from '@/lib/money';
 
 import { DashboardScreen } from '@/components/dashboard/dashboard-screen';
@@ -19,6 +19,7 @@ import { listOverBudget, type OverBudgetItem } from '@/lib/db/queries/budgets';
 import { listStatementSituations, settlementByCompetence } from '@/lib/db/queries/card-settlement';
 import {
   getDashboardData,
+  listDashboardMembers,
   listIncomeExpenseRows,
   listMissingStatements,
   listOverdueRecurring,
@@ -94,7 +95,7 @@ export default async function DashboardPage() {
 
   const settings = await getSettings(householdId);
 
-  const [dashboard, uncategorizedItems, incomeExpenseRows, overdueRecurring, situations, missingStatements] =
+  const [dashboard, uncategorizedItems, incomeExpenseRows, overdueRecurring, situations, missingStatements, memberList] =
     await Promise.all([
       getDashboardData(householdId, today, settings.commitmentMonths),
       listUncategorizedTransactionItems(householdId, today),
@@ -105,6 +106,7 @@ export default async function DashboardPage() {
       // `missingStatements` (lib/finance); sem ela o painel dizia "Nada pendente" com a
       // fatura do mes faltando.
       listMissingStatements(householdId, today),
+      listDashboardMembers(householdId),
     ]);
   // Pago e pendente das faturas do mes (mesma fonte da tela de Cartoes e de Lancamentos).
   const currentSettlement = settlementByCompetence(situations).find((item) => item.competence === competence) ?? null;
@@ -135,6 +137,9 @@ export default async function DashboardPage() {
     transactions: dashboard.spendingTransactions,
     categories: dashboard.categoriesForSpending,
   });
+
+  // "Quem gastou": as MESMAS linhas do mês de `monthlyKpis`; o bloco só aparece com despesa de alguém.
+  const byMemberResult = spendingByMember({ transactions: dashboard.monthlyTransactions, members: memberList });
 
   const commitment = futureCommitment({
     fromCompetence: competence,
@@ -193,6 +198,18 @@ export default async function DashboardPage() {
         average3mCents: row.average3mCents,
         variationBp: row.variationBp,
       }))}
+      byMember={
+        byMemberResult.hasMember
+          ? {
+              items: byMemberResult.rows.map((row) => ({
+                memberId: row.memberId,
+                name: row.name,
+                spentCents: row.spentCents,
+              })),
+              totalCents: byMemberResult.totalCents,
+            }
+          : null
+      }
       commitment={{
         totalCents: commitment.totalCents as Cents,
         lastCommittedCompetence: commitment.lastCommittedCompetence,

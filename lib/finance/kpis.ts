@@ -487,3 +487,96 @@ export function divergentStatements(
   }
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// spendingByMember — "Quem gastou" (Lote 3, item 11)
+// ---------------------------------------------------------------------------
+
+export interface SpendingByMemberInput {
+  /** As MESMAS linhas do mes que alimentam `monthlyKpis`, agora com o responsavel. */
+  transactions: {
+    amountCents: Cents;
+    kind: TransactionKind;
+    memberId: string | null;
+  }[];
+  members: { id: string; name: string }[];
+}
+
+export interface SpendingByMemberRow {
+  /** `null` = "Sem responsavel". */
+  memberId: string | null;
+  name: string;
+  spentCents: Cents;
+}
+
+export interface SpendingByMemberResult {
+  rows: SpendingByMemberRow[];
+  /** Igual a `monthlyKpis().expenseCents` das mesmas linhas: as partes fecham com ele. */
+  totalCents: Cents;
+  /** Ha lancamento de despesa com responsavel? Sem isso o bloco nao faz sentido. */
+  hasMember: boolean;
+}
+
+/** Nome do grupo sem responsavel. */
+export const NO_MEMBER_LABEL = 'Sem responsável';
+
+/**
+ * Despesa do mes por responsavel. Mesmas regras de `monthlyKpis`: so `kind 'expense'` conta (transferencia,
+ * pagamento de fatura e aporte ficam fora), posted e planned juntos, liquido de estorno com piso em zero.
+ *
+ * Fechamento: o total e `netOutflow` da soma de tudo (o mesmo numero da Despesa do mes). Cada grupo e o seu
+ * liquido; grupo cujo liquido nao e saida (so estorno) sai da lista e a sua diferenca e abatida dos grupos
+ * do maior para o menor, com piso em zero (grupo que zera sai da lista), para a soma das partes fechar
+ * EXATAMENTE com o total sem nunca mostrar gasto negativo. Ordem: maior gasto primeiro, "Sem
+ * responsavel" por ultimo. Responsavel desconhecido (id fora de `members`) cai em "Sem responsavel".
+ */
+export function spendingByMember(input: SpendingByMemberInput): SpendingByMemberResult {
+  const names = new Map(input.members.map((member) => [member.id, member.name]));
+  const nets = new Map<string | null, Cents>();
+  let all = zero();
+  let hasMember = false;
+
+  for (const transaction of input.transactions) {
+    if (transaction.kind !== 'expense') continue;
+    const amount = cents(transaction.amountCents);
+    const key = transaction.memberId !== null && names.has(transaction.memberId) ? transaction.memberId : null;
+    if (key !== null) hasMember = true;
+    nets.set(key, addCents(nets.get(key) ?? zero(), amount));
+    all = addCents(all, amount);
+  }
+
+  const totalCents = netOutflow(all);
+  if (totalCents === 0) return { rows: [], totalCents, hasMember };
+
+  const rows: SpendingByMemberRow[] = [];
+  let partsSum = zero();
+  for (const [key, net] of nets) {
+    const spent = netOutflow(net);
+    if (spent === 0) continue;
+    rows.push({
+      memberId: key,
+      name: key === null ? NO_MEMBER_LABEL : (names.get(key) ?? NO_MEMBER_LABEL),
+      spentCents: spent,
+    });
+    partsSum = addCents(partsSum, spent);
+  }
+
+  rows.sort((a, b) => {
+    if ((a.memberId === null) !== (b.memberId === null)) return a.memberId === null ? 1 : -1;
+    return b.spentCents - a.spentCents || a.name.localeCompare(b.name, 'pt-BR');
+  });
+
+  // Excesso a abater: estorno de grupo que nao tem gasto proprio. Do maior para o menor, piso em zero.
+  let excess = partsSum - totalCents;
+  if (excess > 0) {
+    const bySize = [...rows].sort((a, b) => b.spentCents - a.spentCents);
+    for (const row of bySize) {
+      if (excess === 0) break;
+      const take = Math.min(row.spentCents, excess);
+      row.spentCents = cents(row.spentCents - take);
+      excess -= take;
+    }
+  }
+
+  return { rows: rows.filter((row) => row.spentCents > 0), totalCents, hasMember };
+}
