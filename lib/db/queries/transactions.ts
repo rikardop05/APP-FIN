@@ -16,6 +16,7 @@ import { db } from '@/lib/db';
 import { assertCategoryFitsKinds } from './category-kind';
 import { canEditTransactionKind, type EditableTransactionKind } from './transactions-editable-kinds';
 import { COUNTED_STATUSES } from './counted-statuses';
+import { listReviewGroups } from './review-groups';
 import { reconcileManualPosting } from './manual-reconcile';
 import type {
   CategoryNature,
@@ -386,24 +387,18 @@ export async function getMonthSummary(householdId: string, competence: Competenc
 }
 
 /**
- * Quantos lançamentos do HOUSEHOLD estão sem categoria, em qualquer mês: o número do
- * botão "Revisar N sem categoria". Não depende do filtro da lista. Mesmo critério de
- * "sem categoria" da lista e do Painel (`posted` e `planned`, `category_id` nulo); o
- * Painel conta só a competência corrente, então os dois batem quando tudo o que falta
- * categorizar é do mês.
+ * Quantos lançamentos do HOUSEHOLD a revisão de sem categoria vai mostrar, em qualquer mês: o
+ * número do botão "Revisar N sem categoria". Não depende do filtro da lista.
+ *
+ * É a SOMA dos itens dos grupos de `listReviewGroups`, a leitura da tela de destino
+ * (`/lancamentos/revisar`): o recorte (sem categoria, fora `reconciled`, recorrência, renda fixa e
+ * parcelamento já categorizado, só despesa e receita de valor diferente de zero) é o dela por
+ * construção, então o botão nunca diz "Revisar 1" e abre vazio. O Painel conta de forma mais larga
+ * e só na competência corrente; os dois podem divergir.
  */
 export async function countUncategorized(householdId: string): Promise<number> {
-  const [row] = await db
-    .select({ count: sql<number>`COUNT(*)::int` })
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.householdId, householdId),
-        inArray(transactions.status, COUNTED_STATUSES),
-        isNull(transactions.categoryId),
-      ),
-    );
-  return row?.count ?? 0;
+  const groups = await listReviewGroups(householdId);
+  return groups.reduce((total, group) => total + group.transactionIds.length, 0);
 }
 
 export async function listTransactions(

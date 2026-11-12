@@ -66,7 +66,7 @@ export function TransactionFilters({ value, options, open, onOpenChange, onChang
       <div
         role="group"
         aria-label="Filtros rápidos"
-        className="-mx-1 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0"
+        className="-mx-1 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0"
       >
         <QuickButton label="Todos os meses" pressed={allMonths.pressed} onClick={allMonths.onToggle} className="sm:hidden" />
         {toggles.map((toggle) => (

@@ -611,6 +611,9 @@ export function LancamentosScreen({ today, initial }: { today: string; initial: 
         label="Carregando lançamentos…"
         count={4}
         retry={() => void load(appliedFilters)}
+        // Sem carregar nem falhar o bloco só guarda o aviso para leitor de tela: fora do fluxo, para não
+        // deixar um vão (o `gap` do pai) entre a busca e a lista.
+        className={contentState === 'loading' || contentState === 'error' ? undefined : 'absolute'}
       />
 
       {contentState === 'empty' ? (
