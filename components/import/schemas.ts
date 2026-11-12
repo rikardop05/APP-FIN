@@ -14,6 +14,8 @@ const centsSchema = z.custom<Cents>(
 const sourceItemSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
+  /** Banco cadastrado no cartão/conta (texto livre); serve para sugerir o cartão da fatura. */
+  bank: z.string().nullable().optional(),
   active: z.boolean(),
 });
 

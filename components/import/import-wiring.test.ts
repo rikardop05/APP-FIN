@@ -53,7 +53,18 @@ describe('revisão da fatura: ligações da tela', () => {
 
   it('a entrada tem área de soltar em pt-BR, sem o input nativo à mostra', () => {
     expect(screen).toContain('<DropZone');
-    expect(read('components/import/drop-zone.tsx')).toContain('Arraste a fatura ou escolha o PDF');
+    const zone = read('components/import/drop-zone.tsx');
+    expect(zone).toContain('Arraste as faturas ou escolha os PDFs');
+    expect(zone).toContain('multiple');
+  });
+
+  it('vários PDFs entram como fila e nada é gravado ao escolher: só o fluxo de confirmação grava', () => {
+    expect(screen).toContain('queueLabel(position, queueTotal)');
+    expect(screen).toContain('Pular esta fatura');
+    expect(screen).toContain('matchCardForBank(detected.bankKey, cards)');
+    // A senha continua em estado de memória, zerada a cada arquivo (handleFile faz setPassword('')).
+    expect(screen).toMatch(/setFileBytes\(null\);\s*setPassword\(''\)/);
+    expect(screen).not.toMatch(/localStorage|sessionStorage/);
   });
 
   it('a competência sai por extenso, nunca montada a mão com slice', () => {

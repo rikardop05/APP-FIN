@@ -26,6 +26,7 @@ import {
 } from './schemas';
 import { ImportConfirmation } from './import-confirmation';
 import { ImportHistory } from './import-history';
+import { matchCardForBank, queueLabel } from './pdf-queue';
 import type { CategoryNode, MemberItem } from './schemas';
 
 type ImportScreenProps = {
@@ -199,6 +200,11 @@ export function ImportScreen({ today }: ImportScreenProps) {
   /** O erro veio da leitura do PDF ou do texto: ganha título e dica própria. */
   const [readFailed, setReadFailed] = useState(false);
   const latestFile = useRef<File | null>(null);
+  /** Fila de PDFs: os que ainda esperam a vez (o da vez está em `file`) e o total escolhido. Só memória. */
+  const [waiting, setWaiting] = useState<File[]>([]);
+  const [queueTotal, setQueueTotal] = useState(0);
+  /** A fatura da vez não casou com um único cartão: a origem precisa ser confirmada pela pessoa. */
+  const [sourcePending, setSourcePending] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   /**
    * Incrementado após cada commit bem-sucedido para forçar o `ImportHistory`
@@ -292,6 +298,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
   function handleSourceKindChange(value: SourceKind) {
     setSourceKind(value);
     setSourceId('');
+    setSourcePending(false);
     clearResult();
   }
 
@@ -317,7 +324,35 @@ export function ImportScreen({ today }: ImportScreenProps) {
     const bytes = new Uint8Array(await selected.arrayBuffer());
     if (latestFile.current !== selected) return;
     setFileBytes(bytes);
-    setDetection(detectSource({ fileName: selected.name, content: bytes }));
+    const detected = detectSource({ fileName: selected.name, content: bytes });
+    setDetection(detected);
+    if (detected.format === 'pdf') {
+      const match = matchCardForBank(detected.bankKey, cards);
+      if (match !== null) {
+        setSourceKind('credit_card');
+        setSourceId(match.id);
+        setSourcePending(false);
+      } else {
+        setSourcePending(cards.length > 1);
+      }
+    } else {
+      setSourcePending(false);
+    }
+  }
+
+  /** Escolha de um ou vários arquivos: o primeiro é o da vez, os outros esperam. */
+  function handleFiles(files: File[]) {
+    setWaiting(files.slice(1));
+    setQueueTotal(files.length > 1 ? files.length : 0);
+    void handleFile(files[0] ?? null);
+  }
+
+  /** Passa para a próxima fatura da fila (confirmada ou pulada). Não grava nada. */
+  function advanceQueue() {
+    const [next, ...rest] = waiting;
+    setWaiting(rest);
+    if (next === undefined) return;
+    void handleFile(next);
   }
 
   async function uploadFile() {
@@ -420,6 +455,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
     fileBytes !== null &&
     detection?.format === 'pdf' &&
     hasSource &&
+    !sourcePending &&
     isCompetence(competence);
   const canUploadText =
     pastedText.trim() !== '' && hasSource && isCompetence(competence);
@@ -433,15 +469,29 @@ export function ImportScreen({ today }: ImportScreenProps) {
     batchId: string,
     reconciled: { plannedReconciled: number; installmentsReconciled: number },
   ) {
-    setPreview(null);
+    const remaining = waiting.length;
+    if (remaining > 0) {
+      advanceQueue();
+    } else {
+      setPreview(null);
+      setFile(null);
+      setFileBytes(null);
+      setDetection(null);
+      setPassword('');
+      setQueueTotal(0);
+      setSourcePending(false);
+    }
     setPastedText('');
-    setFile(null);
-    setFileBytes(null);
-    setDetection(null);
-    setPassword('');
-    setSuccess(successMessage(reconciled));
+    setSuccess(
+      remaining > 0
+        ? `${successMessage(reconciled)} ${remaining === 1 ? 'Falta 1 fatura' : `Faltam ${remaining} faturas`} da fila.`
+        : successMessage(reconciled),
+    );
     setHistoryRefreshKey((current) => current + 1);
   }
+
+  const position = queueTotal > 0 ? queueTotal - waiting.length : 0;
+  const positionLabel = queueLabel(position, queueTotal);
 
   return (
     <div className="flex flex-col gap-6">
@@ -468,6 +518,12 @@ export function ImportScreen({ today }: ImportScreenProps) {
         </Faixa>
       ) : null}
 
+      {preview && positionLabel ? (
+        <p className="text-sm font-medium text-foreground" role="status">
+          {positionLabel}: {file?.name}
+        </p>
+      ) : null}
+
       {preview ? (
         <ImportConfirmation
           preview={preview}
@@ -490,12 +546,12 @@ export function ImportScreen({ today }: ImportScreenProps) {
                 Destino da importação
               </h2>
               <p className="text-sm text-muted-foreground">
-                Esta origem e competência serão usadas pelo PDF e pelo texto colado.
+                Vale para o PDF e para o texto colado.
               </p>
             </div>
             <SourceFields
               sourceKind={sourceKind}
-              sourceId={sourceId}
+              sourceId={sourcePending ? '' : sourceId}
               competence={competence}
               cards={cards}
               accounts={accounts}
@@ -503,6 +559,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
               onSourceKindChange={handleSourceKindChange}
               onSourceIdChange={(value) => {
                 setSourceId(value);
+                setSourcePending(false);
                 clearResult();
               }}
               onCompetenceChange={handleCompetenceChange}
@@ -516,12 +573,24 @@ export function ImportScreen({ today }: ImportScreenProps) {
                 Fatura em PDF
               </h2>
               <p className="text-sm text-muted-foreground">
-                Escolha a origem e a competência antes de enviar sua fatura.
+                Pode escolher várias faturas: elas são conferidas e confirmadas uma por vez.
               </p>
             </div>
             <form onSubmit={preventSubmit} className="flex flex-col gap-4">
-              <DropZone file={file} disabled={busy} onFile={(selected) => void handleFile(selected)} />
+              <DropZone file={file} disabled={busy} queueSize={queueTotal} onFiles={handleFiles} />
+              {positionLabel ? (
+                <p className="text-sm font-medium text-foreground" role="status">
+                  {positionLabel}: {file?.name}
+                </p>
+              ) : null}
               {detection ? <DetectionMessage detection={detection} /> : null}
+              {sourcePending && detection?.format === 'pdf' ? (
+                <Faixa tone="attention">
+                  <span>
+                    Não deu para saber de qual cartão é esta fatura. Escolha o cartão em “Destino da importação”.
+                  </span>
+                </Faixa>
+              ) : null}
               {detection?.format === 'pdf' && detection.encrypted ? (
                 <label className="flex max-w-sm flex-col gap-1.5 text-sm font-medium text-foreground">
                   Senha da fatura
@@ -539,9 +608,16 @@ export function ImportScreen({ today }: ImportScreenProps) {
               ) : null}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-muted-foreground">PDF é o único formato de arquivo aceito nesta fase.</p>
-                <Button type="button" disabled={!canUploadFile || busy} onClick={() => void uploadFile()}>
-                  {busy ? 'Processando…' : 'Pré-visualizar PDF'}
-                </Button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {waiting.length > 0 ? (
+                    <Button type="button" variant="outline" disabled={busy} onClick={advanceQueue}>
+                      Pular esta fatura
+                    </Button>
+                  ) : null}
+                  <Button type="button" disabled={!canUploadFile || busy} onClick={() => void uploadFile()}>
+                    {busy ? 'Processando…' : 'Pré-visualizar PDF'}
+                  </Button>
+                </div>
               </div>
               <LoadingBlock
                 loading={loadingSources}

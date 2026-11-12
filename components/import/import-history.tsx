@@ -12,8 +12,11 @@ import {
   batchRowsText,
   batchStatusLabel,
   batchTitle,
+  hiddenBatchesLabel,
   revertedMessage,
   rowCountLabel,
+  saoPauloDay,
+  splitBatches,
 } from './import-history-text';
 import { apiErrorSchema } from './schemas';
 import {
@@ -63,7 +66,7 @@ function statusTone(status: ImportBatchHistoryItem['status']): SeloTone {
  * mantém a frase coerente se acontecer por estado inconsistente.
  */
 function revertPrompt(batch: ImportBatchHistoryItem): string {
-  const date = formatDateBR(batch.createdAt.slice(0, 10));
+  const date = formatDateBR(saoPauloDay(batch.createdAt));
   return `Desfazer importação de ${date} com ${rowCountLabel(batch.rowsImported)}?`;
 }
 
@@ -185,6 +188,114 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
     }
   }
 
+  const { main, hidden } = splitBatches(state.kind === 'ready' ? state.batches : []);
+
+  function renderBatch(batch: ImportBatchHistoryItem) {
+    // O diálogo fica aberto também enquanto desfaz: some só com o resultado.
+    const isConfirming =
+      (revertState.kind === 'confirming' || revertState.kind === 'reverting') &&
+      revertState.batchId === batch.id;
+    const isReverting =
+      revertState.kind === 'reverting' && revertState.batchId === batch.id;
+    const revertError =
+      revertState.kind === 'error' && revertState.batchId === batch.id
+        ? revertState.message
+        : null;
+    const justReverted =
+      revertState.kind === 'reverted' && revertState.batchId === batch.id;
+    const canRevert = batch.status === 'committed';
+    return (
+      <li key={batch.id} className="border border-border bg-card p-3 sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="min-w-0 text-sm font-medium text-foreground">
+                {batchTitle(batch)}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {batchRowsText(batch.status, batch.rowsImported)}
+              </span>
+            </div>
+            <span className="min-w-0 break-all text-xs text-muted-foreground">
+              {formatDateBR(saoPauloDay(batch.createdAt))}
+              {batchTitle(batch) === batch.fileName ? '' : ` · ${batch.fileName}`}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <Selo tone={statusTone(batch.status)} label={batchStatusLabel(batch.status)} />
+            {canRevert ? (
+              <Button
+                id={revertTriggerId(batch.id)}
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => startConfirm(batch.id)}
+                disabled={isReverting}
+                aria-label={`Desfazer importação de ${batch.fileName}`}
+              >
+                <Undo2 className="h-3.5 w-3.5" aria-hidden="true" />
+                Desfazer
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        {isConfirming && confirmingBatch ? (
+          <div
+            id={revertDialogId(batch.id)}
+            tabIndex={-1}
+            aria-busy={isReverting}
+            role="alertdialog"
+            aria-labelledby={`revert-prompt-${batch.id}`}
+            aria-describedby={`revert-detail-${batch.id}`}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') cancelConfirm();
+            }}
+            className="mt-3 border border-warning bg-warning-soft p-3 text-sm text-foreground"
+          >
+            <p id={`revert-prompt-${batch.id}`} className="font-medium">{revertPrompt(confirmingBatch)}</p>
+            <p id={`revert-detail-${batch.id}`} className="mt-1 text-xs text-muted-foreground">
+              Esta ação remove os lançamentos do lote. O histórico do
+              lote é preservado como desfeito.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                id={revertCancelId(batch.id)}
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={cancelConfirm}
+                disabled={isReverting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void confirmRevert()}
+                disabled={isReverting}
+              >
+                {isReverting ? 'Desfazendo…' : 'Confirmar desfazer'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {revertError ? (
+          <Faixa tone="danger" role="alert" className="mt-3">
+            <span>{revertError}</span>
+          </Faixa>
+        ) : null}
+
+        {justReverted && revertState.kind === 'reverted' ? (
+          <p ref={resultRef} tabIndex={-1} role="status" className="mt-2 text-xs font-medium text-success">
+            {revertedMessage(revertState.transactionsDeleted)}
+          </p>
+        ) : null}
+      </li>
+    );
+  }
+
   return (
     <section aria-label="Histórico de importações" className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
@@ -219,113 +330,17 @@ export function ImportHistory({ refreshKey }: ImportHistoryProps) {
       ) : null}
 
       {state.kind === 'ready' && state.batches.length > 0 ? (
-        <ul className="flex flex-col gap-2">
-          {state.batches.map((batch) => {
-            // O diálogo fica aberto também enquanto desfaz: some só com o resultado.
-            const isConfirming =
-              (revertState.kind === 'confirming' || revertState.kind === 'reverting') &&
-              revertState.batchId === batch.id;
-            const isReverting =
-              revertState.kind === 'reverting' && revertState.batchId === batch.id;
-            const revertError =
-              revertState.kind === 'error' && revertState.batchId === batch.id
-                ? revertState.message
-                : null;
-            const justReverted =
-              revertState.kind === 'reverted' && revertState.batchId === batch.id;
-            const canRevert = batch.status === 'committed';
-            return (
-              <li key={batch.id} className="border border-border bg-card p-3 sm:p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <span className="min-w-0 break-all text-sm font-medium text-foreground">
-                        {batchTitle(batch)}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {batchRowsText(batch.status, batch.rowsImported)}
-                      </span>
-                    </div>
-                    <span className="min-w-0 break-all text-xs text-muted-foreground">
-                      {formatDateBR(batch.createdAt.slice(0, 10))}
-                      {batchTitle(batch) === batch.fileName ? '' : ` · ${batch.fileName}`}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Selo tone={statusTone(batch.status)} label={batchStatusLabel(batch.status)} />
-                    {canRevert ? (
-                      <Button
-                        id={revertTriggerId(batch.id)}
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => startConfirm(batch.id)}
-                        disabled={isReverting}
-                        aria-label={`Desfazer importação de ${batch.fileName}`}
-                      >
-                        <Undo2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        Desfazer
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-
-                {isConfirming && confirmingBatch ? (
-                  <div
-                    id={revertDialogId(batch.id)}
-                    tabIndex={-1}
-                    aria-busy={isReverting}
-                    role="alertdialog"
-                    aria-labelledby={`revert-prompt-${batch.id}`}
-                    aria-describedby={`revert-detail-${batch.id}`}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Escape') cancelConfirm();
-                    }}
-                    className="mt-3 border border-warning bg-warning-soft p-3 text-sm text-foreground"
-                  >
-                    <p id={`revert-prompt-${batch.id}`} className="font-medium">{revertPrompt(confirmingBatch)}</p>
-                    <p id={`revert-detail-${batch.id}`} className="mt-1 text-xs text-muted-foreground">
-                      Esta ação remove os lançamentos do lote. O histórico do
-                      lote é preservado como desfeito.
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button
-                        id={revertCancelId(batch.id)}
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={cancelConfirm}
-                        disabled={isReverting}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => void confirmRevert()}
-                        disabled={isReverting}
-                      >
-                        {isReverting ? 'Desfazendo…' : 'Confirmar desfazer'}
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {revertError ? (
-                  <Faixa tone="danger" role="alert" className="mt-3">
-                    <span>{revertError}</span>
-                  </Faixa>
-                ) : null}
-
-                {justReverted && revertState.kind === 'reverted' ? (
-                  <p ref={resultRef} tabIndex={-1} role="status" className="mt-2 text-xs font-medium text-success">
-                    {revertedMessage(revertState.transactionsDeleted)}
-                  </p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          {main.length > 0 ? <ul className="flex flex-col gap-2">{main.map(renderBatch)}</ul> : null}
+          {hidden.length > 0 ? (
+            <details className="border border-border bg-card">
+              <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-medium text-foreground sm:px-4">
+                {hiddenBatchesLabel(hidden.length)}
+              </summary>
+              <ul className="flex flex-col gap-2 border-t border-border p-3 sm:p-4">{hidden.map(renderBatch)}</ul>
+            </details>
+          ) : null}
+        </>
       ) : null}
     </section>
   );
