@@ -7,8 +7,10 @@ import { cn } from '@/lib/utils';
 type DropZoneProps = {
   file: File | null;
   disabled?: boolean;
-  /** Chamado com o arquivo escolhido ou solto; `null` quando a escolha é limpa. */
-  onFile: (file: File | null) => void;
+  /** Quantos arquivos há na fila (o da vez incluído); mais de um muda o texto. */
+  queueSize?: number;
+  /** Chamado com os arquivos escolhidos ou soltos (um ou vários); lista vazia quando a escolha é limpa. */
+  onFiles: (files: File[]) => void;
 };
 
 /**
@@ -16,20 +18,22 @@ type DropZoneProps = {
  * continua sendo o controle real (teclado, leitor de tela, seletor do sistema): fica visualmente
  * escondido e a área inteira é o rótulo dele. Soltar um arquivo faz o mesmo que escolhê-lo.
  */
-export function DropZone({ file, disabled = false, onFile }: DropZoneProps) {
+export function DropZone({ file, disabled = false, queueSize = 1, onFiles }: DropZoneProps) {
   const inputId = useId();
   const [dragging, setDragging] = useState(false);
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
-    onFile(event.target.files?.[0] ?? null);
+    onFiles(Array.from(event.target.files ?? []));
+    // Permite escolher o mesmo arquivo de novo depois de limpar.
+    event.target.value = '';
   }
 
   function handleDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setDragging(false);
     if (disabled) return;
-    const dropped = event.dataTransfer.files[0];
-    if (dropped) onFile(dropped);
+    const dropped = Array.from(event.dataTransfer.files);
+    if (dropped.length > 0) onFiles(dropped);
   }
 
   return (
@@ -49,18 +53,23 @@ export function DropZone({ file, disabled = false, onFile }: DropZoneProps) {
     >
       <FileUp className="h-6 w-6 text-primary" aria-hidden="true" />
       <span className="text-base font-medium text-foreground">
-        {file ? file.name : 'Arraste a fatura ou escolha o PDF'}
+        {file ? file.name : 'Arraste as faturas ou escolha os PDFs'}
       </span>
       <span className="text-sm text-muted-foreground">
-        {file ? 'Solte outro arquivo aqui para trocar.' : 'Só o PDF da fatura. Nada é enviado antes de você pedir a pré-visualização.'}
+        {file
+          ? queueSize > 1
+            ? 'Solte outros arquivos aqui para trocar a fila.'
+            : 'Solte outro arquivo aqui para trocar.'
+          : 'Pode escolher várias faturas de uma vez. Nada é enviado antes de você pedir a pré-visualização.'}
       </span>
       <span className="mt-1 inline-flex h-11 items-center border border-input bg-background px-4 text-sm font-medium text-foreground sm:h-9">
-        {file ? 'Escolher outro arquivo' : 'Escolher o PDF'}
+        {file ? 'Escolher outros arquivos' : 'Escolher os PDFs'}
       </span>
       <input
         id={inputId}
         type="file"
         accept=".pdf,.ofx,.csv,.xls,.xlsx,application/pdf"
+        multiple
         disabled={disabled}
         onChange={handleChange}
         className="sr-only"

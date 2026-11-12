@@ -6,6 +6,8 @@ import { requireSession } from '@/lib/auth/session';
 import { listAccounts, listCards, listMembers } from '@/lib/db/queries/cards';
 import { listCategories } from '@/lib/db/queries/categories';
 import { topUpPlanned } from '@/lib/db/queries/recurring-planned-write';
+import { listRecurrenceHistory } from '@/lib/db/queries/recurring-suggestions';
+import { suggestRecurrences } from '@/lib/finance/recurrence-suggestions';
 import {
   listIncomes,
   listRecurringExpenses,
@@ -32,7 +34,7 @@ export default async function RecorrentesPage() {
   // tela segue com o que existe (o erro vai para o log do servidor).
   await topUpPlanned(householdId, today);
 
-  const [expenses, incomes, categories, accounts, cards, members, settings] =
+  const [expenses, incomes, categories, accounts, cards, members, settings, history] =
     await Promise.all([
       listRecurringExpenses(householdId),
       listIncomes(householdId),
@@ -41,7 +43,20 @@ export default async function RecorrentesPage() {
       listCards(householdId),
       listMembers(householdId),
       getSettings(householdId),
+      listRecurrenceHistory(householdId, today),
     ]);
+
+  // Sugestões pelo histórico: o motor roda AQUI, no servidor (ele não pode ir para o navegador),
+  // e a tela recebe os candidatos prontos. O que já é receita ou despesa fixa, ativa ou não, não
+  // é sugerido de novo.
+  const suggestions = suggestRecurrences({
+    today,
+    rows: history,
+    existing: [
+      ...expenses.map((expense) => ({ kind: 'expense' as const, description: expense.description })),
+      ...incomes.map((income) => ({ kind: 'income' as const, description: income.description })),
+    ],
+  });
 
   return (
     <>
@@ -54,6 +69,7 @@ export default async function RecorrentesPage() {
         previewMonths={settings.projectionMonths}
         expenses={expenses}
         incomes={incomes}
+        suggestions={suggestions}
         recurringOptions={{
           // Apenas folhas — despesa fixa exige categoria-folha (RF-CAT-01),
           // a borda do banco recusa raiz no POST. `listCategories` devolve a

@@ -5,6 +5,7 @@ import { Check, Pencil, Tags, Trash2 } from 'lucide-react';
 import { competenceLong, competenceShort } from '@/components/cashflow/labels';
 import { cn } from '@/lib/utils';
 import { cents, formatBRL, parseBRL } from '@/lib/money';
+import { countLabel } from './month-view';
 import {
   Button,
   Canhoto,
@@ -32,7 +33,7 @@ import {
 } from './edit-values';
 import { EDITABLE_TRANSACTION_KINDS } from '@/lib/db/queries/transactions-editable-kinds';
 import { paymentSituation } from './payment-situation';
-import { commonMarks, groupByCompetence, installmentLabel, isBankText, isIncompleteDescription, rowMarkLabels, rowMarkTone, stripInstallmentSuffix } from './list-presentation';
+import { commonMarks, groupByCompetence, installmentLabel, isBankText, isIncompleteDescription, rowMarkLabels, rowMarkTone, rowMetaParts, stripInstallmentSuffix } from './list-presentation';
 
 const kindLabel: Record<Transaction['kind'], string> = {
   expense: 'Despesa',
@@ -318,10 +319,8 @@ export function TransactionList({
                 </span>
               ))}
             </div>
-            <span className="flex flex-wrap items-baseline gap-x-2 font-normal text-muted-foreground">
-              {group.rows.length} {group.rows.length === 1 ? 'lançamento' : 'lançamentos'} · receitas − despesas{' '}
-              <Money value={cents(group.totalCents)} className="font-semibold text-foreground" />
-            </span>
+            {/* Só a contagem: Receitas, Despesas e Sobra do mês ficam no resumo do topo, vindos do motor. */}
+            <span className="text-xs font-normal text-muted-foreground">{countLabel(group.rows.length)}</span>
           </div>
           {(() => {
             const faturas = settlement.find((item) => item.competence === group.competence);
@@ -347,6 +346,13 @@ export function TransactionList({
               // Situação da fatura do lançamento de cartão: texto + letra do selo (nunca só cor).
               const pagamento = paymentSituation(row, today);
               if (pagamento !== null) marcas.push({ label: pagamento.label, tone: pagamento.tone, letter: pagamento.letter });
+              const meta = rowMetaParts({
+                kindLabel: kindLabel[row.kind],
+                sourceLabel: sourceLabel(row),
+                categoryName: row.categoryName,
+                memberName: row.memberName,
+              });
+              const bankText = isBankText(row);
               return (
                 <li key={row.id}>
                   <Canhoto
@@ -371,7 +377,9 @@ export function TransactionList({
                       </button>
                     }
                     marcas={marcas}
-                    valor={<Money value={row.amountCents} />}
+                    // No celular o valor mora na MESMA linha da descrição (dentro do corpo, abaixo); a coluna
+                    // de valor do canhoto só aparece a partir de `sm`.
+                    valor={<Money value={row.amountCents} className="hidden sm:inline" />}
                     footer={
                       editing ? (
                         <div className="flex flex-col gap-2">
@@ -383,30 +391,45 @@ export function TransactionList({
                       ) : null
                     }
                   >
-                    <button
-                      id={`lanc-${row.id}-abrir`}
-                      type="button"
-                      aria-expanded={editing}
-                      aria-label={`${editing ? 'Fechar' : 'Abrir'} ${title}`}
-                      onClick={() => (editing ? onCancelEdit() : onEdit(row.id))}
-                      className="flex min-h-11 min-w-0 items-center gap-2 text-left text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-6"
-                    >
-                      <span className="truncate" title={title}>{title}</span>
-                      <Pencil className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    </button>
-                    <p className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                      <span><DateText value={row.occurredOn} /> · {kindLabel[row.kind]}</span>
-                      <span className="truncate" title={sourceLabel(row)}>{sourceLabel(row)}</span>
-                      {row.categoryName ? <span className="truncate text-foreground" title={row.categoryName}>{row.categoryName}</span> : null}
-                      {row.memberName ? <span className="truncate">{row.memberName}</span> : null}
-                      {/* Descrição crua do banco (crítica 6.5): marca discreta até a edição resumir. */}
-                      {isBankText(row) ? (
-                        <span className="truncate border border-border px-1.5 text-foreground">
-                          texto do banco
-                          <span className="sr-only">: abra a linha para resumir</span>
+                    {/*
+                      Linha compacta (Lote 2, item 6): descrição e valor na mesma linha, apoio numa linha só.
+                      O botão da descrição estica a área de clique sobre o corpo inteiro (`after:inset-0`), então
+                      o alvo de toque é o corpo (44px ou mais) sem a descrição precisar de 44px só para ela.
+                    */}
+                    <div className="relative flex min-h-11 min-w-0 flex-col justify-center gap-0.5 sm:min-h-0 sm:gap-0">
+                      <div className="flex min-w-0 items-baseline gap-2">
+                        <button
+                          id={`lanc-${row.id}-abrir`}
+                          type="button"
+                          aria-expanded={editing}
+                          aria-label={`${editing ? 'Fechar' : 'Abrir'} ${title}`}
+                          onClick={() => (editing ? onCancelEdit() : onEdit(row.id))}
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-foreground after:absolute after:inset-0 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <span className="truncate" title={title}>{title}</span>
+                          <Pencil className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        </button>
+                        <Money value={row.amountCents} className="shrink-0 text-base sm:hidden" />
+                      </div>
+                      <p className="flex min-w-0 items-baseline gap-x-1.5 text-xs text-muted-foreground">
+                        {/* No celular o talão já mostra a data; ela só se repete aqui quando o talão mostra a parcela. */}
+                        <span className={cn('shrink-0', row.installmentNumber === null && 'hidden sm:inline')}>
+                          <DateText value={row.occurredOn} /> ·
                         </span>
-                      ) : null}
-                    </p>
+                        <span className="truncate" title={meta.join(' · ')}>
+                          {kindLabel[row.kind]} · <span title={sourceLabel(row)}>{sourceLabel(row)}</span>
+                          {row.categoryName ? <> · <span className="text-foreground">{row.categoryName}</span></> : null}
+                          {row.memberName ? ` · ${row.memberName}` : null}
+                        </span>
+                        {/* Descrição crua do banco (crítica 6.5): marca discreta até a edição resumir. */}
+                        {bankText ? (
+                          <span className="shrink-0 border border-border px-1.5 text-foreground">
+                            texto do banco
+                            <span className="sr-only">: abra a linha para resumir</span>
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
                   </Canhoto>
                 </li>
               );

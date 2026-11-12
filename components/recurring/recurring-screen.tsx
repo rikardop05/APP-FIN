@@ -29,6 +29,13 @@ import {
   type LeafCategoryGroup,
 } from './recurring-form';
 import {
+  evidenceMonthsText,
+  expenseFormFromSuggestion,
+  incomeFormFromSuggestion,
+  visibleSuggestions,
+  type RecurrenceSuggestion,
+} from './suggestions';
+import {
   IncomeFormSchema,
   RecurringExpenseFormSchema,
   frequencyLabel,
@@ -100,6 +107,11 @@ type RecurringScreenProps = {
   incomes: IncomeItem[];
   recurringOptions: RecurringOptions;
   incomeOptions: IncomeOptions;
+  /**
+   * Candidatos a receita ou despesa fixa pelo histórico, calculados no servidor pelo motor
+   * (`suggestRecurrences`). A tela só mostra a evidência e abre o formulário preenchido.
+   */
+  suggestions: RecurrenceSuggestion[];
 };
 
 const FREQUENCY_OPTIONS: Frequency[] = [
@@ -262,6 +274,7 @@ function DialogShell({
 
 function ExpenseDialog({
   initial,
+  prefill,
   options,
   today,
   previewMonths,
@@ -271,6 +284,8 @@ function ExpenseDialog({
   onSubmit,
 }: {
   initial: RecurringExpenseFormInput | null;
+  /** Valores de uma sugestão do histórico: é um cadastro NOVO, só que já preenchido. */
+  prefill?: RecurringExpenseFormInput | null;
   options: RecurringOptions;
   today: string;
   previewMonths: number;
@@ -280,7 +295,7 @@ function ExpenseDialog({
   onSubmit: (values: RecurringExpenseFormInput) => Promise<void>;
 }) {
   const [values, setValues] = useState<RecurringExpenseFormInput>(
-    initial ?? {
+    initial ?? prefill ?? {
       description: '',
       amountInput: '',
       categoryId: firstLeafId(options.categories),
@@ -513,6 +528,7 @@ function ExpenseDialog({
 
 function IncomeDialog({
   initial,
+  prefill,
   options,
   today,
   previewMonths,
@@ -522,6 +538,8 @@ function IncomeDialog({
   onSubmit,
 }: {
   initial: IncomeFormInput | null;
+  /** Valores de uma sugestão do histórico: é um cadastro NOVO, só que já preenchido. */
+  prefill?: IncomeFormInput | null;
   options: IncomeOptions;
   today: string;
   previewMonths: number;
@@ -531,7 +549,7 @@ function IncomeDialog({
   onSubmit: (values: IncomeFormInput) => Promise<void>;
 }) {
   const [values, setValues] = useState<IncomeFormInput>(
-    initial ?? {
+    initial ?? prefill ?? {
       description: '',
       amountInput: '',
       kind: 'salary',
@@ -809,6 +827,7 @@ export function RecurringScreen({
   incomes,
   recurringOptions,
   incomeOptions,
+  suggestions,
 }: RecurringScreenProps) {
   const [expenseList, setExpenseList] = useState(expenses);
   const [incomeList, setIncomeList] = useState(incomes);
@@ -819,6 +838,29 @@ export function RecurringScreen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleted, setDeleted] = useState<string | null>(null);
+  // Sugestões pelo histórico: "Ignorar" e "Cadastrar" tiram a sugestão só desta sessão (sem
+  // persistência nesta rodada). `fromSuggestion` é a que está aberta no formulário agora.
+  const [dismissedKeys, setDismissedKeys] = useState<string[]>([]);
+  const [fromSuggestion, setFromSuggestion] = useState<RecurrenceSuggestion | null>(null);
+  const openSuggestions = visibleSuggestions(suggestions, dismissedKeys);
+
+  function dismissSuggestion(key: string) {
+    setDismissedKeys((current) => (current.includes(key) ? current : [...current, key]));
+  }
+
+  /** Abre o formulário existente já preenchido. Nada é gravado até a pessoa confirmar. */
+  function registerSuggestion(suggestion: RecurrenceSuggestion) {
+    setFromSuggestion(suggestion);
+    setError(null);
+    if (suggestion.kind === 'income') setCreatingIncome(true);
+    else setCreatingExpense(true);
+  }
+
+  /** Depois de gravar: a sugestão que virou cadastro sai da lista. */
+  function settleSuggestion() {
+    if (fromSuggestion !== null) dismissSuggestion(fromSuggestion.key);
+    setFromSuggestion(null);
+  }
 
   async function submitExpense(values: RecurringExpenseFormInput): Promise<void> {
     setBusy(true);
@@ -882,6 +924,7 @@ export function RecurringScreen({
       );
       setEditingExpense(null);
       setCreatingExpense(false);
+      settleSuggestion();
       setDeleted(null);
     } finally {
       setBusy(false);
@@ -933,6 +976,7 @@ export function RecurringScreen({
       );
       setEditingIncome(null);
       setCreatingIncome(false);
+      settleSuggestion();
       setDeleted(null);
     } finally {
       setBusy(false);
@@ -992,6 +1036,53 @@ export function RecurringScreen({
         <div role="status" className="border border-success/50 bg-success-soft p-3 text-sm text-success">
           Item desativado. As ocorrências previstas não aparecem mais no fluxo de caixa.
         </div>
+      ) : null}
+
+      {openSuggestions.length > 0 ? (
+        <section aria-labelledby="recurring-suggestions-heading" className="flex flex-col gap-3">
+          <div>
+            <h2 id="recurring-suggestions-heading" className="text-base font-semibold text-foreground">
+              Sugestões pelo histórico
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Lançamentos que se repetiram nos últimos meses. Nada é cadastrado sem você confirmar.
+            </p>
+          </div>
+          <ul className="flex flex-col gap-3">
+            {openSuggestions.map((suggestion) => (
+              <li key={suggestion.key}>
+                <article className="flex flex-col gap-3 border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <span className="truncate text-sm font-medium text-foreground" title={suggestion.description}>
+                      {suggestion.description}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {suggestion.kind === 'income' ? 'Receita' : 'Despesa'} · apareceu em{' '}
+                      {evidenceMonthsText(suggestion.months)}, ~
+                      <Money value={suggestion.medianCents} sign="never" className="font-medium text-foreground" /> no dia{' '}
+                      {suggestion.suggestedDay}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <Button type="button" size="sm" onClick={() => registerSuggestion(suggestion)} disabled={busy}>
+                      Cadastrar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Ignorar a sugestão ${suggestion.description}`}
+                      onClick={() => dismissSuggestion(suggestion.key)}
+                      disabled={busy}
+                    >
+                      Ignorar
+                    </Button>
+                  </div>
+                </article>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       <section
@@ -1176,7 +1267,14 @@ export function RecurringScreen({
 
       {creatingExpense ? (
         <ExpenseDialog
+          // `key`: abrir por outra sugestão remonta o formulário com os valores dela.
+          key={fromSuggestion?.key ?? 'new-expense'}
           initial={null}
+          prefill={
+            fromSuggestion !== null && fromSuggestion.kind === 'expense'
+              ? expenseFormFromSuggestion(fromSuggestion, recurringOptions, today)
+              : null
+          }
           options={recurringOptions}
           today={today}
           previewMonths={previewMonths}
@@ -1184,6 +1282,8 @@ export function RecurringScreen({
           error={error}
           onClose={() => {
             setCreatingExpense(false);
+            // Fechar sem salvar NÃO ignora a sugestão: ela continua na lista.
+            setFromSuggestion(null);
             setError(null);
           }}
           onSubmit={submitExpense}
@@ -1208,7 +1308,13 @@ export function RecurringScreen({
 
       {creatingIncome ? (
         <IncomeDialog
+          key={fromSuggestion?.key ?? 'new-income'}
           initial={null}
+          prefill={
+            fromSuggestion !== null && fromSuggestion.kind === 'income'
+              ? incomeFormFromSuggestion(fromSuggestion, incomeOptions, today)
+              : null
+          }
           options={incomeOptions}
           today={today}
           previewMonths={previewMonths}
@@ -1216,6 +1322,7 @@ export function RecurringScreen({
           error={error}
           onClose={() => {
             setCreatingIncome(false);
+            setFromSuggestion(null);
             setError(null);
           }}
           onSubmit={submitIncome}

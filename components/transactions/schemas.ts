@@ -55,6 +55,20 @@ export const transactionResponseSchema = z.object({
   }),
   /** Pago e pendente das faturas de cartão por competência (vem pronto da query). */
   settlement: z.array(z.object({ competence: z.string(), paidCents: centsSchema, pendingCents: centsSchema })).default([]),
+  /**
+   * Receitas, Despesas e Sobra do mês pedido (`monthlyKpis`, o motor do Painel), sempre do mês
+   * INTEIRO. `null` sem mês escolhido ("Todos os meses"). Obrigatório: se a rota esquecer, o parse lança.
+   */
+  summary: z
+    .object({
+      competence: z.string().regex(/^\d{4}-\d{2}$/),
+      incomeCents: centsSchema,
+      expenseCents: centsSchema,
+      surplusCents: centsSchema,
+    })
+    .nullable(),
+  /** Lançamentos sem categoria do household (não do filtro): o número do botão "Revisar N sem categoria". */
+  uncategorizedCount: z.number().int().nonnegative(),
 });
 
 export const ruleSuggestionSchema = z.object({
@@ -67,6 +81,7 @@ export const ruleSuggestionSchema = z.object({
 
 export type Transaction = z.infer<typeof transactionSchema>;
 export type TransactionResponse = z.infer<typeof transactionResponseSchema>;
+export type MonthSummaryView = NonNullable<z.infer<typeof transactionResponseSchema>['summary']>;
 export type TransactionOptions = TransactionResponse['options'];
 export type RuleSuggestion = z.infer<typeof ruleSuggestionSchema>;
 

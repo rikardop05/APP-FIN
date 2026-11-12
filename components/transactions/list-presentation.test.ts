@@ -110,8 +110,8 @@ describe('stripInstallmentSuffix: a parcela não aparece duas vezes', () => {
 
 import { groupByCompetence } from './list-presentation';
 
-describe('groupByCompetence: agrupamento por mês com total', () => {
-  it('mantém a ordem e soma cada mês só com receita e despesa (a regra da Sobra)', () => {
+describe('groupByCompetence: agrupamento por mês, sem somar dinheiro', () => {
+  it('mantém a ordem dos grupos e das linhas', () => {
     const rows = [
       { competence: '2026-10', amountCents: -1000, kind: 'expense' },
       { competence: '2026-10', amountCents: 5000, kind: 'income' },
@@ -120,11 +120,16 @@ describe('groupByCompetence: agrupamento por mês com total', () => {
       { competence: '2026-11', amountCents: -300, kind: 'expense' },
     ];
     const groups = groupByCompetence(rows);
-    expect(groups.map((g) => [g.competence, g.rows.length, g.totalCents])).toEqual([
-      ['2026-10', 3, 4000],
-      ['2026-09', 1, -200],
-      ['2026-11', 1, -300],
+    expect(groups.map((g) => [g.competence, g.rows.length])).toEqual([
+      ['2026-10', 3],
+      ['2026-09', 1],
+      ['2026-11', 1],
     ]);
+  });
+
+  it('o grupo não carrega total: Receitas, Despesas e Sobra vêm do motor, não da tela', () => {
+    const [group] = groupByCompetence([{ competence: '2026-10', amountCents: -1000, kind: 'expense' }]);
+    expect(Object.keys(group ?? {}).sort()).toEqual(['competence', 'rows']);
   });
 
   it('lista vazia, nenhum grupo', () => {
@@ -132,7 +137,26 @@ describe('groupByCompetence: agrupamento por mês com total', () => {
   });
 });
 
-import { commonMarks, isIncompleteDescription, rowMarkLabels } from './list-presentation';
+import { commonMarks, isIncompleteDescription, rowMarkLabels, rowMetaParts } from './list-presentation';
+
+describe('rowMetaParts: a linha de apoio do canhoto', () => {
+  it('tipo · origem · categoria · responsável, nessa ordem', () => {
+    expect(
+      rowMetaParts({ kindLabel: 'Despesa', sourceLabel: 'Cartão · Santander', categoryName: 'Mercado', memberName: 'Ricardo' }),
+    ).toEqual(['Despesa', 'Cartão · Santander', 'Mercado', 'Ricardo']);
+  });
+  it('sem categoria ou sem responsável, a parte some (sem separador sobrando)', () => {
+    expect(rowMetaParts({ kindLabel: 'Receita', sourceLabel: 'Conta · Salário', categoryName: null, memberName: null })).toEqual([
+      'Receita',
+      'Conta · Salário',
+    ]);
+    expect(rowMetaParts({ kindLabel: 'Despesa', sourceLabel: 'Sem origem', categoryName: '', memberName: 'Ana' })).toEqual([
+      'Despesa',
+      'Sem origem',
+      'Ana',
+    ]);
+  });
+});
 
 describe('selos que se repetem sobem para o cabeçalho do mês', () => {
   const planned = { status: 'planned', categoryName: null, description: 'Padaria' };

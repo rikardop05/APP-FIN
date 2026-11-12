@@ -1,9 +1,20 @@
 import { competenceLong } from '@/components/cashflow/labels';
+import { formatDateBR } from '@/lib/date';
 import { bankLabel } from './review-model';
 
 /**
  * Textos do histórico de importações. Fora do .tsx porque o vitest não transforma JSX.
  */
+
+/** Dia (AAAA-MM-DD) de um instante `timestamptz` no fuso de São Paulo: 22h de 12/09 lá é 13/09 em UTC. */
+export function saoPauloDay(instant: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(instant));
+}
 
 export type BatchStatus = 'pending' | 'committed' | 'reverted' | 'failed';
 
@@ -26,19 +37,43 @@ export function batchStatusLabel(status: BatchStatus): string {
 }
 
 /**
- * Título do lote: "Nubank · outubro de 2026" quando o histórico traz banco e competência; senão o nome
+ * Título do lote: "Nubank · outubro de 2026" quando o histórico traz banco e competência; sem competência
+ * (lote desfeito perde a fatura) mas com banco e data, "Nubank · importação de 12/09/2026"; senão o nome
  * do arquivo, que sempre existe.
  */
 export function batchTitle(batch: {
   fileName: string;
   bankKey?: string | null;
   competence?: string | null;
+  createdAt?: string | null;
 }): string {
+  const bank = batch.bankKey ? bankLabel(batch.bankKey) : null;
   if (batch.competence) {
-    const bank = batch.bankKey ? bankLabel(batch.bankKey) : null;
     return bank === null ? competenceLong(batch.competence) : `${bank} · ${competenceLong(batch.competence)}`;
   }
+  if (bank !== null && batch.createdAt) {
+    return `${bank} · importação de ${formatDateBR(saoPauloDay(batch.createdAt))}`;
+  }
   return batch.fileName;
+}
+
+/** Lote desfeito que não guarda mais nada: só atrapalha a lista principal. */
+export function isEmptyReverted(batch: { status: BatchStatus; rowsImported: number }): boolean {
+  return batch.status === 'reverted' && batch.rowsImported === 0;
+}
+
+/** Separa a lista principal dos lotes "Desfeito, sem lançamentos", mantendo a ordem. */
+export function splitBatches<T extends { status: BatchStatus; rowsImported: number }>(
+  batches: readonly T[],
+): { main: T[]; hidden: T[] } {
+  const main: T[] = [];
+  const hidden: T[] = [];
+  for (const batch of batches) (isEmptyReverted(batch) ? hidden : main).push(batch);
+  return { main, hidden };
+}
+
+export function hiddenBatchesLabel(count: number): string {
+  return count === 1 ? 'Ver 1 importação desfeita' : `Ver ${count} importações desfeitas`;
 }
 
 /**

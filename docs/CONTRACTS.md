@@ -69,6 +69,22 @@ function reconcileStatement(input: {
 }): { computedTotal: Cents; differenceCents: Cents; matches: boolean }
 ```
 
+### 3.1 Fatura já fechada e não importada — `/lib/finance/missing-statements.ts` (Lote 1, 2026-11-10)
+
+Pendência do Painel. Puro: recebe `today`; a janela vem de `statementWindow`.
+
+```ts
+function missingStatements(input: {
+  today: IsoDate;
+  cards: readonly ({ id: string } & CardCycleConfig)[];          // só cartões ATIVOS (quem chama filtra)
+  statements: readonly { creditCardId: string; period: Competence }[];  // o HISTÓRICO até a corrente
+}): { creditCardId: string; competence: Competence; closingDate: IsoDate; dueDate: IsoDate }[]
+
+function missingStatementCompetences(today: IsoDate): [Competence, Competence]  // [anterior, corrente]
+```
+
+Regra: a competência CORRENTE é pendência quando `closingDate < today` e não há `statement` dela. A ANTERIOR só é pendência quando, além disso, o cartão já tem fatura de competência menor que ela (buraco no histórico, não o começo dele). Só uma competência para trás. Limite aceito: a primeira fatura de um cartão, nunca importada, some na virada do mês; cartão ativo sem uso no mês (banco não emite fatura) aparece como pendência até ser desativado.
+
 ## 4. Parcelas — `/lib/finance/installments.ts`
 
 ```ts
@@ -783,6 +799,41 @@ function suggestBudgetFromHistory(
   history: { competence: Competence; categoryId: string; amountCents: Cents }[],
   opts: { months: number }
 ): { categoryId: string; suggestedCents: Cents }[]
+```
+
+### 10.1 Gasto sem orçamento e totais do mês (Lote 1, 2026-11-10)
+
+Existem porque `budgetStatus` só devolve linha para categoria COM orçamento: sem eles, um mês sem orçamento salvo aparecia como "nenhuma despesa". Ausência de orçamento não é orçamento zero: sem `usageBp`, sem folga, sem cor, nunca "estourou".
+
+```ts
+function unbudgetedSpend(input: {
+  budgetedCategoryIds: readonly string[];
+  spent: readonly { categoryId: string; amountCents: Cents }[];
+  upcoming?: readonly { categoryId: string; amountCents: Cents }[];
+  allowedCategoryIds?: readonly string[];       // as folhas orçáveis; ausente = todas
+}): { categoryId: string; spentCents: Cents; upcomingCents: Cents; expectedCents: Cents }[]
+// Só categoria com esperado > 0. Mesma agregação de budgetStatus: max(0, -soma) por parcela.
+
+function spendOutsideCategories(input: {
+  spent: readonly { categoryId: string | null; amountCents: Cents }[];
+  upcoming?: readonly { categoryId: string | null; amountCents: Cents }[];
+  allowedCategoryIds: readonly string[];
+}): { spentCents: Cents; upcomingCents: Cents; expectedCents: Cents }
+// Despesa sem categoria ou em categoria que não recebe orçamento (raiz, natureza não orçável).
+
+function budgetMonthTotals(input: {
+  rows: readonly { plannedCents: Cents; spentCents: Cents; upcomingCents: Cents }[];
+  unbudgeted: readonly { spentCents: Cents; upcomingCents: Cents }[];
+  outside?: { spentCents: Cents; upcomingCents: Cents; expectedCents: Cents };
+  warnBp: BasisPoints;
+}): {
+  budgeted: { plannedCents; spentCents; upcomingCents; expectedCents; remainingCents;
+              usageBp: BasisPoints | null; light: BudgetLight | null };  // light null = nenhum orçamento
+  unbudgeted: { spentCents; upcomingCents; expectedCents };
+  outside: { spentCents; upcomingCents; expectedCents };
+}
+// Cor e uso do total = budgetStatus sobre uma linha agregada. O sem-orçamento NÃO entra no uso.
+// budgeted.expected + unbudgeted.expected + outside.expected = despesa do mês (lançado + previsto).
 ```
 
 ## 11. Fluxo de caixa — `/lib/finance/cashflow.ts`
