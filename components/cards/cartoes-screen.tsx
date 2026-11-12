@@ -441,7 +441,18 @@ export function CartoesScreen({ today, commitmentMonths, commitmentTransactions 
                     <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
                       <span>Fecha dia <strong className="font-medium text-foreground">{card.closingDay}</strong></span>
                       <span>Vence dia <strong className="font-medium text-foreground">{card.dueDay}</strong></span>
-                      <span>Limite <strong className="font-medium text-foreground">{card.creditLimitCents === null ? 'Não informado' : <Money value={card.creditLimitCents} />}</strong></span>
+                      {card.creditLimitCents === null ? (
+                        <button
+                          type="button"
+                          onClick={() => setDialog({ kind: 'card', record: card })}
+                          aria-label={`Informar limite de ${card.name}`}
+                          className="-my-2 inline-flex min-h-11 items-center font-medium text-foreground underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0"
+                        >
+                          Informar limite
+                        </button>
+                      ) : (
+                        <span>Limite <strong className="font-medium text-foreground"><Money value={card.creditLimitCents} /></strong></span>
+                      )}
                     </div>
                     <CardHolders
                       card={card}

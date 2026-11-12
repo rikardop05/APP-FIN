@@ -15,7 +15,7 @@ export function messageForStatus(state: MagicLinkState): string | null {
     case 'sent':
       return 'Se este e-mail tiver acesso, enviamos um link. Abra o e-mail neste aparelho.';
     case 'error':
-      return 'Nao foi possivel enviar o link agora. Tente de novo em instantes.';
+      return 'Não foi possível enviar o link agora. Tente de novo em instantes.';
     case 'idle':
       return null;
   }

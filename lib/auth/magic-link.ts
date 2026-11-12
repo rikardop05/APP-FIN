@@ -119,17 +119,17 @@ function singleLine(value: string): string {
 export function buildMagicLinkEmail(url: string, host: string): Pick<MailMessage, 'subject' | 'text' | 'html'> {
   const subject = `Acesso ao APPFIN (${singleLine(host)})`;
   const text =
-    'Alguem pediu um link de acesso ao APPFIN para este endereco.\n\n' +
+    'Alguém pediu um link de acesso ao APPFIN para este endereço.\n\n' +
     `${url}\n\n` +
-    'O link vale por 15 minutos e so pode ser usado uma vez. ' +
-    'Se nao foi voce, ignore este e-mail: sem o link ninguem entra.';
+    'O link vale por 15 minutos e só pode ser usado uma vez. ' +
+    'Se não foi você, ignore este e-mail: sem o link ninguém entra.';
   // `url` e o link gerado pelo Auth.js, mas escapar antes de interpolar em
   // HTML e barato e fecha a porta para injecao caso um dia nao seja.
   const html =
-    '<p>Alguem pediu um link de acesso ao APPFIN para este endereco.</p>' +
+    '<p>Alguém pediu um link de acesso ao APPFIN para este endereço.</p>' +
     `<p><a href="${escapeHtml(url)}">Entrar no APPFIN</a></p>` +
-    '<p>O link vale por 15 minutos e so pode ser usado uma vez. ' +
-    'Se nao foi voce, ignore este e-mail.</p>';
+    '<p>O link vale por 15 minutos e só pode ser usado uma vez. ' +
+    'Se não foi você, ignore este e-mail.</p>';
 
   return { subject, text, html };
 }
