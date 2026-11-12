@@ -3,7 +3,17 @@
 Mantido pelo orquestrador. Estados: `todo | doing | review | done | blocked`.
 Primeiro arquivo a ler ao retomar uma sessão. Modelo por classe em `ORCHESTRATION.md` §9, equipe em `TEAM.md`.
 
-**Última atualização:** 2026-10-14 · 1894 testes verdes · **Redesenho visual "Carnê de Prestações" entregue (impeccable). Fases 1, 2 e 3 completas** (Fase 3 com gate humano aprovado em 2026-10-02; auditoria da Faisca em 2026-10-14 confirmou T-301..T-306; falta só conferir Investimentos a 390px por imagem). Equipe nova em OpenCode desde 2026-10-14 (`TEAM.md`).
+**Última atualização:** 2026-11-12 · ~2215 testes verdes · **Três lotes de melhoria** (aprovados pelo Ricardo em 2026-11-10; briefings em `.notas/brief-lote*.md`, fora do git):
+
+| Lote | Conteúdo | Estado |
+|---|---|---|
+| 1 — Números confiáveis | Orçamento mostra o gasto sem orçamento salvo; pendência "fatura já fechada e não importada" (CONTRACTS §3.1); saldo de hoje por conta; tipo editável na linha (marcar como transferência) | **na main** (PR #10) |
+| 2 — Uso | Lançamentos por mês com resumo do motor do Painel e filtros rápidos; linha compacta no celular; botão "Revisar N" com a contagem da tela de revisão; sugestão de fixas pelo histórico; Importar com fila de vários PDFs e desfeitas recolhidas | **PR #11** |
+| 3 — Visual | Investimentos com cartão de cenário em pilha e um carimbo só; Painel reordenado, Comprometido compacto e "Quem gastou"; vão do LoadingBlock fechado; login e e-mail acentuados; "Informar limite" nos cartões | **PR #12** (empilhado no #11) |
+
+Decisões dos lotes tomadas pelo Orquestrador com o Ricardo fora (revisáveis): contagem do "Revisar" = household em qualquer mês (bate com a tela de revisão, não com o Painel); sugestão de fixas exige 2+ meses de histórico; pendência de fatura só olha a competência anterior quando é buraco no histórico.
+
+**2026-10-14:** 1894 testes verdes · **Redesenho visual "Carnê de Prestações" entregue (impeccable). Fases 1, 2 e 3 completas** (Fase 3 com gate humano aprovado em 2026-10-02; auditoria da Faisca em 2026-10-14 confirmou T-301..T-306; falta só conferir Investimentos a 390px por imagem). Equipe nova em OpenCode desde 2026-10-14 (`TEAM.md`).
 
 **2026-10-14:** texto colado em cartão agora inverte o sinal como os PDFs (compra sem sinal = despesa). Carregar o Fluxo grava as previstas das recorrências **de propósito** (RF-ORC-02), de forma idempotente. As regras de categorização mostram "0 usos" porque não retroagem sobre importações antigas: use "Aplicar regras aos não categorizados". **Resolvido em 2026-10-14:** 264 households de teste órfãos apagados (`scripts/cleanup-test-households.ts`); o banco tem só a "Casa". O vazamento nos testes de banco foi fechado (seed autocontido).
 
