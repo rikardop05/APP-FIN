@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { TrendingUp } from 'lucide-react';
 
-import { Button, Canhoto, Carimbo, DateField, Money, PageHeader, Placar } from '@/components/ui-kit';
+import { Badge, Button, Carimbo, DateField, Money, PageHeader } from '@/components/ui-kit';
 
 import { AccumulationChart } from './accumulation-chart';
 import { FeasibilityLine, SurplusSummary } from './feasibility/feasibility';
@@ -13,7 +13,7 @@ import {
   saveButtonHint,
   visibleConfirmation,
   type SaveEvent,
-  formatMonthsStub,
+  scenarioVerdict,
   formatMonthsToTarget,
   SCENARIO_ORDER,
   scenarioName,
@@ -66,7 +66,7 @@ async function readData(response: Response): Promise<InvestmentData> {
 /** Avisos permanentes do módulo (RF-INV-01 e RF-INV-03): aparecem em toda visita, sem fechar. */
 function Notices() {
   return (
-    <div className="mt-4 flex max-w-prose flex-col gap-1 border border-border bg-secondary/40 px-4 py-3 text-sm" role="note">
+    <div className="mt-4 flex flex-col gap-1 border border-border bg-secondary/40 px-4 py-3 text-sm" role="note">
       <p><strong className="font-semibold">Valores em R$ de hoje.</strong> Tudo aqui está no poder de compra de hoje, já descontada a inflação.</p>
       <p className="text-muted-foreground">Retorno passado não é garantia de retorno futuro. Os cenários são hipóteses para planejar, não previsões.</p>
     </div>
@@ -205,10 +205,10 @@ type ScenarioCardProps = {
 };
 
 /**
- * Cada cenário é um bloco do mundo: o PRAZO (meses até o alvo, vindo do motor) vai no
- * talão, o patrimônio necessário é o valor do canhoto, a renda passiva projetada fecha
- * no Placar e o veredito vai no Carimbo (reservado a veredito). As premissas editáveis
- * (retorno e retirada) ficam visíveis ao lado dos números, nunca escondidas.
+ * Cada cenário é uma pilha: título com o veredito (Carimbo só no cenário de referência, Badge nos
+ * outros), patrimônio necessário e o PRAZO (meses até o alvo, vindo do motor), as premissas
+ * editáveis (retorno e retirada, sempre visíveis ao lado dos números), a tabela de aporte e o
+ * bloco de renda passiva.
  */
 function ScenarioCard({ scenario, surplus, maxYears, values, errors, onChange }: ScenarioCardProps) {
   const label = scenario.label;
@@ -217,30 +217,38 @@ function ScenarioCard({ scenario, surplus, maxYears, values, errors, onChange }:
   const feasible = scenario.result.feasible;
   const setPremise = (field: 'returnPct' | 'withdrawalPct') => (event: { target: { value: string } }) =>
     onChange({ ...values, scenarios: { ...values.scenarios, [label]: { ...row, [field]: event.target.value } } });
+  const verdict = scenarioVerdict(label, feasible);
   return (
-    <article className="flex min-w-0 flex-col gap-3 border-t-2 border-foreground pt-3" aria-labelledby={`scenario-${label}`}>
-      <h3 id={`scenario-${label}`} className="text-base font-semibold">{scenarioName(label)}</h3>
+    <article className="flex min-w-0 flex-col gap-4 border-t-2 border-foreground pt-3" aria-labelledby={`scenario-${label}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 id={`scenario-${label}`} className="text-base font-semibold">{scenarioName(label)}</h3>
+        {verdict.mode === 'stamp' ? (
+          <Carimbo tone={verdict.tone}>{verdict.text}</Carimbo>
+        ) : (
+          <Badge variant={verdict.tone}>{verdict.text}</Badge>
+        )}
+      </div>
       {!feasible && values.targetDate !== '' ? (
         <p className="text-xs text-muted-foreground">Fora do prazo do plano: com o aporte atual, o alvo passa do prazo.</p>
       ) : null}
 
-      <Canhoto
-        stub={formatMonthsStub(scenario.result.monthsWithCurrentContribution)}
-        valor={<Money value={scenario.result.targetPortfolioCents} sign="never" />}
-        ariaLabel={`Cenário ${scenarioName(label)}: ${feasible ? 'alcança' : 'não alcança'} o alvo, ${months.text}`}
-      >
+      <div role="group" className="flex flex-col gap-0.5" aria-label={`Cenário ${scenarioName(label)}: ${feasible ? 'alcança' : 'não alcança'} o alvo, ${months.text}`}>
+        <span className="text-sm text-muted-foreground">Patrimônio necessário</span>
+        <span className="num whitespace-nowrap text-2xl font-semibold"><Money value={scenario.result.targetPortfolioCents} sign="never" /></span>
         <span className="text-sm text-muted-foreground">
-          Patrimônio necessário{months.kind === 'time' ? '' : ` · ${months.text}`}
+          {months.kind === 'time' ? 'Tempo até a meta: ' : ''}
+          <span className="font-medium text-foreground">{months.text}</span>
         </span>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Retorno real ao ano (%)" htmlFor={`ret-${label}`} error={errors[`${label}.return`]}>
-            <input id={`ret-${label}`} className={inputClass} value={row.returnPct} onChange={setPremise('returnPct')} inputMode="decimal" />
-          </Field>
-          <Field label="Retirada ao ano (%)" htmlFor={`wd-${label}`} error={errors[`${label}.withdrawal`]}>
-            <input id={`wd-${label}`} className={inputClass} value={row.withdrawalPct} onChange={setPremise('withdrawalPct')} inputMode="decimal" />
-          </Field>
-        </div>
-      </Canhoto>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Retorno real a.a. (%)" htmlFor={`ret-${label}`} error={errors[`${label}.return`]}>
+          <input id={`ret-${label}`} className={inputClass} value={row.returnPct} onChange={setPremise('returnPct')} inputMode="decimal" />
+        </Field>
+        <Field label="Retirada a.a. (%)" htmlFor={`wd-${label}`} error={errors[`${label}.withdrawal`]}>
+          <input id={`wd-${label}`} className={inputClass} value={row.withdrawalPct} onChange={setPremise('withdrawalPct')} inputMode="decimal" />
+        </Field>
+      </div>
 
       <div className="flex flex-col gap-1 text-sm">
         <p className="text-muted-foreground">Aporte mensal necessário para chegar em</p>
@@ -248,24 +256,19 @@ function ScenarioCard({ scenario, surplus, maxYears, values, errors, onChange }:
           {scenario.result.requiredByHorizon.map((item) => (
             <li key={item.years} className="flex items-baseline justify-between gap-3 px-3 py-1.5">
               <span>{item.years} anos</span>
-              <span className="font-medium"><Money value={item.contributionCents} sign="never" /></span>
+              <span className="num whitespace-nowrap font-medium"><Money value={item.contributionCents} sign="never" /></span>
             </li>
           ))}
         </ul>
       </div>
       <FeasibilityLine scenario={scenario} surplus={surplus} />
       <p className="text-xs text-muted-foreground">{feasibleText(scenario.result.feasible, maxYears)}</p>
-      <Placar
-        title="Renda passiva"
-        action={<Carimbo tone={feasible ? 'ok' : 'danger'}>{feasible ? 'Alcança' : 'Não alcança'}</Carimbo>}
-        items={[
-          {
-            label: `Por mês em ${maxYears} anos, com o aporte atual`,
-            value: <Money value={scenario.result.projectedIncomeWithCurrentPlanCents} sign="never" />,
-            primary: true,
-          },
-        ]}
-      />
+
+      <section aria-label="Renda passiva" className="flex flex-col gap-0.5 border-t-2 border-foreground pt-2">
+        <h4 className="text-xs font-semibold uppercase tracking-widest">Renda passiva</h4>
+        <span className="text-xs text-muted-foreground">Por mês em {maxYears} anos, com o aporte atual</span>
+        <span className="num whitespace-nowrap text-xl font-semibold"><Money value={scenario.result.projectedIncomeWithCurrentPlanCents} sign="never" /></span>
+      </section>
     </article>
   );
 }
@@ -363,7 +366,7 @@ export function InvestmentScreen({ initial }: { initial: InvestmentData }) {
               </p>
             ) : null}
             <SurplusSummary scenarios={ordered} surplus={data.surplus} />
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-6 lg:grid-cols-3">
               {ordered.map((scenario) => (
                 <ScenarioCard key={scenario.label} scenario={scenario} surplus={data.surplus} maxYears={maxYears} values={values} errors={errors} onChange={setValues} />
               ))}

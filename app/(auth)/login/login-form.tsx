@@ -2,7 +2,7 @@
 
 import { useActionState } from 'react';
 
-import { Button } from '@/components/ui-kit';
+import { Button, Input } from '@/components/ui-kit';
 
 import { requestMagicLink } from './actions';
 import {
@@ -11,8 +11,8 @@ import {
 } from './magic-link-state';
 
 /**
- * Formulario de login: um campo de e-mail e um botao. Sem cadastro, sem senha,
- * sem "criar conta" — o acesso e so a allowlist (RNF-01).
+ * Formulário de login: um campo de e-mail e um botão. Sem cadastro, sem senha,
+ * sem "criar conta" — o acesso é só a allowlist (RNF-01).
  */
 export function LoginForm() {
   const [state, formAction, isPending] = useActionState(
@@ -27,7 +27,7 @@ export function LoginForm() {
     <form action={formAction} className="flex flex-col gap-4">
       <label className="flex flex-col gap-1.5 text-sm font-medium" htmlFor="email">
         E-mail
-        <input
+        <Input
           id="email"
           name="email"
           type="email"
@@ -36,12 +36,11 @@ export function LoginForm() {
           required
           autoFocus
           placeholder="voce@exemplo.com"
-          className="h-10 rounded-md border border-border bg-background px-3 text-base text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
       </label>
 
       <Button type="submit" disabled={isPending}>
-        {isPending ? 'Enviando...' : 'Receber link de acesso'}
+        {isPending ? 'Enviando…' : 'Receber link de acesso'}
       </Button>
 
       {message ? (
@@ -59,7 +58,7 @@ export function LoginForm() {
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        So os dois e-mails cadastrados entram. Sem link no e-mail, ninguem
+        Só os dois e-mails cadastrados entram. Sem link no e-mail, ninguém
         acessa.
       </p>
     </form>

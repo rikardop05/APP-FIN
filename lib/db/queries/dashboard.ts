@@ -8,6 +8,7 @@ import {
   categories,
   creditCards,
   investmentPlans,
+  members,
   statements,
   transactions,
 } from '@/lib/db/schema';
@@ -40,6 +41,8 @@ export type DashboardMonthlyTransaction = {
   kind: TransactionKind;
   status: TransactionStatus;
   categoryNature: CategoryNature;
+  /** Quem gastou; alimenta `spendingByMember` ("Quem gastou"). */
+  memberId: string | null;
 };
 
 export type DashboardSpendingTransaction = {
@@ -67,6 +70,15 @@ export type DashboardCommitmentTransaction = {
   /** Dia em que a linha sai do caixa (vencimento da fatura); null quando desconhecido. */
   cashDate: IsoDate | null;
 };
+
+/** Responsaveis da casa (id e nome), para o bloco "Quem gastou". Sempre recortado por household. */
+export async function listDashboardMembers(householdId: string): Promise<{ id: string; name: string }[]> {
+  return db
+    .select({ id: members.id, name: members.name })
+    .from(members)
+    .where(eq(members.householdId, householdId))
+    .orderBy(asc(members.name));
+}
 
 export type DashboardCategory = {
   id: string;
@@ -160,6 +172,7 @@ export async function getDashboardData(
         amountCents: transactions.amountCents,
         kind: transactions.kind,
         status: transactions.status,
+        memberId: transactions.memberId,
         // Lançamento sem categoria fica com `categoryNature = null` no join.
         // `monthlyKpis` (CONTRACTS §14) só consulta `categoryNature` para
         // distinguir essencial de não-essencial; "ainda não categorizado" não
@@ -309,6 +322,7 @@ export async function getDashboardData(
       kind: row.kind,
       status: row.status,
       categoryNature: row.categoryNature,
+      memberId: row.memberId,
     })),
     futureInstallmentsCents,
     uncategorizedCount: Number(uncategorizedCountAgg),

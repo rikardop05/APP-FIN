@@ -71,8 +71,11 @@ export function LoadingBlock({
       ? failedText
       : (endText ?? '');
 
+  // Parado e sem falha, o bloco só guarda o aviso de "carregado" para o leitor de tela. Fora do fluxo
+  // (`sr-only`), senão a margem de `className` e o `gap` do pai viram um vão morto sob o cabeçalho.
+  const idle = !loading && !failed;
   return (
-    <div className={cn('flex flex-col items-start gap-2', className)} aria-busy={loading || undefined}>
+    <div className={idle ? 'sr-only' : cn('flex flex-col items-start gap-2', className)} aria-busy={loading || undefined}>
       <p
         role="status"
         className={cn(

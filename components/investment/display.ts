@@ -135,3 +135,20 @@ export function saveButtonHint(state: { dirty: boolean; saving: boolean }): stri
 export function visibleConfirmation(event: SaveEvent | null, dirty: boolean): string | null {
   return event === null || dirty ? null : confirmationText(event);
 }
+
+/** O cenário que a tela trata como principal: só ele leva o carimbo de veredito. */
+export const REFERENCE_SCENARIO: ScenarioLabel = 'moderate';
+
+export type ScenarioVerdict =
+  | { mode: 'stamp'; tone: 'ok' | 'danger'; text: string }
+  | { mode: 'badge'; tone: 'success' | 'warning'; text: string };
+
+/**
+ * Veredito de um cenário, em texto sempre. O de referência vira carimbo (vermelho só aí); os
+ * outros dois dizem o mesmo num Badge com ícone (o Selo tem letra própria, que aqui mentiria), e "não alcança" é atenção (âmbar), não perigo.
+ */
+export function scenarioVerdict(label: ScenarioLabel, feasible: boolean): ScenarioVerdict {
+  const text = feasible ? 'Alcança' : 'Não alcança';
+  if (label === REFERENCE_SCENARIO) return { mode: 'stamp', tone: feasible ? 'ok' : 'danger', text };
+  return { mode: 'badge', tone: feasible ? 'success' : 'warning', text };
+}
