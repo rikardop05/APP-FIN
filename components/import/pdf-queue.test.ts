@@ -19,6 +19,16 @@ describe('fila de PDFs', () => {
     expect(matchCardForBank('itau_card', [nu, itau])).toBe(itau); // sem acento no token, com acento no cadastro
   });
 
+  it('casa o Inter só pelo campo banco inteiro, não por "inter" dentro de outra palavra', () => {
+    const inter = { id: '5', name: 'Gold', bank: 'Inter' };
+    const bancoInter = { id: '6', name: 'Black', bank: 'Banco Inter' };
+    const internacional = { id: '7', name: 'Cartão Internacional', bank: null };
+    expect(matchCardForBank('inter_card', [nu, inter])).toBe(inter);
+    expect(matchCardForBank('inter_card', [nu, bancoInter])).toBe(bancoInter);
+    expect(matchCardForBank('inter_card', [nu, internacional])).toBeNull();
+    expect(matchCardForBank('inter_card', [inter, bancoInter])).toBeNull();
+  });
+
   it('dois cartões do mesmo banco, nenhum ou banco desconhecido: pede a origem', () => {
     expect(matchCardForBank('nubank_card', [nu, nu2])).toBeNull();
     expect(matchCardForBank('itau_card', [nu, sant])).toBeNull();

@@ -17,6 +17,7 @@
 | `santander_account` | Santander | extrato de conta | sem OFX; CSV/planilha **a confirmar pelo humano** (Fase 4) | — | ⏳ a confirmar pelo humano |
 | `mercadopago_card` | Mercado Pago | fatura de cartão | **PDF** (v1, T-117c) — cifrado AES-256, fonte CID | `Fatura_MP_20260720.pdf` | ✓ sonda ok |
 | `mercadopago_account` | Mercado Pago | extrato de conta | sem OFX; CSV/planilha **a confirmar pelo humano** (Fase 4) | — | ⏳ a confirmar pelo humano |
+| `inter_card` | Banco Inter | fatura de cartão | **PDF** (T-INTER) — sem senha, camada de texto nativa, data com ano | fatura com vencimento em 2026-11-20 (arquivo real fora do repo) | ✓ medida e validada contra o arquivo real (§10) |
 
 OFX já foi verificado e não existe em nenhum dos três. O que resta procurar é **CSV ou planilha**, insumo da Fase 4: a opção de exportar/baixar ao lado da fatura ou do extrato, no internet banking do desktop (costuma oferecer mais formatos que o app).
 
@@ -304,3 +305,64 @@ sintética prova que o parser faz o que o autor quis; só o arquivo real prova o
 que o banco faz. A medição anonimizada das §6/§7/§8 fechou parte dessa distância
 e não fechou esta parte: ela registrou posição e formato, não o repertório de
 caracteres nem o alcance dos valores.
+
+## 10. Layout medido da fatura Banco Inter (2026-11-26)
+
+> Medido sobre fatura **real** (vencimento 2026-11-20, 6 páginas de 446×632pt, **sem senha**, texto
+> nativo). Forma anonimizada: nenhum nome, final de cartão, estabelecimento ou valor real aparece
+> aqui. O parser é `lib/import/pdf/inter.ts`; a fixture sintética, `__fixtures__/inter.ts`.
+
+### 10.1 Onde estão os lançamentos
+
+Página "Despesas da fatura" (página 3 na fatura medida), **agrupada por cartão**: uma fatura reúne os
+cartões do titular e cada um tem a sua tabela.
+
+| Elemento | x | Máscara | Observação |
+|---|---|---|---|
+| Abre a seção | `24` + `55` | `CARTÃO 9999****9999` | os 4 últimos dígitos são o final (`cardLast4`) |
+| Cabeçalho | `24/75/282/404` | `Data · Movimentação · Beneficiário · Valor` | repete-se por cartão |
+| Data | `24` | `99 de AAA. 9999` | **com ano**, mês abreviado pt-BR com ponto |
+| Movimentação | `77` | livre | parcela colada: `(Parcela 99 de 99)` |
+| Beneficiário | `282–300` | `-` | só `-` nas faturas medidas |
+| Valor | `388–406` | `R$ 999,99` / `+ R$ 999,99` | à direita; `+` marca crédito |
+| Fecha a seção | `24` + `61` | `Total CARTÃO 9999****9999 R$ 999,99` | |
+
+### 10.2 O que difere dos outros quatro bancos
+
+1. **A data traz o ano.** Os outros imprimem `dd/MM` e precisam do cabeçalho ou do `defaultYear` (§6.2,
+   §9.2). No Inter a data da linha é a da compra, inclusive a parcelada (`27 de nov. 2025` numa fatura
+   de nov/2026). O parser não tem `defaultYear` nem virada de ano, e a rota não passa competência.
+2. **O sinal é `+`, não `-`.** Compra vem sem sinal (saída); `+ R$ 508,40` é pagamento ou estorno
+   (entrada). Mesma convenção final do sistema (saída negativa), outro caractere de entrada.
+3. **O total do cartão não inclui o pagamento da fatura anterior.** Medido: `Total CARTÃO` = soma das
+   compras, sem o `+ R$`. O pagamento é reconhecido pela descrição (`creditCardPayment`, RF-CC-04) e
+   chega desmarcado; a soma dos lançamentos **sem** ele fecha com o total impresso, centavo a centavo.
+4. **A página de limites lista parcelas futuras** (`Próxima fatura`), com `Movimentação | Valor` e
+   **sem coluna de data**. Só vira lançamento a linha com data válida dentro de uma seção de cartão; as
+   parcelas futuras nunca somam à fatura atual.
+5. **Quebra de kerning na inicial.** `PAGAMENTO DE FATURA` chega em dois runs, `P` em `x=77` e
+   `AGAMENTO DE FATURA` em `x=80`. Unidos por espaço virariam `P AGAMENTO` e o pagamento deixaria de
+   ser reconhecido. O parser cola letra solta ao run seguinte quando a distância é ≤ 4pt.
+
+### 10.3 De onde saem vencimento e total
+
+| Dado | Onde | Observação |
+|---|---|---|
+| Vencimento | página 1, rótulo `Data de Vencimento` (x=329); a data `99/99/9999` está **na linha de baixo** | `documentDate.kind = 'due_date'` |
+| Total | página 1, `Total da sua fatura`; o valor está duas linhas abaixo, na coluna da esquerda (`x < 300`) | a coluna da direita é o limite de crédito |
+| Total (2ª fonte) | topo da página de lançamentos, `Fatura atual R$ 999,99` | só vale se concordar com a 1ª |
+
+O cabeçalho das páginas 2+ (titular, cartão, vencimento, total em `y ≥ 597`) repete-se e **não** é
+lançamento: o parser só lê abaixo de `y = 590`.
+
+### 10.4 Suposições, não medidas
+
+- **Beneficiário diferente de `-`** entra na descrição. Nas faturas medidas a coluna era sempre `-`;
+  para Pix/boleto no crédito presume-se que traga o favorecido. Se vier lixo, a remoção é uma linha.
+- **`-` impresso no valor** é tratado como sinal invertido (a convenção dos outros bancos de cartão).
+  A fatura medida não trouxe nenhum.
+- **Fatura de um mês com encargos** (juros, IOF, multa) não foi medida: a fatura de referência tinha
+  `Valor total de juros e encargos R$ 0,00`. Se os encargos virarem linha da tabela, o parser os lê como
+  qualquer lançamento; se vierem só no resumo, o total impresso vai divergir da soma e o placar avisa.
+- **Detecção do emissor** usa `BANCO INTER S/A` (boleto) e `bancointer.com.br` (rodapé). A palavra
+  `inter` sozinha é descartada de propósito: casaria `IOF Internacional` e `Conta Inter` em fatura alheia.

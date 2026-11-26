@@ -141,6 +141,12 @@ const BANK_MARKERS: readonly {
     // impressa no próprio documento, não a palavra "Itaú" isolada.
     contentTokens: ['itau unibanco holding'],
   },
+  {
+    bankKey: 'inter_card',
+    // `inter` só vale como token inteiro do nome (`Fatura_Inter_2026-11.pdf`).
+    fileNameTokens: ['inter', 'bancointer'],
+    contentTokens: ['bancointer.com.br'],
+  },
 ];
 
 /** `true` para os dois tipos que `content` aceita. Qualquer outra coisa e entrada malformada. */

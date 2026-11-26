@@ -190,6 +190,17 @@ describe('detectSource — palpite de banco', () => {
     ).toBeNull();
   });
 
+  it('sugere o Inter pelo nome (token inteiro) e pelo site, nunca por "inter" dentro de outra palavra', () => {
+    expect(detectSource({ fileName: 'Fatura_Inter_2026-11.pdf', content: '%PDF-1.7' }).bankKey).toBe(
+      'inter_card',
+    );
+    expect(
+      detectSource({ fileName: 'fatura.pdf', content: '%PDF-1.7 www.bancointer.com.br' }).bankKey,
+    ).toBe('inter_card');
+    expect(detectSource({ fileName: 'Fatura_Internacional.pdf', content: '%PDF-1.7' }).bankKey).toBeNull();
+    expect(detectSource({ fileName: 'internet.pdf', content: '%PDF-1.7' }).bankKey).toBeNull();
+  });
+
   it('reconhece pelo conteudo quando o nome nao diz nada', () => {
     expect(
       detectSource({

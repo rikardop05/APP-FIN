@@ -25,7 +25,14 @@ const BANK_TOKENS: Record<string, readonly string[]> = {
   santander_card: ['santander'],
   mercadopago_card: ['mercadopago', 'mp'],
   itau_card: ['itau', 'itaucard'],
+  inter_card: ['bancointer', 'inter'],
 };
+
+/**
+ * Tokens que só valem como o campo "banco" inteiro, nunca dentro de um texto: `mp` e `inter`
+ * são curtos demais e aparecem em outras palavras ("Internacional", "campo").
+ */
+const EXACT_BANK_TOKENS: ReadonlySet<string> = new Set(['mp', 'inter']);
 
 /**
  * Cartão ativo que casa com o banco detectado, só quando é exatamente UM. Zero ou vários → `null`
@@ -38,7 +45,9 @@ export function matchCardForBank(bankKey: string | null, cards: readonly QueueCa
   if (tokens === undefined) return null;
   const matches = cards.filter((card) => {
     const text = normalize(`${card.bank ?? ''} ${card.name}`);
-    return tokens.some((token) => (token.length <= 2 ? normalize(card.bank ?? '') === token : text.includes(token)));
+    return tokens.some((token) =>
+      EXACT_BANK_TOKENS.has(token) ? normalize(card.bank ?? '') === token : text.includes(token),
+    );
   });
   return matches.length === 1 ? (matches[0] ?? null) : null;
 }

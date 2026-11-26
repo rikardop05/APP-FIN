@@ -1107,7 +1107,7 @@ invólucro em `kpis.ts` seria camada redundante sobre função pura já testada.
 
 ## 15. Importação — `/lib/import`
 
-> **v1:** `types.ts` + `detect.ts` (T-120), `installments.ts` (T-121), `pdf/` (T-117, T-ITAU), `text.ts` (T-119), `pipeline.ts` (T-107).
+> **v1:** `types.ts` + `detect.ts` (T-120), `installments.ts` (T-121), `pdf/` (T-117, T-ITAU, T-INTER), `text.ts` (T-119), `pipeline.ts` (T-107).
 > **Fase 4:** `ofx.ts` (T-106 — nenhum dos três bancos oferece OFX), `csv.ts` (T-105), `xlsx.ts` (T-118) e os tipos de mapeamento de coluna. Declarados aqui para estabilidade de contrato, **não implementar na v1**.
 
 ```ts
@@ -1177,13 +1177,22 @@ function parseNubankPdf(rows: PdfTextRow[], opts?: NubankPdfParseOptions): Parse
 function parseSantanderPdf(rows: PdfTextRow[], opts?: SantanderPdfParseOptions): ParseResult    // T-117b
 function parseMercadoPagoPdf(rows: PdfTextRow[], opts?: MercadoPagoPdfParseOptions): ParseResult // T-117c
 function parseItauPdf(rows: PdfTextRow[], opts?: ItauPdfParseOptions): ParseResult               // T-ITAU
+// Inter: SEM opts. E o unico banco que imprime a data completa na linha
+// (`15 de jun. 2026`), entao nao ha ano a resolver nem virada de ano.
+function parseInterPdf(rows: PdfTextRow[]): ParseResult                                          // T-INTER
 
 /** Identifica o banco pelo conteudo das primeiras linhas, para escolher o parser. */
-function detectPdfIssuer(rows: PdfTextRow[]): 'nubank' | 'santander' | 'mercadopago' | 'itau' | null
+function detectPdfIssuer(rows: PdfTextRow[]): 'nubank' | 'santander' | 'mercadopago' | 'itau' | 'inter' | null
 
 // bankKey para faturas PDF na v1: nubank_card, santander_card,
-// mercadopago_card e itau_card. A deteccao por conteudo do Itaú exige o
+// mercadopago_card, itau_card e inter_card. A deteccao por conteudo do Itaú exige o
 // marcador de layout "ITAU UNIBANCO HOLDING"; a palavra "Itaú" isolada nao basta.
+// A do Inter exige "BANCO INTER S/A" ou "bancointer.com.br"; "inter" isolado nao basta
+// (casaria "IOF Internacional"). Layout medido em IMPORT-SOURCES §10.
+//
+// Sinal no Inter: compra sem sinal (saida), credito com `+` (entrada). O total do cartao
+// NAO inclui o pagamento da fatura anterior: a soma dos lancamentos sem o
+// `creditCardPayment` fecha com `reportedTotalCents`.
 
 // xBands — acrescentado em 2026-09-16, medicao do Santander (IMPORT-SOURCES §8).
 //

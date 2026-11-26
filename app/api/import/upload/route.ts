@@ -6,6 +6,7 @@ import { PdfPasswordError, extractPdfTextItems } from '@/lib/import/pdf/extract'
 import { detectPdfIssuer } from '@/lib/import/pdf/detect';
 import { groupIntoRows } from '@/lib/import/pdf/rows';
 import { parseMercadoPagoPdf } from '@/lib/import/pdf/mercadopago';
+import { parseInterPdf } from '@/lib/import/pdf/inter';
 import { parseItauPdf } from '@/lib/import/pdf/itau';
 import { parseNubankPdf } from '@/lib/import/pdf/nubank';
 import { parseSantanderPdf, SANTANDER_X_BANDS } from '@/lib/import/pdf/santander';
@@ -59,6 +60,14 @@ async function parsePdf(input: Extract<UploadBody, { inputType: 'pdf' }>) {
         defaultYear: defaultYear(input.defaultCompetence),
       }),
       bankKey: 'itau_card',
+      format: 'pdf' as const,
+    };
+  }
+  if (issuer === 'inter') {
+    // O Inter imprime a data completa (`15 de jun. 2026`): sem `defaultYear`.
+    return {
+      parse: parseInterPdf(plainRows),
+      bankKey: 'inter_card',
       format: 'pdf' as const,
     };
   }
