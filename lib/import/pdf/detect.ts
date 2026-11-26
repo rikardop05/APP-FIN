@@ -32,7 +32,7 @@
 import type { PdfTextRow } from './rows';
 
 /** Emissores que a v1 sabe parsear. */
-export type PdfIssuer = 'nubank' | 'santander' | 'mercadopago' | 'itau';
+export type PdfIssuer = 'nubank' | 'santander' | 'mercadopago' | 'itau' | 'inter';
 
 /**
  * Marcadores por emissor. Cada token e comparado em minusculas, por
@@ -47,6 +47,10 @@ const ISSUER_MARKERS: readonly { issuer: PdfIssuer; tokens: readonly string[] }[
     // Marcador específico do layout, não a palavra isolada "Itaú", que pode
     // aparecer em instruções de pagamento de faturas de outros bancos.
     { issuer: 'itau', tokens: ['itau unibanco holding s.a.'] },
+    // "inter" sozinho casaria "IOF Internacional", "internet" e a "Conta Inter" de
+    // qualquer outra fatura. Medido na fatura Inter: a razão social no boleto
+    // ("BANCO INTER S/A") e o site no rodapé da página de limites.
+    { issuer: 'inter', tokens: ['banco inter s/a', 'bancointer.com.br'] },
   ];
 
 /**
