@@ -25,6 +25,8 @@ export const accountsResponseSchema = z.object({
 
 export const apiErrorSchema = z.object({
   error: z.string(),
+  /** Só o upload de PDF preenche (`pdf_password`); o resto das rotas não manda. */
+  code: z.string().optional(),
 });
 
 export const cardsResponseSchema = z.object({

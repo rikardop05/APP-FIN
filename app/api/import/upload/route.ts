@@ -4,6 +4,8 @@ import { requireSession, SessionMissingError } from '@/lib/auth/session';
 import { detectSource } from '@/lib/import/detect';
 import { PdfPasswordError, extractPdfTextItems } from '@/lib/import/pdf/extract';
 import { detectPdfIssuer } from '@/lib/import/pdf/detect';
+import { NO_TEXT_LAYER_MESSAGE } from '@/lib/import/pdf/no-text';
+import { PDF_PASSWORD_ERROR_CODE } from '@/lib/import/pdf/password';
 import { groupIntoRows } from '@/lib/import/pdf/rows';
 import { parseMercadoPagoPdf } from '@/lib/import/pdf/mercadopago';
 import { parseInterPdf } from '@/lib/import/pdf/inter';
@@ -41,6 +43,8 @@ async function parsePdf(input: Extract<UploadBody, { inputType: 'pdf' }>) {
   }
 
   const items = await extractPdfTextItems(bytes, { password: input.password });
+  // PDF aberto, mas sem nenhum texto (imagem): dizer isso, em vez de culpar o banco.
+  if (items.length === 0) throw new InvalidImportUploadError(NO_TEXT_LAYER_MESSAGE);
   const plainRows = groupIntoRows(items);
   const issuer = detectPdfIssuer(plainRows);
   if (issuer === null) throw new InvalidImportUploadError('Não foi possível reconhecer o banco neste PDF.');
@@ -150,7 +154,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Conta ou cartão inválido.' }, { status: 400 });
     }
     if (error instanceof PdfPasswordError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      // `code` deixa a tela abrir o campo de senha sem adivinhar pelo texto da mensagem.
+      return NextResponse.json(
+        { error: error.message, code: PDF_PASSWORD_ERROR_CODE },
+        { status: 400 },
+      );
     }
     if (error instanceof InvalidImportUploadError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
