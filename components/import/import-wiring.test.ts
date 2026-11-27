@@ -76,6 +76,28 @@ describe('revisão da fatura: ligações da tela', () => {
     expect(screen).toContain("sourceId={sourcePending ? '' : sourceId}");
   });
 
+  it('PDF sem texto (imagem) é avisado pela rota antes de detectar o banco, e a tela troca a dica', () => {
+    const route = read('app/api/import/upload/route.ts');
+    const noText = route.indexOf('items.length === 0');
+    expect(noText).toBeGreaterThan(-1);
+    expect(noText).toBeLessThan(route.indexOf('detectPdfIssuer(plainRows)'));
+    expect(route).toContain('NO_TEXT_LAYER_MESSAGE');
+    expect(screen).toContain('readFailureHint(');
+  });
+
+  it('o campo de senha existe para todo PDF (recolhido) e abre sozinho quando o servidor pede', () => {
+    const route = read('app/api/import/upload/route.ts');
+    // A rota marca o erro de senha com um código; a tela não adivinha pelo texto.
+    expect(route).toContain('code: PDF_PASSWORD_ERROR_CODE');
+    expect(screen).toContain('isPasswordErrorCode(failure.code)');
+    expect(screen).toContain('isPasswordFieldOpen({ encrypted: detection.encrypted, requested: passwordRequested })');
+    expect(screen).toContain('PASSWORD_OPTIONAL_LABEL');
+    // Só um <PasswordField> por ramo e a senha continua só em memória, zerada a cada arquivo.
+    expect(screen.match(/<PasswordField /g)).toHaveLength(2);
+    expect(screen).toMatch(/setPassword\(''\);\s*setPasswordRequested\(false\)/);
+    expect(screen).not.toMatch(/localStorage|sessionStorage/);
+  });
+
   it('a competência sai por extenso, nunca montada a mão com slice', () => {
     expect(read('components/import/competence-warning-banner.tsx')).not.toMatch(/slice\(5\)/);
     expect(confirmation).not.toMatch(/slice\(5\)\}\/\$\{/);

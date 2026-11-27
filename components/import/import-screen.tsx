@@ -9,6 +9,14 @@ import {
 } from 'react';
 import Link from 'next/link';
 import { detectSource, type DetectedSource } from '@/lib/import/detect';
+import { readFailureHint } from '@/lib/import/pdf/no-text';
+import {
+  PASSWORD_FIELD_LABEL,
+  PASSWORD_OPTIONAL_LABEL,
+  PASSWORD_REQUESTED_HINT,
+  isPasswordErrorCode,
+  isPasswordFieldOpen,
+} from '@/lib/import/pdf/password';
 import { Button, Faixa, Input, LoadingBlock, MonthPicker, PageHeader, Picote, Select } from '@/components/ui-kit';
 import { describeApiError } from './api-error';
 import { DropZone } from './drop-zone';
@@ -51,10 +59,38 @@ function isCompetence(value: string): boolean {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 }
 
-async function readApiError(response: Response, fallback: string): Promise<string> {
+/** Mensagem e `code` (quando a rota manda) de uma resposta de erro da API de importação. */
+async function readApiFailure(
+  response: Response,
+  fallback: string,
+): Promise<{ message: string; code: string | undefined }> {
   const body: unknown = await response.json().catch(() => null);
   const parsed = apiErrorSchema.safeParse(body);
-  return describeApiError(parsed.success ? parsed.data.error : null, response.status, fallback);
+  return {
+    message: describeApiError(parsed.success ? parsed.data.error : null, response.status, fallback),
+    code: parsed.success ? parsed.data.code : undefined,
+  };
+}
+
+async function readApiError(response: Response, fallback: string): Promise<string> {
+  return (await readApiFailure(response, fallback)).message;
+}
+
+/** Campo de senha do PDF. A senha fica só na memória (RF-IMP-11) e vai no corpo do upload. */
+function PasswordField({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  return (
+    <label className="flex max-w-sm flex-col gap-1.5 text-sm font-medium text-foreground">
+      {PASSWORD_FIELD_LABEL}
+      <Input
+        type="password"
+        value={value}
+        autoComplete="new-password"
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Digite a senha do PDF"
+      />
+      <span className="font-normal text-muted-foreground">A senha fica somente na memória e não é salva.</span>
+    </label>
+  );
 }
 
 function SourceFields({
@@ -192,6 +228,8 @@ export function ImportScreen({ today }: ImportScreenProps) {
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
   const [detection, setDetection] = useState<DetectedSource | null>(null);
   const [password, setPassword] = useState('');
+  /** O servidor respondeu que o PDF pede senha (ausente ou incorreta): o campo abre sozinho. */
+  const [passwordRequested, setPasswordRequested] = useState(false);
   const [pastedText, setPastedText] = useState('');
   const [preview, setPreview] = useState<UploadResponse | null>(null);
   const [loadingSources, setLoadingSources] = useState(true);
@@ -319,6 +357,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
     setFile(selected);
     setFileBytes(null);
     setPassword('');
+    setPasswordRequested(false);
     clearResult();
     if (selected === null) {
       setDetection(null);
@@ -397,9 +436,10 @@ export function ImportScreen({ today }: ImportScreenProps) {
         body: JSON.stringify(body),
       });
       if (!response.ok) {
-        throw new Error(
-          await readApiError(response, 'Não foi possível processar o PDF.'),
-        );
+        const failure = await readApiFailure(response, 'Não foi possível processar o PDF.');
+        // Senha ausente ou errada: abre o campo, para a pessoa ter onde corrigir.
+        setPasswordRequested(isPasswordErrorCode(failure.code));
+        throw new Error(failure.message);
       }
       setPreview(uploadResponseSchema.parse(await response.json()));
     } catch (cause) {
@@ -516,8 +556,12 @@ export function ImportScreen({ today }: ImportScreenProps) {
           <span>{error}</span>
           {readFailed ? (
             <span className="text-xs text-muted-foreground">
-              Confira se o cartão e a competência estão certos e, em PDF com senha, a senha. Também dá para colar o
-              texto da fatura mais abaixo.
+              {readFailureHint(
+                error,
+                passwordRequested
+                  ? PASSWORD_REQUESTED_HINT
+                  : 'Confira se o cartão e a competência estão certos e, em PDF com senha, a senha. Também dá para colar o texto da fatura mais abaixo.',
+              )}
             </span>
           ) : null}
         </Faixa>
@@ -602,20 +646,19 @@ export function ImportScreen({ today }: ImportScreenProps) {
                   </span>
                 </Faixa>
               ) : null}
-              {detection?.format === 'pdf' && detection.encrypted ? (
-                <label className="flex max-w-sm flex-col gap-1.5 text-sm font-medium text-foreground">
-                  Senha da fatura
-                  <Input
-                    type="password"
-                    value={password}
-                    autoComplete="new-password"
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="Digite a senha do PDF"
-                  />
-                  <span className="font-normal text-muted-foreground">
-                    A senha fica somente na memória e não é salva.
-                  </span>
-                </label>
+              {detection?.format === 'pdf' ? (
+                isPasswordFieldOpen({ encrypted: detection.encrypted, requested: passwordRequested }) ? (
+                  <PasswordField value={password} onChange={setPassword} />
+                ) : (
+                  <details className="max-w-sm">
+                    <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-foreground sm:min-h-9">
+                      {PASSWORD_OPTIONAL_LABEL}
+                    </summary>
+                    <div className="mt-2">
+                      <PasswordField value={password} onChange={setPassword} />
+                    </div>
+                  </details>
+                )
               ) : null}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-muted-foreground">PDF é o único formato de arquivo aceito nesta fase.</p>
