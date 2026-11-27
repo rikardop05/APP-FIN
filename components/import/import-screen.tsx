@@ -26,7 +26,7 @@ import {
 } from './schemas';
 import { ImportConfirmation } from './import-confirmation';
 import { ImportHistory } from './import-history';
-import { matchCardForBank, queueLabel } from './pdf-queue';
+import { keepChosenCard, matchCardForBank, queueLabel } from './pdf-queue';
 import type { CategoryNode, MemberItem } from './schemas';
 
 type ImportScreenProps = {
@@ -310,7 +310,11 @@ export function ImportScreen({ today }: ImportScreenProps) {
     }
   }
 
-  async function handleFile(selected: File | null) {
+  /**
+   * `fromQueue`: é a próxima fatura de uma fila, não um arquivo que a pessoa acabou de escolher. Na
+   * fila o cartão da fatura anterior não vale para a seguinte, então a origem é pedida de novo.
+   */
+  async function handleFile(selected: File | null, fromQueue = false) {
     latestFile.current = selected;
     setFile(selected);
     setFileBytes(null);
@@ -333,7 +337,14 @@ export function ImportScreen({ today }: ImportScreenProps) {
         setSourceId(match.id);
         setSourcePending(false);
       } else {
-        setSourcePending(cards.length > 1);
+        // O cartão que a pessoa já deixou no seletor fica, a não ser que o arquivo o contradiga:
+        // apagá-lo faz parecer que continua escolhido (o upload, então, vai para o cartão errado).
+        const chosen =
+          sourceKind === 'credit_card'
+            ? (cards.find((card) => card.id === sourceId) ?? null)
+            : null;
+        const keep = !fromQueue && keepChosenCard(detected.bankKey, chosen);
+        setSourcePending(!keep && cards.length > 1);
       }
     } else {
       setSourcePending(false);
@@ -352,7 +363,7 @@ export function ImportScreen({ today }: ImportScreenProps) {
     const [next, ...rest] = waiting;
     setWaiting(rest);
     if (next === undefined) return;
-    void handleFile(next);
+    void handleFile(next, true);
   }
 
   async function uploadFile() {
