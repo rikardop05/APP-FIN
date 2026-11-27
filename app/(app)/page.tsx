@@ -13,6 +13,7 @@ import {
 } from '@/components/dashboard/passive-income/passive-income';
 import { buildIncomeExpenseSeries } from '@/components/dashboard/income-expense-series';
 import type { ProjectedState } from '@/components/dashboard/projected-balance';
+import { requiredIncome } from '@/components/dashboard/required-income';
 import { type DivergentStatementItem, type UncategorizedItem } from '@/components/dashboard/pendencias-list';
 import { requireSession } from '@/lib/auth/session';
 import { listOverBudget, type OverBudgetItem } from '@/lib/db/queries/budgets';
@@ -225,6 +226,7 @@ export default async function DashboardPage() {
         })),
       }}
       incomeExpense={incomeExpense}
+      requiredIncome={requiredIncome(incomeExpense, competence)}
       projected={projected}
       passiveIncome={passiveIncome}
       pendencias={{

@@ -20,6 +20,8 @@ import {
 } from './pendencias-list';
 import { monthName, pendingSummary } from './presentation';
 import { ProjectedBalance, type ProjectedState } from './projected-balance';
+import { RequiredIncomeCard } from './required-income-card';
+import type { RequiredIncome } from './required-income';
 import { SpendingByCategory } from './spending-by-category';
 import { SpendingByMember, type SpendingByMemberItem } from './spending-by-member';
 
@@ -68,6 +70,8 @@ type DashboardScreenProps = {
    * passar compila e some da tela. "Não deu para carregar" é um valor explícito, nunca omissão.
    */
   incomeExpense: IncomeExpenseMonth[];
+  /** Renda mínima do próximo mês pelo gasto médio e pelo gasto do mês anterior (`requiredIncome`). */
+  requiredIncome: RequiredIncome;
   /** A MESMA projeção de `/fluxo` (`loadProjectedCashflow`). */
   projected: ProjectedState;
   /** Renda passiva (T-306). `none` = sem plano; `unavailable` = o planejador falhou. */
@@ -93,7 +97,8 @@ type DashboardScreenProps = {
  * 1. Sobra, veredito e pendências (Headline).
  * 2. Gastos por categoria.
  * 3. Comprometido nos cartões e saldo projetado (futuro).
- * 4. Resumo do mês, receita × despesa e "Quem gastou" (só com despesa de responsável).
+ * 4. Resumo do mês, renda necessária para o próximo mês, receita × despesa e "Quem gastou" (só com despesa
+ *    de responsável).
  * 5. Renda passiva (20 anos) atrás de "ver mais" e a lista de pendências por último.
  */
 export function DashboardScreen({
@@ -103,6 +108,7 @@ export function DashboardScreen({
   byMember,
   commitment,
   incomeExpense,
+  requiredIncome,
   projected,
   passiveIncome,
   pendencias,
@@ -166,6 +172,8 @@ export function DashboardScreen({
         savingsRateBp={kpis.savingsRateBp}
         essentialShareBp={kpis.essentialShareBp}
       />
+
+      <RequiredIncomeCard required={requiredIncome} />
 
       <div className={byMember ? 'grid grid-cols-1 gap-6 lg:grid-cols-2' : 'flex flex-col gap-6'}>
         <IncomeExpenseChart months={incomeExpense} currentCompetence={competence} />
