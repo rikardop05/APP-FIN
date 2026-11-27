@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { matchCardForBank, queueLabel } from './pdf-queue';
+import { keepChosenCard, matchCardForBank, queueLabel } from './pdf-queue';
 
 const nu = { id: '1', name: 'Nubank Ultravioleta', bank: 'Nubank' };
 const nu2 = { id: '2', name: 'Roxinho', bank: 'nubank' };
@@ -27,6 +27,23 @@ describe('fila de PDFs', () => {
     expect(matchCardForBank('inter_card', [nu, bancoInter])).toBe(bancoInter);
     expect(matchCardForBank('inter_card', [nu, internacional])).toBeNull();
     expect(matchCardForBank('inter_card', [inter, bancoInter])).toBeNull();
+  });
+
+  it('mantém o cartão já escolhido quando o arquivo não diz de que banco é', () => {
+    expect(keepChosenCard(null, nu)).toBe(true);
+    expect(keepChosenCard('banco_x', nu)).toBe(true); // banco que a fila nem conhece: nada contradiz
+  });
+
+  it('mantém o cartão escolhido quando ele é do banco que o arquivo aponta, mesmo com dois do mesmo banco', () => {
+    expect(keepChosenCard('nubank_card', nu)).toBe(true);
+    expect(matchCardForBank('nubank_card', [nu, nu2])).toBeNull(); // sozinho o detector pediria a origem
+    expect(keepChosenCard('nubank_card', nu2)).toBe(true);
+  });
+
+  it('não mantém o cartão escolhido quando o arquivo aponta outro banco, nem sem escolha', () => {
+    expect(keepChosenCard('nubank_card', sant)).toBe(false);
+    expect(keepChosenCard('nubank_card', null)).toBe(false);
+    expect(keepChosenCard(null, null)).toBe(false);
   });
 
   it('dois cartões do mesmo banco, nenhum ou banco desconhecido: pede a origem', () => {

@@ -67,6 +67,15 @@ describe('revisão da fatura: ligações da tela', () => {
     expect(screen).not.toMatch(/localStorage|sessionStorage/);
   });
 
+  it('o cartão escolhido antes do PDF não é apagado pelo upload, só na fila ou se o arquivo o contradiz', () => {
+    expect(screen).toContain('keepChosenCard(detected.bankKey, chosen)');
+    expect(screen).toContain('!fromQueue && keepChosenCard');
+    // A próxima fatura da fila pede a origem de novo (o cartão da anterior não vale).
+    expect(screen).toContain('void handleFile(next, true)');
+    // O seletor só aparece vazio quando a origem está de fato pendente.
+    expect(screen).toContain("sourceId={sourcePending ? '' : sourceId}");
+  });
+
   it('a competência sai por extenso, nunca montada a mão com slice', () => {
     expect(read('components/import/competence-warning-banner.tsx')).not.toMatch(/slice\(5\)/);
     expect(confirmation).not.toMatch(/slice\(5\)\}\/\$\{/);

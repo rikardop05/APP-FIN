@@ -51,3 +51,16 @@ export function matchCardForBank(bankKey: string | null, cards: readonly QueueCa
   });
   return matches.length === 1 ? (matches[0] ?? null) : null;
 }
+
+/**
+ * O cartão que a pessoa já deixou escolhido continua valendo para a fatura que acabou de entrar?
+ * Vale quando a fatura não contradiz o cartão: banco ainda desconhecido pelo nome do arquivo (o caso
+ * comum — o PDF vem comprimido e o emissor só é lido no servidor) ou banco que o cartão confirma.
+ * Só NÃO vale quando o arquivo aponta um banco e o cartão escolhido é de outro: aí a tela pede a origem.
+ * Apagar uma escolha que ninguém contradisse faz a pessoa achar que ela ainda está lá.
+ */
+export function keepChosenCard(bankKey: string | null, chosen: QueueCard | null): boolean {
+  if (chosen === null) return false;
+  if (bankKey === null || BANK_TOKENS[bankKey] === undefined) return true;
+  return matchCardForBank(bankKey, [chosen]) !== null;
+}
